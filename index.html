@@ -28,6 +28,8 @@
         .cp-knob:active { cursor:grabbing; }
         .shader-on  { background-color:#7c3aed; }
         .shader-off { background-color:#52525b; }
+        .warp-layer-on  { background-color:#059669; color:#fff; }
+        .warp-layer-off { background-color:#52525b; color:#888; }
     </style>
 </head>
 <body class="bg-zinc-950 text-zinc-100 min-h-screen">
@@ -114,7 +116,16 @@
                     <div class="row"><span>Osc Speed <span class="text-zinc-500 text-xs">(Hz, 0=off)</span></span><span id="val-warpOscSpeed">0.0</span></div>
                     <input type="range" id="warpOscSpeed" min="0" max="5" step="0.1" value="0" class="w-full accent-purple-500 mb-2">
                 </div>
-                <div class="flex items-center justify-between">
+                <!-- Warp layer select -->
+                <div class="mt-2">
+                    <p class="text-xs text-zinc-400 mb-1">Apply warp to</p>
+                    <div class="flex gap-1">
+                        <button id="warpL1Btn" onclick="toggleWarpLayer(1)" class="flex-1 py-1 text-xs rounded warp-layer-on">L1</button>
+                        <button id="warpL2Btn" onclick="toggleWarpLayer(2)" class="flex-1 py-1 text-xs rounded warp-layer-on">L2</button>
+                        <button id="warpL3Btn" onclick="toggleWarpLayer(3)" class="flex-1 py-1 text-xs rounded warp-layer-on">L3</button>
+                    </div>
+                </div>
+                <div class="flex items-center justify-between mt-2">
                     <label class="text-xs text-zinc-400">Animate Warp</label>
                     <label class="relative inline-flex items-center cursor-pointer">
                         <input type="checkbox" id="animateWarp" class="sr-only peer">
@@ -137,6 +148,10 @@
                         <span class="text-xs text-zinc-400 w-10">Color</span>
                         <input type="color" id="layer1Color" value="#000000" class="flex-1 h-7 rounded border border-zinc-600">
                     </div>
+                    <div class="row"><span>Opacity</span><span id="val-layer1Opacity">100</span></div>
+                    <input type="range" id="layer1Opacity" min="0" max="100" value="100" class="w-full accent-emerald-600 mb-2">
+                    <div class="row"><span>RGB Shift</span><span id="val-layer1RgbShift">0</span></div>
+                    <input type="range" id="layer1RgbShift" min="0" max="20" value="0" step="0.5" class="w-full accent-rose-500 mb-2">
                     <div class="row"><span>Rot Speed °/s</span><span id="val-layer1Speed">0</span></div>
                     <input type="range" id="layer1Speed" min="-180" max="180" value="0" class="w-full accent-emerald-600 mb-2">
                     <div class="row"><span>Offset X</span><span id="val-layer1OffsetX">0</span></div>
@@ -155,6 +170,10 @@
                         <span class="text-xs text-zinc-400 w-10">Color</span>
                         <input type="color" id="layer2Color" value="#ffffff" class="flex-1 h-7 rounded border border-zinc-600">
                     </div>
+                    <div class="row"><span>Opacity</span><span id="val-layer2Opacity">100</span></div>
+                    <input type="range" id="layer2Opacity" min="0" max="100" value="100" class="w-full accent-emerald-600 mb-2">
+                    <div class="row"><span>RGB Shift</span><span id="val-layer2RgbShift">0</span></div>
+                    <input type="range" id="layer2RgbShift" min="0" max="20" value="0" step="0.5" class="w-full accent-rose-500 mb-2">
                     <div class="row"><span>Rot Speed °/s</span><span id="val-layer2Speed">20</span></div>
                     <input type="range" id="layer2Speed" min="-180" max="180" value="20" class="w-full accent-emerald-600 mb-2">
                     <div class="row"><span>Offset X</span><span id="val-layer2OffsetX">0</span></div>
@@ -173,6 +192,10 @@
                         <span class="text-xs text-zinc-400 w-10">Color</span>
                         <input type="color" id="layer3Color" value="#ff6600" class="flex-1 h-7 rounded border border-zinc-600">
                     </div>
+                    <div class="row"><span>Opacity</span><span id="val-layer3Opacity">100</span></div>
+                    <input type="range" id="layer3Opacity" min="0" max="100" value="100" class="w-full accent-emerald-600 mb-2">
+                    <div class="row"><span>RGB Shift</span><span id="val-layer3RgbShift">0</span></div>
+                    <input type="range" id="layer3RgbShift" min="0" max="20" value="0" step="0.5" class="w-full accent-rose-500 mb-2">
                     <div class="row"><span>Rot Speed °/s</span><span id="val-layer3Speed">-20</span></div>
                     <input type="range" id="layer3Speed" min="-180" max="180" value="-20" class="w-full accent-emerald-600 mb-2">
                     <div class="row"><span>Offset X</span><span id="val-layer3OffsetX">0</span></div>
@@ -185,12 +208,13 @@
             <!-- Shaders -->
             <div class="sep">
                 <p class="slabel">Shaders</p>
-                <!-- Colour XY Gradient -->
+                <!-- Colour XY Gradient (applied per-layer via 2D canvas) -->
                 <div class="rounded-xl border border-zinc-700 bg-zinc-800/50 p-3 mb-2">
                     <div class="flex items-center justify-between mb-2">
                         <span class="text-xs font-semibold">Colour XY Gradient</span>
                         <button id="shGradToggle" onclick="toggleShader('grad')" class="shader-off px-3 py-0.5 text-xs rounded-lg font-medium">OFF</button>
                     </div>
+                    <p class="text-zinc-500 text-xs mb-2">Tints pattern lines (layer-only)</p>
                     <div class="grid grid-cols-2 gap-1 mb-2">
                         <div><span class="text-xs text-zinc-400">Colour A</span><input type="color" id="gradColorA" value="#ff0080" class="w-full h-6 mt-1 rounded border border-zinc-600"></div>
                         <div><span class="text-xs text-zinc-400">Colour B</span><input type="color" id="gradColorB" value="#0080ff" class="w-full h-6 mt-1 rounded border border-zinc-600"></div>
@@ -223,27 +247,10 @@
                     <input type="range" id="colorNoiseScale" min="0.5" max="20" value="5" step="0.5" class="w-full accent-violet-500 mb-1">
                     <div class="row"><span>Speed</span><span id="val-colorNoiseSpeed">0.5</span></div>
                     <input type="range" id="colorNoiseSpeed" min="0" max="3" value="0.5" step="0.05" class="w-full accent-violet-500 mb-1">
+                    <div class="row"><span>Expand <span class="text-zinc-500 text-xs">(&lt;0 contract)</span></span><span id="val-colorNoiseExpand">0</span></div>
+                    <input type="range" id="colorNoiseExpand" min="-5" max="5" value="0" step="0.1" class="w-full accent-violet-500 mb-1">
                     <div class="row"><span>Opacity</span><span id="val-colorNoiseOpacity">50</span></div>
                     <input type="range" id="colorNoiseOpacity" min="0" max="100" value="50" class="w-full accent-violet-500">
-                </div>
-                <!-- Oscillation -->
-                <div class="rounded-xl border border-zinc-700 bg-zinc-800/50 p-3 mb-2">
-                    <div class="flex items-center justify-between mb-2">
-                        <span class="text-xs font-semibold">Oscillation Bands</span>
-                        <button id="shOscToggle" onclick="toggleShader('osc')" class="shader-off px-3 py-0.5 text-xs rounded-lg font-medium">OFF</button>
-                    </div>
-                    <div class="grid grid-cols-2 gap-1 mb-2">
-                        <div><span class="text-xs text-zinc-400">Colour A</span><input type="color" id="oscColorA" value="#ffff00" class="w-full h-6 mt-1 rounded border border-zinc-600"></div>
-                        <div><span class="text-xs text-zinc-400">Colour B</span><input type="color" id="oscColorB" value="#00ffff" class="w-full h-6 mt-1 rounded border border-zinc-600"></div>
-                    </div>
-                    <div class="row"><span>Frequency</span><span id="val-oscFreq">6</span></div>
-                    <input type="range" id="oscFreq" min="1" max="40" value="6" step="0.5" class="w-full accent-violet-500 mb-1">
-                    <div class="row"><span>Speed</span><span id="val-oscSpeed">1</span></div>
-                    <input type="range" id="oscSpeed" min="0" max="10" value="1" step="0.1" class="w-full accent-violet-500 mb-1">
-                    <div class="row"><span>Angle °</span><span id="val-oscAngle">0</span></div>
-                    <input type="range" id="oscAngle" min="0" max="360" value="0" class="w-full accent-violet-500 mb-1">
-                    <div class="row"><span>Opacity</span><span id="val-oscOpacity">60</span></div>
-                    <input type="range" id="oscOpacity" min="0" max="100" value="60" class="w-full accent-violet-500">
                 </div>
                 <!-- Time Blur -->
                 <div class="rounded-xl border border-zinc-700 bg-zinc-800/50 p-3">
@@ -355,13 +362,16 @@ const params = {
     cutout:        'none',
     bgColor:       '#0f172a',
     layer1Color: '#000000', layer1Speed:  0,  layer1OffsetX: 0, layer1OffsetY: 0, layer1On: true,
+    layer1Opacity: 100, layer1RgbShift: 0,
     layer2Color: '#ffffff', layer2Speed:  20, layer2OffsetX: 0, layer2OffsetY: 0, layer2On: true,
+    layer2Opacity: 100, layer2RgbShift: 0,
     layer3Color: '#ff6600', layer3Speed: -20, layer3OffsetX: 0, layer3OffsetY: 0, layer3On: false,
+    layer3Opacity: 100, layer3RgbShift: 0,
+    warpLayers: [true, true, true],  // which layers warp applies to
     // Shaders
     shGrad:       false, gradColorA: '#ff0080', gradColorB: '#0080ff', gradAngle: 45,  gradOpacity: 60,
     shNoise:      false, noiseScale: 3,  noiseSpeed: 0.3, noiseOpacity: 40,
-    shColorNoise: false, colorNoiseScale: 5, colorNoiseSpeed: 0.5, colorNoiseOpacity: 50,
-    shOsc:        false, oscColorA: '#ffff00', oscColorB: '#00ffff', oscFreq: 6, oscSpeed: 1, oscAngle: 0, oscOpacity: 60,
+    shColorNoise: false, colorNoiseScale: 5, colorNoiseSpeed: 0.5, colorNoiseExpand: 0, colorNoiseOpacity: 50,
     shBlur:       false, blurPersist: 0.85,
 };
 
@@ -389,18 +399,17 @@ window.addEventListener('resize', resizeCanvas);
 const numericIds = new Set([
     'cellCount','cellSize','stroke','blendStrength',
     'warpStrength','warpRadius','warpOscSpeed','meshStrength',
-    'layer1Speed','layer1OffsetX','layer1OffsetY',
-    'layer2Speed','layer2OffsetX','layer2OffsetY',
-    'layer3Speed','layer3OffsetX','layer3OffsetY',
+    'layer1Speed','layer1OffsetX','layer1OffsetY','layer1Opacity','layer1RgbShift',
+    'layer2Speed','layer2OffsetX','layer2OffsetY','layer2Opacity','layer2RgbShift',
+    'layer3Speed','layer3OffsetX','layer3OffsetY','layer3Opacity','layer3RgbShift',
     'gradAngle','gradOpacity',
     'noiseScale','noiseSpeed','noiseOpacity',
-    'colorNoiseScale','colorNoiseSpeed','colorNoiseOpacity',
-    'oscFreq','oscSpeed','oscAngle','oscOpacity',
+    'colorNoiseScale','colorNoiseSpeed','colorNoiseExpand','colorNoiseOpacity',
     'blurPersist',
 ]);
 const selectIds = new Set(['shape','blendMode','warpType','cutout','meshMode']);
 const colorIds  = new Set(['bgColor','layer1Color','layer2Color','layer3Color',
-                            'gradColorA','gradColorB','oscColorA','oscColorB']);
+                            'gradColorA','gradColorB']);
 
 document.querySelectorAll('input[type="range"], select, input[type="color"]').forEach(el => {
     el.addEventListener('input', () => {
@@ -437,9 +446,20 @@ function toggleLayer(n) {
 }
 
 // ════════════════════════════════════════════════════════════════════
+//  Warp layer select
+// ════════════════════════════════════════════════════════════════════
+function toggleWarpLayer(n) {
+    params.warpLayers[n-1] = !params.warpLayers[n-1];
+    const btn = document.getElementById('warpL' + n + 'Btn');
+    btn.classList.toggle('warp-layer-on',  params.warpLayers[n-1]);
+    btn.classList.toggle('warp-layer-off', !params.warpLayers[n-1]);
+    if (paused) renderFrame(lastTime);
+}
+
+// ════════════════════════════════════════════════════════════════════
 //  Shader toggles
 // ════════════════════════════════════════════════════════════════════
-const shaderKeys = { grad:'shGrad', noise:'shNoise', colorNoise:'shColorNoise', osc:'shOsc', blur:'shBlur' };
+const shaderKeys = { grad:'shGrad', noise:'shNoise', colorNoise:'shColorNoise', blur:'shBlur' };
 function toggleShader(id) {
     const key = shaderKeys[id];
     params[key] = !params[key];
@@ -687,23 +707,13 @@ varying vec2 v_uv;
 uniform float u_time;
 uniform vec2  u_res;
 
-// ── Gradient ──
-uniform bool  u_gradOn;
-uniform vec3  u_gradA, u_gradB;
-uniform float u_gradAngle, u_gradOpacity;
-
 // ── Noise ──
 uniform bool  u_noiseOn;
 uniform float u_noiseScale, u_noiseSpeed, u_noiseOpacity;
 
 // ── Colour Noise ──
 uniform bool  u_colorNoiseOn;
-uniform float u_cnScale, u_cnSpeed, u_cnOpacity;
-
-// ── Oscillation ──
-uniform bool  u_oscOn;
-uniform vec3  u_oscA, u_oscB;
-uniform float u_oscFreq, u_oscSpeed, u_oscAngle, u_oscOpacity;
+uniform float u_cnScale, u_cnSpeed, u_cnExpand, u_cnOpacity;
 
 ${NOISE_GLSL}
 
@@ -711,15 +721,6 @@ vec3 hexToRgb(vec3 c){ return c; }
 
 void main(){
     vec4 out_col = vec4(0.0);
-
-    // ── Gradient ──
-    if(u_gradOn){
-        float rad = u_gradAngle * 3.14159265 / 180.0;
-        vec2 d = vec2(cos(rad), sin(rad));
-        float t = clamp(dot(v_uv - 0.5, d) + 0.5, 0.0, 1.0);
-        vec3 gc = mix(u_gradA, u_gradB, t);
-        out_col = mix(out_col, vec4(gc, 1.0), u_gradOpacity / 100.0);
-    }
 
     // ── Perlin Noise (monochrome overlay) ──
     if(u_noiseOn){
@@ -731,32 +732,27 @@ void main(){
         out_col.a   = max(out_col.a, a * n);
     }
 
-    // ── Colour Noise (three offset noise channels = RGB) ──
+    // ── Colour Noise (expand/contract from centre, RGB shift) ──
     if(u_colorNoiseOn){
-        vec2 uv2 = v_uv * u_cnScale;
+        // Radial expand/contract: scale UV about centre
+        vec2 cuv = v_uv - 0.5;
+        float dist = length(cuv);
+        float zoom = 1.0 + u_cnExpand * dist;  // expand>0 pushes out, <0 pulls in
+        vec2 uv2 = (cuv / max(zoom, 0.01) + 0.5) * u_cnScale;
         float t  = u_cnSpeed * u_time;
         float r  = snoise(uv2 + vec2(0.0, t)) * 0.5 + 0.5;
         float g  = snoise(uv2 + vec2(3.3, t + 1.1)) * 0.5 + 0.5;
         float b  = snoise(uv2 + vec2(6.6, t + 2.2)) * 0.5 + 0.5;
+        // Warm the red channel a bit for a red-dominant look
+        r = clamp(r * 1.3, 0.0, 1.0);
+        b = clamp(b * 0.7, 0.0, 1.0);
         vec3  cnc = vec3(r,g,b);
         float a   = u_cnOpacity / 100.0;
         out_col.rgb = mix(out_col.rgb, cnc, a);
         out_col.a   = max(out_col.a, a);
     }
 
-    // ── Oscillation bands ──
-    if(u_oscOn){
-        float rad = u_oscAngle * 3.14159265 / 180.0;
-        vec2 dir  = vec2(cos(rad), sin(rad));
-        float p   = dot(v_uv, dir);
-        float wave = sin(p * u_oscFreq * 6.2831853 - u_oscSpeed * u_time) * 0.5 + 0.5;
-        vec3  oc   = mix(u_oscA, u_oscB, wave);
-        float a    = u_oscOpacity / 100.0;
-        out_col.rgb = mix(out_col.rgb, oc, a * wave);
-        out_col.a   = max(out_col.a, a * wave);
-    }
-
-    gl_FragColor = out_col;
+        gl_FragColor = out_col;
 }
 `;
 
@@ -828,7 +824,7 @@ function hexToRgb01(hex) {
 
 function drawShaders(time) {
     if (!gl || !shaderProg) return;
-    const anyOn = params.shGrad || params.shNoise || params.shColorNoise || params.shOsc || params.shBlur;
+    const anyOn = params.shNoise || params.shColorNoise || params.shBlur;
     if (!anyOn) {
         // Clear the shader canvas
         gl.viewport(0, 0, shaderCanvas.width, shaderCanvas.height);
@@ -871,12 +867,6 @@ function drawShaders(time) {
 
     u1f(shaderProg, 'u_time', time);
     u2f(shaderProg, 'u_res', W, H);
-    // Gradient
-    u1i(shaderProg, 'u_gradOn', params.shGrad ? 1 : 0);
-    u3f(shaderProg, 'u_gradA',  hexToRgb01(params.gradColorA));
-    u3f(shaderProg, 'u_gradB',  hexToRgb01(params.gradColorB));
-    u1f(shaderProg, 'u_gradAngle', params.gradAngle);
-    u1f(shaderProg, 'u_gradOpacity', params.gradOpacity);
     // Noise
     u1i(shaderProg, 'u_noiseOn', params.shNoise ? 1 : 0);
     u1f(shaderProg, 'u_noiseScale', params.noiseScale);
@@ -886,15 +876,8 @@ function drawShaders(time) {
     u1i(shaderProg, 'u_colorNoiseOn', params.shColorNoise ? 1 : 0);
     u1f(shaderProg, 'u_cnScale', params.colorNoiseScale);
     u1f(shaderProg, 'u_cnSpeed', params.colorNoiseSpeed);
+    u1f(shaderProg, 'u_cnExpand', params.colorNoiseExpand);
     u1f(shaderProg, 'u_cnOpacity', params.colorNoiseOpacity);
-    // Oscillation
-    u1i(shaderProg, 'u_oscOn', params.shOsc ? 1 : 0);
-    u3f(shaderProg, 'u_oscA',  hexToRgb01(params.oscColorA));
-    u3f(shaderProg, 'u_oscB',  hexToRgb01(params.oscColorB));
-    u1f(shaderProg, 'u_oscFreq', params.oscFreq);
-    u1f(shaderProg, 'u_oscSpeed', params.oscSpeed);
-    u1f(shaderProg, 'u_oscAngle', params.oscAngle);
-    u1f(shaderProg, 'u_oscOpacity', params.oscOpacity);
 
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
@@ -941,19 +924,19 @@ function renderFrame(time = 0) {
 
     if (params.layer1On) {
         ctx.globalCompositeOperation = 'source-over';
-        ctx.globalAlpha = 1;
-        renderLayerOn(ctx, layerAngle[0], params.layer1OffsetX, params.layer1OffsetY, params.layer1Color);
+        ctx.globalAlpha = params.layer1Opacity / 100;
+        renderLayerOn(ctx, layerAngle[0], params.layer1OffsetX, params.layer1OffsetY, params.layer1Color, 0);
     }
-    const alpha = params.blendStrength / 100;
+    const blendAlpha = params.blendStrength / 100;
     if (params.layer2On) {
         ctx.globalCompositeOperation = params.blendMode;
-        ctx.globalAlpha = alpha;
-        renderLayerOn(ctx, layerAngle[1], params.layer2OffsetX, params.layer2OffsetY, params.layer2Color);
+        ctx.globalAlpha = blendAlpha * (params.layer2Opacity / 100);
+        renderLayerOn(ctx, layerAngle[1], params.layer2OffsetX, params.layer2OffsetY, params.layer2Color, 1);
     }
     if (params.layer3On) {
         ctx.globalCompositeOperation = params.blendMode;
-        ctx.globalAlpha = alpha;
-        renderLayerOn(ctx, layerAngle[2], params.layer3OffsetX, params.layer3OffsetY, params.layer3Color);
+        ctx.globalAlpha = blendAlpha * (params.layer3Opacity / 100);
+        renderLayerOn(ctx, layerAngle[2], params.layer3OffsetX, params.layer3OffsetY, params.layer3Color, 2);
     }
     ctx.globalCompositeOperation = 'source-over';
     ctx.globalAlpha = 1;
@@ -987,11 +970,79 @@ function applyClip(c) {
 //  via an offscreen canvas pixel-displacement trick for closed shapes,
 //  or by warping each line segment's endpoint for line-based shapes.
 // ════════════════════════════════════════════════════════════════════
-function renderLayerOn(c, angle, offX, offY, color) {
+// Build a CSS gradient string (matching gradColorA→gradColorB at gradAngle) for strokeStyle
+function gradientForLayer(c, angle, offX, offY) {
+    if (!params.shGrad) return null;
+    const W = canvas.width, H = canvas.height;
+    const cx = W/2 + offX, cy = H/2 + offY;
+    const rad = params.gradAngle * Math.PI / 180;
+    const len = Math.max(W, H);
+    const gx1 = cx - Math.cos(rad)*len, gy1 = cy - Math.sin(rad)*len;
+    const gx2 = cx + Math.cos(rad)*len, gy2 = cy + Math.sin(rad)*len;
+    // Convert to layer-local coords (undo translate)
+    // We apply the gradient in world coords on the main canvas
+    const g = c.createLinearGradient(gx1 - (W/2 + offX), gy1 - (H/2 + offY),
+                                      gx2 - (W/2 + offX), gy2 - (H/2 + offY));
+    const [rA,gA,bA] = hexToRgb01(params.gradColorA).map(v=>Math.round(v*255));
+    const [rB,gB,bB] = hexToRgb01(params.gradColorB).map(v=>Math.round(v*255));
+    const op = params.gradOpacity / 100;
+    g.addColorStop(0, `rgba(${rA},${gA},${bA},${op})`);
+    g.addColorStop(1, `rgba(${rB},${gB},${bB},${op})`);
+    return g;
+}
+
+function renderLayerOn(c, angle, offX, offY, color, layerIdx) {
+    const layerOpaque = !params.shGrad && (layerIdx === undefined || params['layer'+(layerIdx+1)+'RgbShift'] === 0);
+    const rgbShift = layerIdx !== undefined ? (params['layer'+(layerIdx+1)+'RgbShift'] || 0) : 0;
+    const warpOn = layerIdx !== undefined ? params.warpLayers[layerIdx] : true;
+
+    if (rgbShift > 0) {
+        // Draw layer to offscreen, then do chromatic aberration on main canvas
+        const oc = document.createElement('canvas');
+        oc.width = canvas.width; oc.height = canvas.height;
+        const oc2 = oc.getContext('2d');
+        _renderLayerCore(oc2, angle, offX, offY, color, warpOn);
+        // Composite R, G, B channels with slight offsets using screen-blend math:
+        // Draw three copies (red+offset, green, blue-offset) with source-over
+        const r = rgbShift;
+        const saved_gco = c.globalCompositeOperation;
+        const saved_ga  = c.globalAlpha;
+        // Red channel: shift left
+        c.save();
+        c.globalCompositeOperation = saved_gco;
+        c.globalAlpha = saved_ga;
+        _blitChannel(c, oc, -r, 0, 255, 0, 0);
+        // Green channel: centre
+        _blitChannel(c, oc,  0, 0, 0, 255, 0);
+        // Blue channel: shift right
+        _blitChannel(c, oc,  r, 0, 0, 0, 255);
+        c.restore();
+        // Apply gradient tint on top if enabled
+        if (params.shGrad) {
+            c.save();
+            c.globalCompositeOperation = 'source-atop';
+            c.globalAlpha = params.gradOpacity / 100;
+            const grad = gradientForLayer(c, angle, offX, offY);
+            if (grad) {
+                c.translate(canvas.width/2 + offX, canvas.height/2 + offY);
+                c.fillStyle = grad;
+                c.fillRect(-canvas.width, -canvas.height, canvas.width*2, canvas.height*2);
+            }
+            c.restore();
+        }
+        return;
+    }
+
     c.save();
     c.translate(canvas.width/2 + offX, canvas.height/2 + offY);
     c.rotate(angle * Math.PI/180);
-    c.strokeStyle = color;
+    // Apply gradient as stroke colour if grad is on
+    if (params.shGrad) {
+        const g = gradientForLayer(c, angle, offX, offY);
+        c.strokeStyle = g || color;
+    } else {
+        c.strokeStyle = color;
+    }
     c.lineWidth   = params.stroke;
     c.lineCap     = 'square';
 
@@ -1000,12 +1051,54 @@ function renderLayerOn(c, angle, offX, offY, color) {
     const size    = params.cellSize;
 
     switch (params.shape) {
-        case 'lines':       drawLines(c, spacing, size, maxDist, angle);       break;
-        case 'radial':      drawRadial(c, spacing, size, maxDist, angle);      break;
-        case 'iso-circles': drawIsoCircles(c, spacing, size, maxDist, angle);  break;
-        case 'grid':        drawGrid(c, spacing, size, maxDist, angle);        break;
-        case 'hexagon':     drawHexGrid(c, spacing, size, maxDist, angle);     break;
-        case 'triangle':    drawTriGrid(c, spacing, size, maxDist, angle);     break;
+        case 'lines':       drawLines(c, spacing, size, maxDist, angle, warpOn);       break;
+        case 'radial':      drawRadial(c, spacing, size, maxDist, angle, warpOn);      break;
+        case 'iso-circles': drawIsoCircles(c, spacing, size, maxDist, angle, warpOn);  break;
+        case 'grid':        drawGrid(c, spacing, size, maxDist, angle, warpOn);        break;
+        case 'hexagon':     drawHexGrid(c, spacing, size, maxDist, angle, warpOn);     break;
+        case 'triangle':    drawTriGrid(c, spacing, size, maxDist, angle, warpOn);     break;
+    }
+    c.restore();
+}
+
+// Channel blit helper for RGB shift
+function _blitChannel(c, src, dx, dy, rMul, gMul, bMul) {
+    const W = src.width, H = src.height;
+    const tmp = document.createElement('canvas');
+    tmp.width = W; tmp.height = H;
+    const t2 = tmp.getContext('2d');
+    t2.drawImage(src, 0, 0);
+    const id = t2.getImageData(0, 0, W, H);
+    const d = id.data;
+    // Zero out unused channels
+    for (let i = 0; i < d.length; i += 4) {
+        d[i]   = rMul ? d[i] : 0;
+        d[i+1] = gMul ? d[i+1] : 0;
+        d[i+2] = bMul ? d[i+2] : 0;
+    }
+    t2.putImageData(id, 0, 0);
+    c.drawImage(tmp, dx, dy);
+}
+
+function _renderLayerCore(c, angle, offX, offY, color, warpOn) {
+    c.save();
+    c.translate(canvas.width/2 + offX, canvas.height/2 + offY);
+    c.rotate(angle * Math.PI/180);
+    c.strokeStyle = color;
+    c.lineWidth   = params.stroke;
+    c.lineCap     = 'square';
+
+    const maxDist2 = Math.max(canvas.width, canvas.height) * 0.82;
+    const spacing2 = params.cellCount;
+    const size2    = params.cellSize;
+
+    switch (params.shape) {
+        case 'lines':       drawLines(c, spacing2, size2, maxDist2, angle, warpOn);       break;
+        case 'radial':      drawRadial(c, spacing2, size2, maxDist2, angle, warpOn);      break;
+        case 'iso-circles': drawIsoCircles(c, spacing2, size2, maxDist2, angle, warpOn);  break;
+        case 'grid':        drawGrid(c, spacing2, size2, maxDist2, angle, warpOn);        break;
+        case 'hexagon':     drawHexGrid(c, spacing2, size2, maxDist2, angle, warpOn);     break;
+        case 'triangle':    drawTriGrid(c, spacing2, size2, maxDist2, angle, warpOn);     break;
     }
     c.restore();
 }
@@ -1013,9 +1106,9 @@ function renderLayerOn(c, angle, offX, offY, color) {
 // ════════════════════════════════════════════════════════════════════
 //  Shape renderers  (pass layerRot so mesh warp can choose mode)
 // ════════════════════════════════════════════════════════════════════
-function segs()    { return (params.warpType !== 'none') ? 32 : 1; }
-function isMesh()  { return params.warpType === 'mesh'; }
-function hasWarp() { return params.warpType !== 'none' && (isMesh() || params.warpStrength > 0); }
+function segs(warpOn)    { return (warpOn && params.warpType !== 'none') ? 32 : 1; }
+function isMesh()        { return params.warpType === 'mesh'; }
+function hasWarp(warpOn) { return warpOn && params.warpType !== 'none' && (isMesh() || params.warpStrength > 0); }
 
 // World-to-canvas for mesh: add mesh displacement to a point
 function mwarp(px, py, layerRot) {
@@ -1027,10 +1120,11 @@ function mwarp(px, py, layerRot) {
 }
 
 // Unified warp for any vertex: mesh OR legacy (flag/sine/ripple)
-// Legacy warps displace x based on y-position.
-function warpPt(x, y, rot) {
-    if (isMesh())  return mwarp(x, y, rot);
-    if (!hasWarp()) return {x, y};
+// warpOn = whether this layer has warp enabled
+function warpPt(x, y, rot, warpOn) {
+    if (!warpOn) return {x, y};
+    if (isMesh())        return mwarp(x, y, rot);
+    if (!hasWarp(true))  return {x, y};
     return { x: x + warpDX(y, x), y };
 }
 
@@ -1040,23 +1134,23 @@ function effectiveWarpStrength() {
     return params.warpStrength * (1 + Math.sin(globalTime * params.warpOscSpeed * Math.PI * 2));
 }
 
-function drawLines(c, spacing, _size, maxDist, rot) {
+function drawLines(c, spacing, _size, maxDist, rot, warpOn) {
     const n  = Math.ceil(maxDist * 2 / spacing) + 4;
-    const sg = segs();
-    for (let i = -n/2; i <= n/2; i++) strokeVLine(c, i * spacing, maxDist, sg, rot);
+    const sg = segs(warpOn);
+    for (let i = -n/2; i <= n/2; i++) strokeVLine(c, i * spacing, maxDist, sg, rot, warpOn);
 }
 
-function drawGrid(c, spacing, _size, maxDist, rot) {
+function drawGrid(c, spacing, _size, maxDist, rot, warpOn) {
     const n  = Math.ceil(maxDist * 2 / spacing) + 4;
-    const sg = segs();
+    const sg = segs(warpOn);
     for (let i = -n/2; i <= n/2; i++) {
-        strokeVLine(c, i * spacing, maxDist, sg, rot);
-        strokeHLine(c, i * spacing, maxDist, sg, rot);
+        strokeVLine(c, i * spacing, maxDist, sg, rot, warpOn);
+        strokeHLine(c, i * spacing, maxDist, sg, rot, warpOn);
     }
 }
 
-function drawRadial(c, spacing, _size, maxDist, rot) {
-    const warp    = hasWarp();
+function drawRadial(c, spacing, _size, maxDist, rot, warpOn) {
+    const warp    = hasWarp(warpOn);
     const arcSeg  = warp ? 64 : 0;   // 0 = native arc()
     const spokeSg = warp ? 16 : 1;
     for (let r = spacing; r < maxDist; r += spacing) {
@@ -1064,7 +1158,7 @@ function drawRadial(c, spacing, _size, maxDist, rot) {
         if (arcSeg > 0) {
             for (let s = 0; s <= arcSeg; s++) {
                 const a = (s / arcSeg) * Math.PI * 2;
-                const p = warpPt(Math.cos(a)*r, Math.sin(a)*r, rot);
+                const p = warpPt(Math.cos(a)*r, Math.sin(a)*r, rot, warpOn);
                 s === 0 ? c.moveTo(p.x, p.y) : c.lineTo(p.x, p.y);
             }
             c.closePath();
@@ -1079,18 +1173,18 @@ function drawRadial(c, spacing, _size, maxDist, rot) {
         c.beginPath();
         for (let s = 0; s <= spokeSg; s++) {
             const t = s / spokeSg;
-            const p = warpPt(Math.cos(a)*maxDist*t, Math.sin(a)*maxDist*t, rot);
+            const p = warpPt(Math.cos(a)*maxDist*t, Math.sin(a)*maxDist*t, rot, warpOn);
             s === 0 ? c.moveTo(p.x, p.y) : c.lineTo(p.x, p.y);
         }
         c.stroke();
     }
 }
 
-function drawIsoCircles(c, spacing, size, maxDist, rot) {
+function drawIsoCircles(c, spacing, size, maxDist, rot, warpOn) {
     const hx = spacing, hy = spacing * Math.sqrt(3)/2;
     const r  = Math.max(1, size/2);
     const cols = Math.ceil(maxDist/hx)+2, rows = Math.ceil(maxDist/hy)+2;
-    const arcSeg = hasWarp() ? 32 : 0;
+    const arcSeg = hasWarp(warpOn) ? 32 : 0;
     for (let row = -rows; row <= rows; row++) {
         for (let col = -cols; col <= cols; col++) {
             const cx = col*hx + (row%2===0 ? 0 : hx/2);
@@ -1099,7 +1193,7 @@ function drawIsoCircles(c, spacing, size, maxDist, rot) {
             if (arcSeg > 0) {
                 for (let s = 0; s <= arcSeg; s++) {
                     const a = (s / arcSeg) * Math.PI * 2;
-                    const p = warpPt(cx + Math.cos(a)*r, cy + Math.sin(a)*r, rot);
+                    const p = warpPt(cx + Math.cos(a)*r, cy + Math.sin(a)*r, rot, warpOn);
                     s === 0 ? c.moveTo(p.x, p.y) : c.lineTo(p.x, p.y);
                 }
                 c.closePath();
@@ -1111,7 +1205,7 @@ function drawIsoCircles(c, spacing, size, maxDist, rot) {
     }
 }
 
-function drawHexGrid(c, spacing, size, maxDist, rot) {
+function drawHexGrid(c, spacing, size, maxDist, rot, warpOn) {
     const R    = Math.max(1, size/2);
     const colW = spacing*0.75, rowH = spacing*Math.sqrt(3)/2;
     const cols = Math.ceil(maxDist/colW)+2, rows = Math.ceil(maxDist/rowH)+2;
@@ -1123,7 +1217,7 @@ function drawHexGrid(c, spacing, size, maxDist, rot) {
             for (let i = 0; i < 6; i++) {
                 const a = (Math.PI/3)*i - Math.PI/6;
                 const vx = hcx + R*Math.cos(a), vy = hcy + R*Math.sin(a);
-                const p = warpPt(vx, vy, rot);
+                const p = warpPt(vx, vy, rot, warpOn);
                 i === 0 ? c.moveTo(p.x, p.y) : c.lineTo(p.x, p.y);
             }
             c.closePath(); c.stroke();
@@ -1131,7 +1225,7 @@ function drawHexGrid(c, spacing, size, maxDist, rot) {
     }
 }
 
-function drawTriGrid(c, spacing, size, maxDist, rot) {
+function drawTriGrid(c, spacing, size, maxDist, rot, warpOn) {
     const h    = spacing*Math.sqrt(3)/2;
     const cols = Math.ceil(maxDist*2/spacing)+4;
     const rows = Math.ceil(maxDist*2/h)+4;
@@ -1145,7 +1239,7 @@ function drawTriGrid(c, spacing, size, maxDist, rot) {
                 : [[cx, cy+th*2/3],[cx+s/2, cy-th/3],[cx-s/2, cy-th/3]];
             c.beginPath();
             verts.forEach(([vx,vy], i) => {
-                const p = warpPt(vx, vy, rot);
+                const p = warpPt(vx, vy, rot, warpOn);
                 i === 0 ? c.moveTo(p.x, p.y) : c.lineTo(p.x, p.y);
             });
             c.closePath(); c.stroke();
@@ -1156,28 +1250,30 @@ function drawTriGrid(c, spacing, size, maxDist, rot) {
 // ════════════════════════════════════════════════════════════════════
 //  Segmented line helpers (global warp types: flag, sine, ripple)
 // ════════════════════════════════════════════════════════════════════
-function strokeVLine(c, lineX, maxDist, sg, rot) {
+function strokeVLine(c, lineX, maxDist, sg, rot, warpOn) {
     c.beginPath();
     const dy = (maxDist*2)/sg;
     for (let s = 0; s <= sg; s++) {
         const y = -maxDist + s*dy;
-        const p = warpPt(lineX, y, rot);   // warpPt handles mesh + legacy
+        const p = warpPt(lineX, y, rot, warpOn);
         s === 0 ? c.moveTo(p.x, p.y) : c.lineTo(p.x, p.y);
     }
     c.stroke();
 }
 
-function strokeHLine(c, lineY, maxDist, sg, rot) {
+function strokeHLine(c, lineY, maxDist, sg, rot, warpOn) {
     c.beginPath();
     const dx = (maxDist*2)/sg;
     for (let s = 0; s <= sg; s++) {
         const x = -maxDist + s*dx;
-        if (isMesh()) {
+        if (warpOn && isMesh()) {
             const p = mwarp(x, lineY, rot);
             s === 0 ? c.moveTo(p.x, p.y) : c.lineTo(p.x, p.y);
-        } else {
+        } else if (warpOn) {
             const y = lineY + warpDX(x, lineY);  // H-lines displace in Y
             s === 0 ? c.moveTo(x, y) : c.lineTo(x, y);
+        } else {
+            s === 0 ? c.moveTo(x, lineY) : c.lineTo(x, lineY);
         }
     }
     c.stroke();
