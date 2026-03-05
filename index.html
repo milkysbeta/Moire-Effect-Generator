@@ -7,19 +7,27 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body { font-family: system-ui, sans-serif; }
-        #canvas { image-rendering: crisp-edges; box-shadow: 0 10px 30px rgba(0,0,0,0.5); max-width: 100%; height: auto; }
-        @media (max-width: 768px) { .controls { border-right: none !important; border-bottom: 1px solid #374151; } }
-        input[type="range"] { cursor: pointer; }
-        select, input[type="color"] { cursor: pointer; }
-        button { cursor: pointer; transition: background-color 0.15s ease; }
-        .layer-on  { background-color: #059669; }
-        .layer-off { background-color: #52525b; }
-        .slabel { font-size: 0.62rem; letter-spacing: 0.1em; text-transform: uppercase; color: #71717a; margin-bottom: 0.4rem; }
-        .row { display: flex; justify-content: space-between; font-size: 0.72rem; margin-bottom: 0.2rem; }
-        .sep { border-top: 1px solid #27272a; padding-top: 0.75rem; margin-top: 0.25rem; }
+        #canvas { image-rendering: crisp-edges; max-width:100%; height:auto; }
+        #shaderCanvas { position:absolute; top:0; left:0; pointer-events:none; max-width:100%; height:auto; }
+        #meshCanvas   { position:absolute; top:0; left:0; cursor:crosshair; max-width:100%; height:auto; }
+        #canvasWrap   { position:relative; box-shadow:0 10px 30px rgba(0,0,0,.5); display:inline-block; }
+        @media (max-width:768px) { .controls { border-right:none !important; border-bottom:1px solid #374151; } }
+        input[type="range"] { cursor:pointer; }
+        select, input[type="color"] { cursor:pointer; }
+        button { cursor:pointer; transition:background-color 0.15s ease; }
+        .layer-on  { background-color:#059669; }
+        .layer-off { background-color:#52525b; }
+        .slabel { font-size:0.62rem; letter-spacing:0.1em; text-transform:uppercase; color:#71717a; margin-bottom:0.4rem; }
+        .row { display:flex; justify-content:space-between; font-size:0.72rem; margin-bottom:0.2rem; }
+        .sep { border-top:1px solid #27272a; padding-top:0.75rem; margin-top:0.25rem; }
         #dlModal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.7); z-index:100; align-items:center; justify-content:center; }
         #dlModal.open { display:flex; }
         #dlBox { background:#18181b; border:1px solid #3f3f46; border-radius:1rem; padding:1.5rem; width:300px; }
+        /* Mesh control point knob */
+        .cp-knob { position:absolute; width:12px; height:12px; border-radius:50%; background:#f59e0b; border:2px solid #fff; transform:translate(-50%,-50%); cursor:grab; touch-action:none; }
+        .cp-knob:active { cursor:grabbing; }
+        .shader-on  { background-color:#7c3aed; }
+        .shader-off { background-color:#52525b; }
     </style>
 </head>
 <body class="bg-zinc-950 text-zinc-100 min-h-screen">
@@ -76,14 +84,34 @@
                 <p class="slabel">Warp</p>
                 <select id="warpType" class="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm mb-2">
                     <option value="none">None</option>
+                    <option value="mesh">Mesh (drag control points)</option>
                     <option value="flag">Flag — Centre Bulge</option>
                     <option value="sine">Sine (global)</option>
                     <option value="ripple">Ripple (global)</option>
                 </select>
-                <div class="row"><span>Strength</span><span id="val-warpStrength">0</span></div>
-                <input type="range" id="warpStrength" min="0" max="80" value="0" class="w-full accent-emerald-600 mb-2">
-                <div class="row"><span>Radius <span class="text-zinc-500 text-xs">(Flag %)</span></span><span id="val-warpRadius">50</span></div>
-                <input type="range" id="warpRadius" min="5" max="100" value="50" class="w-full accent-emerald-600 mb-2">
+                <!-- Mesh warp controls -->
+                <div id="meshControls" class="hidden">
+                    <div class="flex items-center justify-between mb-2">
+                        <label class="text-xs text-zinc-400">Mode</label>
+                        <select id="meshMode" class="bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-xs">
+                            <option value="fixed">Fixed (world-space)</option>
+                            <option value="layer">Follows Layer</option>
+                        </select>
+                    </div>
+                    <div class="grid grid-cols-2 gap-1 mb-2">
+                        <button onclick="resetMesh()" class="py-1 bg-zinc-700 hover:bg-zinc-600 rounded text-xs">↺ Reset</button>
+                        <button id="meshEditBtn" onclick="toggleMeshEdit()" class="py-1 bg-amber-700 hover:bg-amber-600 rounded text-xs">✎ Edit</button>
+                    </div>
+                    <div class="row"><span>Strength</span><span id="val-meshStrength">100</span></div>
+                    <input type="range" id="meshStrength" min="0" max="200" value="100" class="w-full accent-amber-500 mb-2">
+                </div>
+                <!-- Global warp controls (sine/flag/ripple) -->
+                <div id="globalWarpControls">
+                    <div class="row"><span>Strength</span><span id="val-warpStrength">0</span></div>
+                    <input type="range" id="warpStrength" min="0" max="80" value="0" class="w-full accent-emerald-600 mb-2">
+                    <div class="row"><span>Radius <span class="text-zinc-500 text-xs">(Flag %)</span></span><span id="val-warpRadius">50</span></div>
+                    <input type="range" id="warpRadius" min="5" max="100" value="50" class="w-full accent-emerald-600 mb-2">
+                </div>
                 <div class="flex items-center justify-between">
                     <label class="text-xs text-zinc-400">Animate Warp</label>
                     <label class="relative inline-flex items-center cursor-pointer">
@@ -152,6 +180,80 @@
                 </div>
             </div>
 
+            <!-- Shaders -->
+            <div class="sep">
+                <p class="slabel">Shaders</p>
+                <!-- Colour XY Gradient -->
+                <div class="rounded-xl border border-zinc-700 bg-zinc-800/50 p-3 mb-2">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-semibold">Colour XY Gradient</span>
+                        <button id="shGradToggle" onclick="toggleShader('grad')" class="shader-off px-3 py-0.5 text-xs rounded-lg font-medium">OFF</button>
+                    </div>
+                    <div class="grid grid-cols-2 gap-1 mb-2">
+                        <div><span class="text-xs text-zinc-400">Colour A</span><input type="color" id="gradColorA" value="#ff0080" class="w-full h-6 mt-1 rounded border border-zinc-600"></div>
+                        <div><span class="text-xs text-zinc-400">Colour B</span><input type="color" id="gradColorB" value="#0080ff" class="w-full h-6 mt-1 rounded border border-zinc-600"></div>
+                    </div>
+                    <div class="row"><span>Angle °</span><span id="val-gradAngle">45</span></div>
+                    <input type="range" id="gradAngle" min="0" max="360" value="45" class="w-full accent-violet-500 mb-1">
+                    <div class="row"><span>Opacity</span><span id="val-gradOpacity">60</span></div>
+                    <input type="range" id="gradOpacity" min="0" max="100" value="60" class="w-full accent-violet-500">
+                </div>
+                <!-- Noise -->
+                <div class="rounded-xl border border-zinc-700 bg-zinc-800/50 p-3 mb-2">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-semibold">Perlin Noise</span>
+                        <button id="shNoiseToggle" onclick="toggleShader('noise')" class="shader-off px-3 py-0.5 text-xs rounded-lg font-medium">OFF</button>
+                    </div>
+                    <div class="row"><span>Scale</span><span id="val-noiseScale">3</span></div>
+                    <input type="range" id="noiseScale" min="0.5" max="20" value="3" step="0.5" class="w-full accent-violet-500 mb-1">
+                    <div class="row"><span>Speed</span><span id="val-noiseSpeed">0.3</span></div>
+                    <input type="range" id="noiseSpeed" min="0" max="3" value="0.3" step="0.05" class="w-full accent-violet-500 mb-1">
+                    <div class="row"><span>Opacity</span><span id="val-noiseOpacity">40</span></div>
+                    <input type="range" id="noiseOpacity" min="0" max="100" value="40" class="w-full accent-violet-500">
+                </div>
+                <!-- Colour Noise -->
+                <div class="rounded-xl border border-zinc-700 bg-zinc-800/50 p-3 mb-2">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-semibold">Colour Noise</span>
+                        <button id="shColorNoiseToggle" onclick="toggleShader('colorNoise')" class="shader-off px-3 py-0.5 text-xs rounded-lg font-medium">OFF</button>
+                    </div>
+                    <div class="row"><span>Scale</span><span id="val-colorNoiseScale">5</span></div>
+                    <input type="range" id="colorNoiseScale" min="0.5" max="20" value="5" step="0.5" class="w-full accent-violet-500 mb-1">
+                    <div class="row"><span>Speed</span><span id="val-colorNoiseSpeed">0.5</span></div>
+                    <input type="range" id="colorNoiseSpeed" min="0" max="3" value="0.5" step="0.05" class="w-full accent-violet-500 mb-1">
+                    <div class="row"><span>Opacity</span><span id="val-colorNoiseOpacity">50</span></div>
+                    <input type="range" id="colorNoiseOpacity" min="0" max="100" value="50" class="w-full accent-violet-500">
+                </div>
+                <!-- Oscillation -->
+                <div class="rounded-xl border border-zinc-700 bg-zinc-800/50 p-3 mb-2">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-semibold">Oscillation Bands</span>
+                        <button id="shOscToggle" onclick="toggleShader('osc')" class="shader-off px-3 py-0.5 text-xs rounded-lg font-medium">OFF</button>
+                    </div>
+                    <div class="grid grid-cols-2 gap-1 mb-2">
+                        <div><span class="text-xs text-zinc-400">Colour A</span><input type="color" id="oscColorA" value="#ffff00" class="w-full h-6 mt-1 rounded border border-zinc-600"></div>
+                        <div><span class="text-xs text-zinc-400">Colour B</span><input type="color" id="oscColorB" value="#00ffff" class="w-full h-6 mt-1 rounded border border-zinc-600"></div>
+                    </div>
+                    <div class="row"><span>Frequency</span><span id="val-oscFreq">6</span></div>
+                    <input type="range" id="oscFreq" min="1" max="40" value="6" step="0.5" class="w-full accent-violet-500 mb-1">
+                    <div class="row"><span>Speed</span><span id="val-oscSpeed">1</span></div>
+                    <input type="range" id="oscSpeed" min="0" max="10" value="1" step="0.1" class="w-full accent-violet-500 mb-1">
+                    <div class="row"><span>Angle °</span><span id="val-oscAngle">0</span></div>
+                    <input type="range" id="oscAngle" min="0" max="360" value="0" class="w-full accent-violet-500 mb-1">
+                    <div class="row"><span>Opacity</span><span id="val-oscOpacity">60</span></div>
+                    <input type="range" id="oscOpacity" min="0" max="100" value="60" class="w-full accent-violet-500">
+                </div>
+                <!-- Time Blur -->
+                <div class="rounded-xl border border-zinc-700 bg-zinc-800/50 p-3">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-semibold">Time Blur</span>
+                        <button id="shBlurToggle" onclick="toggleShader('blur')" class="shader-off px-3 py-0.5 text-xs rounded-lg font-medium">OFF</button>
+                    </div>
+                    <div class="row"><span>Persistence</span><span id="val-blurPersist">0.85</span></div>
+                    <input type="range" id="blurPersist" min="0.5" max="0.99" value="0.85" step="0.01" class="w-full accent-violet-500">
+                </div>
+            </div>
+
             <!-- Canvas -->
             <div class="sep">
                 <p class="slabel">Canvas</p>
@@ -177,7 +279,11 @@
 
     <!-- Canvas area -->
     <div class="flex-1 flex items-center justify-center p-4 bg-zinc-950" id="canvasContainer">
-        <canvas id="canvas"></canvas>
+        <div id="canvasWrap">
+            <canvas id="canvas"></canvas>
+            <canvas id="shaderCanvas"></canvas>
+            <canvas id="meshCanvas"></canvas>
+        </div>
     </div>
 </div>
 
@@ -211,49 +317,49 @@
 
     <script>
 // ════════════════════════════════════════════════════════════════════
-//  State
+//  Canvases
 // ════════════════════════════════════════════════════════════════════
-const canvas = document.getElementById('canvas');
-const ctx    = canvas.getContext('2d', { alpha: false });
+const canvas       = document.getElementById('canvas');
+const ctx          = canvas.getContext('2d', { alpha: false });
+const shaderCanvas = document.getElementById('shaderCanvas');
+const meshCanvas   = document.getElementById('meshCanvas');
+
 let animationFrame = null;
-let lastTime = 0;
-let paused   = false;
-let warpPhase = 0;
+let lastTime       = 0;
+let paused         = false;
+let warpPhase      = 0;
+let globalTime     = 0;
 
 // Per-layer accumulated rotation angles (degrees)
-const layerAngle = [0, 0, 0];  // [L1, L2, L3]
+const layerAngle = [0, 0, 0];
 
+// ════════════════════════════════════════════════════════════════════
+//  Params
+// ════════════════════════════════════════════════════════════════════
 const params = {
-    shape:          'lines',
-    blendMode:      'difference',
-    blendStrength:  100,
-    cellCount:      40,    // centre-to-centre spacing (px) — grid density
-    cellSize:       38,    // shape draw size (px) — independent of spacing
-    stroke:         4,
-    warpStrength:   0,
-    warpRadius:     50,
-    warpType:       'none',
-    animateWarp:    false,
-    cutout:         'none',
-    bgColor:        '#0f172a',
-    // Layer 1
-    layer1Color:    '#000000',
-    layer1Speed:    0,
-    layer1OffsetX:  0,
-    layer1OffsetY:  0,
-    layer1On:       true,
-    // Layer 2
-    layer2Color:    '#ffffff',
-    layer2Speed:    20,
-    layer2OffsetX:  0,
-    layer2OffsetY:  0,
-    layer2On:       true,
-    // Layer 3
-    layer3Color:    '#ff6600',
-    layer3Speed:    -20,
-    layer3OffsetX:  0,
-    layer3OffsetY:  0,
-    layer3On:       false,
+    shape:         'lines',
+    blendMode:     'difference',
+    blendStrength: 100,
+    cellCount:     40,
+    cellSize:      38,
+    stroke:        4,
+    warpStrength:  0,
+    warpRadius:    50,
+    warpType:      'none',
+    meshStrength:  100,
+    meshMode:      'fixed',
+    animateWarp:   false,
+    cutout:        'none',
+    bgColor:       '#0f172a',
+    layer1Color: '#000000', layer1Speed:  0,  layer1OffsetX: 0, layer1OffsetY: 0, layer1On: true,
+    layer2Color: '#ffffff', layer2Speed:  20, layer2OffsetX: 0, layer2OffsetY: 0, layer2On: true,
+    layer3Color: '#ff6600', layer3Speed: -20, layer3OffsetX: 0, layer3OffsetY: 0, layer3On: false,
+    // Shaders
+    shGrad:       false, gradColorA: '#ff0080', gradColorB: '#0080ff', gradAngle: 45,  gradOpacity: 60,
+    shNoise:      false, noiseScale: 3,  noiseSpeed: 0.3, noiseOpacity: 40,
+    shColorNoise: false, colorNoiseScale: 5, colorNoiseSpeed: 0.5, colorNoiseOpacity: 50,
+    shOsc:        false, oscColorA: '#ffff00', oscColorB: '#00ffff', oscFreq: 6, oscSpeed: 1, oscAngle: 0, oscOpacity: 60,
+    shBlur:       false, blurPersist: 0.85,
 };
 
 // ════════════════════════════════════════════════════════════════════
@@ -262,25 +368,36 @@ const params = {
 function resizeCanvas() {
     const c    = document.getElementById('canvasContainer');
     const size = Math.min(c.clientWidth * 0.95, c.clientHeight * 0.9, 800);
-    canvas.width  = size;
-    canvas.height = size;
+    [canvas, shaderCanvas, meshCanvas].forEach(cv => {
+        cv.width  = size;
+        cv.height = size;
+        cv.style.width  = size + 'px';
+        cv.style.height = size + 'px';
+    });
+    initMeshKnobs();
+    initWebGL();
     if (paused) renderFrame(lastTime);
 }
 window.addEventListener('resize', resizeCanvas);
-resizeCanvas();
 
 // ════════════════════════════════════════════════════════════════════
 //  Control wiring
 // ════════════════════════════════════════════════════════════════════
 const numericIds = new Set([
     'cellCount','cellSize','stroke','blendStrength',
-    'warpStrength','warpRadius',
+    'warpStrength','warpRadius','meshStrength',
     'layer1Speed','layer1OffsetX','layer1OffsetY',
     'layer2Speed','layer2OffsetX','layer2OffsetY',
     'layer3Speed','layer3OffsetX','layer3OffsetY',
+    'gradAngle','gradOpacity',
+    'noiseScale','noiseSpeed','noiseOpacity',
+    'colorNoiseScale','colorNoiseSpeed','colorNoiseOpacity',
+    'oscFreq','oscSpeed','oscAngle','oscOpacity',
+    'blurPersist',
 ]);
-const selectIds = new Set(['shape','blendMode','warpType','cutout']);
-const colorIds  = new Set(['bgColor','layer1Color','layer2Color','layer3Color']);
+const selectIds = new Set(['shape','blendMode','warpType','cutout','meshMode']);
+const colorIds  = new Set(['bgColor','layer1Color','layer2Color','layer3Color',
+                            'gradColorA','gradColorB','oscColorA','oscColorB']);
 
 document.querySelectorAll('input[type="range"], select, input[type="color"]').forEach(el => {
     el.addEventListener('input', () => {
@@ -289,14 +406,19 @@ document.querySelectorAll('input[type="range"], select, input[type="color"]').fo
         else if (selectIds.has(id))  params[id] = el.value;
         else if (numericIds.has(id)) params[id] = +el.value;
         const valEl = document.getElementById('val-' + id);
-        if (valEl && el.type === 'range') valEl.textContent = Math.round(+el.value);
+        if (valEl && el.type === 'range') valEl.textContent = parseFloat(el.value).toFixed(el.step && el.step < 1 ? 2 : 0);
         if (paused) renderFrame(lastTime);
     });
 });
 
-document.getElementById('animateWarp').addEventListener('change', e => {
-    params.animateWarp = e.target.checked;
+document.getElementById('animateWarp').addEventListener('change', e => { params.animateWarp = e.target.checked; });
+document.getElementById('warpType').addEventListener('change', e => {
+    const isMesh = e.target.value === 'mesh';
+    document.getElementById('meshControls').classList.toggle('hidden', !isMesh);
+    document.getElementById('globalWarpControls').classList.toggle('hidden', isMesh);
+    meshCanvas.style.pointerEvents = (isMesh && meshEditMode) ? 'auto' : 'none';
 });
+document.getElementById('meshMode').addEventListener('change', e => { params.meshMode = e.target.value; });
 
 // ════════════════════════════════════════════════════════════════════
 //  Layer toggles
@@ -312,16 +434,466 @@ function toggleLayer(n) {
 }
 
 // ════════════════════════════════════════════════════════════════════
+//  Shader toggles
+// ════════════════════════════════════════════════════════════════════
+const shaderKeys = { grad:'shGrad', noise:'shNoise', colorNoise:'shColorNoise', osc:'shOsc', blur:'shBlur' };
+function toggleShader(id) {
+    const key = shaderKeys[id];
+    params[key] = !params[key];
+    const btn = document.getElementById('sh' + id.charAt(0).toUpperCase() + id.slice(1) + 'Toggle');
+    btn.textContent = params[key] ? 'ON' : 'OFF';
+    btn.classList.toggle('shader-on',  params[key]);
+    btn.classList.toggle('shader-off', !params[key]);
+    if (paused) renderFrame(lastTime);
+}
+
+// ════════════════════════════════════════════════════════════════════
 //  Pause / Resume
 // ════════════════════════════════════════════════════════════════════
 function togglePause() {
     paused = !paused;
     document.getElementById('pauseBtn').textContent = paused ? '▶ Resume' : '⏸ Pause';
-    if (!paused) {
-        lastTime = 0;
-        animationFrame = requestAnimationFrame(renderFrame);
+    if (!paused) { lastTime = 0; animationFrame = requestAnimationFrame(renderFrame); }
+    else if (animationFrame) cancelAnimationFrame(animationFrame);
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  ── MESH WARP ───────────────────────────────────────────────────
+//  4×4 grid of bicubic-like control points.
+//  Each point stores { x, y } in canvas UV space [0..1].
+//  Neutral = uniform grid. User drags to deform.
+// ════════════════════════════════════════════════════════════════════
+const MESH_ROWS = 4, MESH_COLS = 4;
+let meshPoints = [];   // [row][col] = {x, y}  (0..1 UV)
+let meshEditMode = false;
+let draggingPoint = null;
+
+function resetMesh() {
+    meshPoints = [];
+    for (let r = 0; r < MESH_ROWS; r++) {
+        meshPoints.push([]);
+        for (let c = 0; c < MESH_COLS; c++) {
+            meshPoints[r].push({ x: c / (MESH_COLS-1), y: r / (MESH_ROWS-1) });
+        }
+    }
+    updateMeshKnobs();
+    if (paused) renderFrame(lastTime);
+}
+
+function toggleMeshEdit() {
+    meshEditMode = !meshEditMode;
+    const btn = document.getElementById('meshEditBtn');
+    btn.textContent    = meshEditMode ? '✔ Done' : '✎ Edit';
+    btn.className      = meshEditMode
+        ? 'py-1 bg-amber-500 hover:bg-amber-400 rounded text-xs'
+        : 'py-1 bg-amber-700 hover:bg-amber-600 rounded text-xs';
+    meshCanvas.style.pointerEvents = meshEditMode ? 'auto' : 'none';
+    updateMeshKnobs();
+}
+
+// Map a canvas pixel coordinate [0..size] → mesh-displaced coordinate
+// For fixed mode: displaces before layer rotation is applied.
+// For layer mode: displaces in layer-local space (after rotation).
+// Returns {dx, dy} offset to add to the canvas pixel.
+function meshDisplace(px, py, layerRot) {
+    if (params.warpType !== 'mesh' || meshPoints.length === 0) return {dx:0, dy:0};
+    const W = canvas.width, H = canvas.height;
+    const strength = params.meshStrength / 100;
+
+    // Convert canvas coords to UV [0..1]
+    let u = px / W, v = py / H;
+    if (params.meshMode === 'layer' && layerRot !== 0) {
+        // rotate UV back to layer-local space
+        const cx = 0.5, cy = 0.5;
+        const rad = -layerRot * Math.PI / 180;
+        const du = u - cx, dv = v - cy;
+        u = cx + du * Math.cos(rad) - dv * Math.sin(rad);
+        v = cy + du * Math.sin(rad) + dv * Math.cos(rad);
+    }
+
+    // Bilinear interpolation across mesh
+    const tc = u * (MESH_COLS-1);
+    const tr = v * (MESH_ROWS-1);
+    const c0 = Math.min(MESH_COLS-2, Math.max(0, Math.floor(tc)));
+    const r0 = Math.min(MESH_ROWS-2, Math.max(0, Math.floor(tr)));
+    const fu = tc - c0, fv = tr - r0;
+
+    const p00 = meshPoints[r0  ][c0  ];
+    const p10 = meshPoints[r0  ][c0+1];
+    const p01 = meshPoints[r0+1][c0  ];
+    const p11 = meshPoints[r0+1][c0+1];
+
+    // Neutral target (what the point should map to without distortion)
+    const nu = c0 / (MESH_COLS-1) + fu / (MESH_COLS-1);
+    const nv = r0 / (MESH_ROWS-1) + fv / (MESH_ROWS-1);
+
+    // Displaced target
+    const du2 = p00.x*(1-fu)*(1-fv) + p10.x*fu*(1-fv) + p01.x*(1-fu)*fv + p11.x*fu*fv;
+    const dv2 = p00.y*(1-fu)*(1-fv) + p10.y*fu*(1-fv) + p01.y*(1-fu)*fv + p11.y*fu*fv;
+
+    return {
+        dx: (du2 - nu) * W * strength,
+        dy: (dv2 - nv) * H * strength
+    };
+}
+
+// ── Mesh knob DOM elements ───────────────────────────────────────
+let knobEls = [];
+function initMeshKnobs() {
+    knobEls.forEach(k => k.remove());
+    knobEls = [];
+    const wrap = document.getElementById('canvasWrap');
+    for (let r = 0; r < MESH_ROWS; r++) {
+        knobEls.push([]);
+        for (let c = 0; c < MESH_COLS; c++) {
+            const el = document.createElement('div');
+            el.className = 'cp-knob';
+            el.style.display = 'none';
+            el.dataset.row = r;
+            el.dataset.col = c;
+            wrap.appendChild(el);
+            knobEls[r].push(el);
+            // Pointer events
+            el.addEventListener('pointerdown', e => {
+                e.preventDefault();
+                draggingPoint = { r, c };
+                el.setPointerCapture(e.pointerId);
+            });
+        }
+    }
+    resetMesh();
+}
+
+function updateMeshKnobs() {
+    const show = meshEditMode && params.warpType === 'mesh';
+    for (let r = 0; r < MESH_ROWS; r++) {
+        for (let c = 0; c < MESH_COLS; c++) {
+            const el = knobEls[r][c];
+            el.style.display = show ? 'block' : 'none';
+            if (show) {
+                const pt = meshPoints[r][c];
+                el.style.left = (pt.x * canvas.width)  + 'px';
+                el.style.top  = (pt.y * canvas.height) + 'px';
+            }
+        }
+    }
+    // Draw mesh lines on meshCanvas
+    drawMeshOverlay();
+}
+
+function drawMeshOverlay() {
+    const mc = meshCanvas.getContext('2d');
+    mc.clearRect(0, 0, meshCanvas.width, meshCanvas.height);
+    if (!meshEditMode || params.warpType !== 'mesh') return;
+    mc.strokeStyle = 'rgba(251,191,36,0.5)';
+    mc.lineWidth   = 1;
+    const W = canvas.width, H = canvas.height;
+    // Draw grid lines
+    for (let r = 0; r < MESH_ROWS; r++) {
+        mc.beginPath();
+        for (let c = 0; c < MESH_COLS; c++) {
+            const pt = meshPoints[r][c];
+            c === 0 ? mc.moveTo(pt.x*W, pt.y*H) : mc.lineTo(pt.x*W, pt.y*H);
+        }
+        mc.stroke();
+    }
+    for (let c = 0; c < MESH_COLS; c++) {
+        mc.beginPath();
+        for (let r = 0; r < MESH_ROWS; r++) {
+            const pt = meshPoints[r][c];
+            r === 0 ? mc.moveTo(pt.x*W, pt.y*H) : mc.lineTo(pt.x*W, pt.y*H);
+        }
+        mc.stroke();
+    }
+}
+
+// Pointer move/up on meshCanvas
+meshCanvas.addEventListener('pointermove', e => {
+    if (!draggingPoint) return;
+    const rect = meshCanvas.getBoundingClientRect();
+    const scaleX = canvas.width  / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const x = (e.clientX - rect.left) * scaleX / canvas.width;
+    const y = (e.clientY - rect.top)  * scaleY / canvas.height;
+    meshPoints[draggingPoint.r][draggingPoint.c].x = Math.max(0, Math.min(1, x));
+    meshPoints[draggingPoint.r][draggingPoint.c].y = Math.max(0, Math.min(1, y));
+    updateMeshKnobs();
+    if (paused) renderFrame(lastTime);
+});
+meshCanvas.addEventListener('pointerup',   () => { draggingPoint = null; });
+meshCanvas.addEventListener('pointerleave',() => { draggingPoint = null; });
+
+// ════════════════════════════════════════════════════════════════════
+//  ── WebGL SHADER CANVAS ─────────────────────────────────────────
+// ════════════════════════════════════════════════════════════════════
+let gl = null, shaderProg = null, shaderBuf = null;
+// Time-blur accumulation: we render to a texture, blend with previous frame
+let blurFBO = null, blurTex = [null, null], blurPingPong = 0;
+
+const VERT_SRC = `
+attribute vec2 a_pos;
+varying   vec2 v_uv;
+void main() { v_uv = a_pos * 0.5 + 0.5; gl_Position = vec4(a_pos, 0.0, 1.0); }
+`;
+
+// Simplex-like noise from hash
+const NOISE_GLSL = `
+vec3 mod289(vec3 x){return x-floor(x*(1./289.))*289.;}
+vec2 mod289v(vec2 x){return x-floor(x*(1./289.))*289.;}
+vec3 permute(vec3 x){return mod289((x*34.+1.)*x);}
+float snoise(vec2 v){
+    const vec4 C=vec4(0.211324865405187,0.366025403784439,-0.577350269189626,0.024390243902439);
+    vec2 i=floor(v+dot(v,C.yy)),x0=v-i+dot(i,C.xx);
+    vec2 i1=(x0.x>x0.y)?vec2(1.,0.):vec2(0.,1.);
+    vec4 x12=x0.xyxy+C.xxzz; x12.xy-=i1;
+    i=mod289v(i);
+    vec3 p=permute(permute(i.y+vec3(0.,i1.y,1.))+i.x+vec3(0.,i1.x,1.));
+    vec3 m=max(0.5-vec3(dot(x0,x0),dot(x12.xy,x12.xy),dot(x12.zw,x12.zw)),0.);
+    m=m*m; m=m*m;
+    vec3 x2=fract(p*C.www)*2.-1.;
+    vec3 h=abs(x2)-.5;
+    vec3 ox=floor(x2+.5);
+    vec3 a0=x2-ox;
+    m*=1.79284291400159-.85373472095314*(a0*a0+h*h);
+    vec3 g; g.x=a0.x*x0.x+h.x*x0.y; g.yz=a0.yz*x12.xz+h.yz*x12.yw;
+    return 130.*dot(m,g);
+}
+`;
+
+const FRAG_SRC = `
+precision mediump float;
+varying vec2 v_uv;
+uniform float u_time;
+uniform vec2  u_res;
+
+// ── Gradient ──
+uniform bool  u_gradOn;
+uniform vec3  u_gradA, u_gradB;
+uniform float u_gradAngle, u_gradOpacity;
+
+// ── Noise ──
+uniform bool  u_noiseOn;
+uniform float u_noiseScale, u_noiseSpeed, u_noiseOpacity;
+
+// ── Colour Noise ──
+uniform bool  u_colorNoiseOn;
+uniform float u_cnScale, u_cnSpeed, u_cnOpacity;
+
+// ── Oscillation ──
+uniform bool  u_oscOn;
+uniform vec3  u_oscA, u_oscB;
+uniform float u_oscFreq, u_oscSpeed, u_oscAngle, u_oscOpacity;
+
+${NOISE_GLSL}
+
+vec3 hexToRgb(vec3 c){ return c; }
+
+void main(){
+    vec4 out_col = vec4(0.0);
+
+    // ── Gradient ──
+    if(u_gradOn){
+        float rad = u_gradAngle * 3.14159265 / 180.0;
+        vec2 d = vec2(cos(rad), sin(rad));
+        float t = clamp(dot(v_uv - 0.5, d) + 0.5, 0.0, 1.0);
+        vec3 gc = mix(u_gradA, u_gradB, t);
+        out_col = mix(out_col, vec4(gc, 1.0), u_gradOpacity / 100.0);
+    }
+
+    // ── Perlin Noise (monochrome overlay) ──
+    if(u_noiseOn){
+        float n = snoise(v_uv * u_noiseScale + u_noiseSpeed * u_time);
+        n = n * 0.5 + 0.5;
+        vec3 nc = vec3(n);
+        float a = u_noiseOpacity / 100.0;
+        out_col.rgb = mix(out_col.rgb, nc, a);
+        out_col.a   = max(out_col.a, a * n);
+    }
+
+    // ── Colour Noise (three offset noise channels = RGB) ──
+    if(u_colorNoiseOn){
+        vec2 uv2 = v_uv * u_cnScale;
+        float t  = u_cnSpeed * u_time;
+        float r  = snoise(uv2 + vec2(0.0, t)) * 0.5 + 0.5;
+        float g  = snoise(uv2 + vec2(3.3, t + 1.1)) * 0.5 + 0.5;
+        float b  = snoise(uv2 + vec2(6.6, t + 2.2)) * 0.5 + 0.5;
+        vec3  cnc = vec3(r,g,b);
+        float a   = u_cnOpacity / 100.0;
+        out_col.rgb = mix(out_col.rgb, cnc, a);
+        out_col.a   = max(out_col.a, a);
+    }
+
+    // ── Oscillation bands ──
+    if(u_oscOn){
+        float rad = u_oscAngle * 3.14159265 / 180.0;
+        vec2 dir  = vec2(cos(rad), sin(rad));
+        float p   = dot(v_uv, dir);
+        float wave = sin(p * u_oscFreq * 6.2831853 - u_oscSpeed * u_time) * 0.5 + 0.5;
+        vec3  oc   = mix(u_oscA, u_oscB, wave);
+        float a    = u_oscOpacity / 100.0;
+        out_col.rgb = mix(out_col.rgb, oc, a * wave);
+        out_col.a   = max(out_col.a, a * wave);
+    }
+
+    gl_FragColor = out_col;
+}
+`;
+
+// Time-blur blend shader: mix previous accumulated frame with new shading
+const BLUR_FRAG_SRC = `
+precision mediump float;
+varying vec2 v_uv;
+uniform sampler2D u_prev;
+uniform sampler2D u_curr;
+uniform float u_persist;
+void main(){
+    vec4 prev = texture2D(u_prev, v_uv);
+    vec4 curr = texture2D(u_curr, v_uv);
+    gl_FragColor = mix(curr, prev, u_persist);
+}
+`;
+
+function compileShader(src, type) {
+    const s = gl.createShader(type);
+    gl.shaderSource(s, src);
+    gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS))
+        console.warn('Shader compile error:', gl.getShaderInfoLog(s));
+    return s;
+}
+
+function makeProgram(vsrc, fsrc) {
+    const p = gl.createProgram();
+    gl.attachShader(p, compileShader(vsrc, gl.VERTEX_SHADER));
+    gl.attachShader(p, compileShader(fsrc, gl.FRAGMENT_SHADER));
+    gl.linkProgram(p);
+    return p;
+}
+
+function initWebGL() {
+    gl = shaderCanvas.getContext('webgl', { alpha:true, premultipliedAlpha:false });
+    if (!gl) { console.warn('WebGL not available'); return; }
+
+    shaderProg = makeProgram(VERT_SRC, FRAG_SRC);
+
+    // Full-screen quad
+    shaderBuf = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, shaderBuf);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
+
+    // Two ping-pong textures + an FBO for time-blur accumulation
+    blurFBO = gl.createFramebuffer();
+    blurProg = makeProgram(VERT_SRC, BLUR_FRAG_SRC);
+    for (let i = 0; i < 2; i++) {
+        blurTex[i] = gl.createTexture();
+        gl.bindTexture(gl.TEXTURE_2D, blurTex[i]);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA,
+            shaderCanvas.width, shaderCanvas.height,
+            0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    }
+}
+
+let blurProg = null;
+
+function hexToRgb01(hex) {
+    const r = parseInt(hex.slice(1,3),16)/255;
+    const g = parseInt(hex.slice(3,5),16)/255;
+    const b = parseInt(hex.slice(5,7),16)/255;
+    return [r,g,b];
+}
+
+function drawShaders(time) {
+    if (!gl || !shaderProg) return;
+    const anyOn = params.shGrad || params.shNoise || params.shColorNoise || params.shOsc || params.shBlur;
+    if (!anyOn) {
+        // Clear the shader canvas
+        gl.viewport(0, 0, shaderCanvas.width, shaderCanvas.height);
+        gl.clearColor(0,0,0,0);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+        return;
+    }
+
+    const W = shaderCanvas.width, H = shaderCanvas.height;
+    gl.viewport(0, 0, W, H);
+
+    function setFullQuad(prog) {
+        gl.bindBuffer(gl.ARRAY_BUFFER, shaderBuf);
+        const loc = gl.getAttribLocation(prog, 'a_pos');
+        gl.enableVertexAttribArray(loc);
+        gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+    }
+
+    function u1f(prog, name, v){ gl.uniform1f(gl.getUniformLocation(prog, name), v); }
+    function u1i(prog, name, v){ gl.uniform1i(gl.getUniformLocation(prog, name), v); }
+    function u2f(prog, name, a,b){ gl.uniform2f(gl.getUniformLocation(prog, name), a, b); }
+    function u3f(prog, name, arr){ gl.uniform3fv(gl.getUniformLocation(prog, name), arr); }
+
+    if (params.shBlur && blurProg) {
+        // Render shader to ping-pong[blurPingPong] FBO
+        gl.bindFramebuffer(gl.FRAMEBUFFER, blurFBO);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, blurTex[blurPingPong], 0);
+        gl.clear(gl.COLOR_BUFFER_BIT);
     } else {
-        if (animationFrame) cancelAnimationFrame(animationFrame);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    }
+
+    // Draw shader effects
+    gl.useProgram(shaderProg);
+    setFullQuad(shaderProg);
+    gl.clearColor(0,0,0,0);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+
+    u1f(shaderProg, 'u_time', time);
+    u2f(shaderProg, 'u_res', W, H);
+    // Gradient
+    u1i(shaderProg, 'u_gradOn', params.shGrad ? 1 : 0);
+    u3f(shaderProg, 'u_gradA',  hexToRgb01(params.gradColorA));
+    u3f(shaderProg, 'u_gradB',  hexToRgb01(params.gradColorB));
+    u1f(shaderProg, 'u_gradAngle', params.gradAngle);
+    u1f(shaderProg, 'u_gradOpacity', params.gradOpacity);
+    // Noise
+    u1i(shaderProg, 'u_noiseOn', params.shNoise ? 1 : 0);
+    u1f(shaderProg, 'u_noiseScale', params.noiseScale);
+    u1f(shaderProg, 'u_noiseSpeed', params.noiseSpeed);
+    u1f(shaderProg, 'u_noiseOpacity', params.noiseOpacity);
+    // Colour Noise
+    u1i(shaderProg, 'u_colorNoiseOn', params.shColorNoise ? 1 : 0);
+    u1f(shaderProg, 'u_cnScale', params.colorNoiseScale);
+    u1f(shaderProg, 'u_cnSpeed', params.colorNoiseSpeed);
+    u1f(shaderProg, 'u_cnOpacity', params.colorNoiseOpacity);
+    // Oscillation
+    u1i(shaderProg, 'u_oscOn', params.shOsc ? 1 : 0);
+    u3f(shaderProg, 'u_oscA',  hexToRgb01(params.oscColorA));
+    u3f(shaderProg, 'u_oscB',  hexToRgb01(params.oscColorB));
+    u1f(shaderProg, 'u_oscFreq', params.oscFreq);
+    u1f(shaderProg, 'u_oscSpeed', params.oscSpeed);
+    u1f(shaderProg, 'u_oscAngle', params.oscAngle);
+    u1f(shaderProg, 'u_oscOpacity', params.oscOpacity);
+
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+
+    // Time blur: blend with previous frame
+    if (params.shBlur && blurProg) {
+        const next = 1 - blurPingPong;
+        // Read current FBO result (blurTex[blurPingPong]) and old (blurTex[next]),
+        // blend to output canvas
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        gl.useProgram(blurProg);
+        setFullQuad(blurProg);
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, blurTex[next]);           // previous accumulated
+        gl.uniform1i(gl.getUniformLocation(blurProg,'u_prev'), 0);
+        gl.activeTexture(gl.TEXTURE1);
+        gl.bindTexture(gl.TEXTURE_2D, blurTex[blurPingPong]);   // current frame
+        gl.uniform1i(gl.getUniformLocation(blurProg,'u_curr'), 1);
+        u1f(blurProg, 'u_persist', params.blurPersist);
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+        blurPingPong = next;
     }
 }
 
@@ -334,24 +906,23 @@ function renderFrame(time = 0) {
     lastTime = time;
 
     if (!paused) {
+        globalTime += delta;
         layerAngle[0] = (layerAngle[0] + params.layer1Speed * delta) % 360;
         layerAngle[1] = (layerAngle[1] + params.layer2Speed * delta) % 360;
         layerAngle[2] = (layerAngle[2] + params.layer3Speed * delta) % 360;
         if (params.animateWarp) warpPhase += delta;
     }
 
+    // ── 2D pattern canvas ──
     ctx.fillStyle = params.bgColor;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-
     const clipped = applyClip(ctx);
 
-    // Layer 1 always source-over at full opacity
     if (params.layer1On) {
         ctx.globalCompositeOperation = 'source-over';
         ctx.globalAlpha = 1;
         renderLayerOn(ctx, layerAngle[0], params.layer1OffsetX, params.layer1OffsetY, params.layer1Color);
     }
-    // Layers 2+3 use chosen blend mode and strength
     const alpha = params.blendStrength / 100;
     if (params.layer2On) {
         ctx.globalCompositeOperation = params.blendMode;
@@ -367,6 +938,9 @@ function renderFrame(time = 0) {
     ctx.globalAlpha = 1;
     if (clipped) ctx.restore();
 
+    // ── WebGL shader overlay ──
+    drawShaders(globalTime);
+
     if (!paused) animationFrame = requestAnimationFrame(renderFrame);
 }
 
@@ -375,177 +949,201 @@ function renderFrame(time = 0) {
 // ════════════════════════════════════════════════════════════════════
 function applyClip(c) {
     if (params.cutout === 'none') return false;
-    const cx = canvas.width / 2, cy = canvas.height / 2;
+    const cx = canvas.width/2, cy = canvas.height/2;
     const r  = Math.min(canvas.width, canvas.height) / 2 * 0.85;
-    c.save();
-    c.beginPath();
-    if (params.cutout === 'circle') {
-        c.arc(cx, cy, r, 0, Math.PI * 2);
-    } else if (params.cutout === 'square') {
-        const s = r * 1.4; c.rect(cx - s/2, cy - s/2, s, s);
-    } else if (params.cutout === 'diamond') {
-        c.moveTo(cx, cy - r); c.lineTo(cx + r, cy);
-        c.lineTo(cx, cy + r); c.lineTo(cx - r, cy);
-        c.closePath();
+    c.save(); c.beginPath();
+    if      (params.cutout === 'circle')  c.arc(cx, cy, r, 0, Math.PI*2);
+    else if (params.cutout === 'square') { const s = r*1.4; c.rect(cx-s/2, cy-s/2, s, s); }
+    else if (params.cutout === 'diamond') {
+        c.moveTo(cx, cy-r); c.lineTo(cx+r, cy);
+        c.lineTo(cx, cy+r); c.lineTo(cx-r, cy); c.closePath();
     }
-    c.clip();
-    return true;
+    c.clip(); return true;
 }
 
 // ════════════════════════════════════════════════════════════════════
-//  Render one layer onto any 2D context (uses canvas.width/height)
+//  Render one layer — with optional mesh warp applied point-by-point
+//  via an offscreen canvas pixel-displacement trick for closed shapes,
+//  or by warping each line segment's endpoint for line-based shapes.
 // ════════════════════════════════════════════════════════════════════
 function renderLayerOn(c, angle, offX, offY, color) {
     c.save();
-    c.translate(canvas.width / 2 + offX, canvas.height / 2 + offY);
-    c.rotate(angle * Math.PI / 180);
+    c.translate(canvas.width/2 + offX, canvas.height/2 + offY);
+    c.rotate(angle * Math.PI/180);
     c.strokeStyle = color;
     c.lineWidth   = params.stroke;
     c.lineCap     = 'square';
 
     const maxDist = Math.max(canvas.width, canvas.height) * 0.82;
-    const spacing = params.cellCount;  // centre-to-centre grid step (px)
-    const size    = params.cellSize;   // shape draw size (px), independent of spacing
+    const spacing = params.cellCount;
+    const size    = params.cellSize;
 
     switch (params.shape) {
-        case 'lines':       drawLines(c, spacing, size, maxDist);       break;
-        case 'radial':      drawRadial(c, spacing, size, maxDist);      break;
-        case 'iso-circles': drawIsoCircles(c, spacing, size, maxDist);  break;
-        case 'grid':        drawGrid(c, spacing, size, maxDist);        break;
-        case 'hexagon':     drawHexGrid(c, spacing, size, maxDist);     break;
-        case 'triangle':    drawTriGrid(c, spacing, size, maxDist);     break;
+        case 'lines':       drawLines(c, spacing, size, maxDist, angle);       break;
+        case 'radial':      drawRadial(c, spacing, size, maxDist, angle);      break;
+        case 'iso-circles': drawIsoCircles(c, spacing, size, maxDist, angle);  break;
+        case 'grid':        drawGrid(c, spacing, size, maxDist, angle);        break;
+        case 'hexagon':     drawHexGrid(c, spacing, size, maxDist, angle);     break;
+        case 'triangle':    drawTriGrid(c, spacing, size, maxDist, angle);     break;
     }
     c.restore();
 }
 
 // ════════════════════════════════════════════════════════════════════
-//  Shape renderers
-//  spacing = centre-to-centre grid step (cellCount, px)
-//  size    = shape draw size (cellSize, px), independent of spacing
+//  Shape renderers  (pass layerRot so mesh warp can choose mode)
 // ════════════════════════════════════════════════════════════════════
-function segs() { return params.warpType === 'none' ? 1 : 32; }
+function segs()    { return (params.warpType !== 'none') ? 32 : 1; }
+function isMesh()  { return params.warpType === 'mesh'; }
 
-// Parallel vertical lines
-// spacing = gap between line centres; size not applicable (infinite lines)
-function drawLines(c, spacing, _size, maxDist) {
-    const n  = Math.ceil(maxDist * 2 / spacing) + 4;
-    const sg = segs();
-    for (let i = -n/2; i <= n/2; i++) strokeVLine(c, i * spacing, maxDist, sg);
+// World-to-canvas for mesh: add mesh displacement to a point
+// px,py are in layer-local space (centred, before canvas translation).
+// We convert to canvas UV, get displacement, then convert back.
+function mwarp(px, py, layerRot) {
+    if (!isMesh()) return {x: px, y: py};
+    // Convert layer-local coords to canvas UV [0..1]
+    const cpx = px + canvas.width/2;
+    const cpy = py + canvas.height/2;
+    const d  = meshDisplace(cpx, cpy, layerRot);
+    return { x: px + d.dx, y: py + d.dy };
 }
 
-// Square grid
-function drawGrid(c, spacing, _size, maxDist) {
+function drawLines(c, spacing, _size, maxDist, rot) {
+    const n  = Math.ceil(maxDist * 2 / spacing) + 4;
+    const sg = segs();
+    for (let i = -n/2; i <= n/2; i++) strokeVLine(c, i * spacing, maxDist, sg, rot);
+}
+
+function drawGrid(c, spacing, _size, maxDist, rot) {
     const n  = Math.ceil(maxDist * 2 / spacing) + 4;
     const sg = segs();
     for (let i = -n/2; i <= n/2; i++) {
-        strokeVLine(c, i * spacing, maxDist, sg);
-        strokeHLine(c, i * spacing, maxDist, sg);
+        strokeVLine(c, i * spacing, maxDist, sg, rot);
+        strokeHLine(c, i * spacing, maxDist, sg, rot);
     }
 }
 
-// Radial: concentric rings spaced by 'spacing', spokes independent of size
-function drawRadial(c, spacing, _size, maxDist) {
+function drawRadial(c, spacing, _size, maxDist, rot) {
+    const sg = segs();
     for (let r = spacing; r < maxDist; r += spacing) {
-        c.beginPath(); c.arc(0, 0, r, 0, Math.PI * 2); c.stroke();
-    }
-    const spokes = Math.max(2, Math.round(Math.PI * 2 * (maxDist / 2) / spacing));
-    for (let i = 0; i < spokes; i++) {
-        const a = (i / spokes) * Math.PI * 2;
-        c.beginPath(); c.moveTo(0, 0);
-        c.lineTo(Math.cos(a) * maxDist, Math.sin(a) * maxDist); c.stroke();
-    }
-}
-
-// Isometric circles: circles at triangular grid positions
-// spacing = centre-to-centre distance; size = circle diameter (radius = size/2)
-function drawIsoCircles(c, spacing, size, maxDist) {
-    const hx   = spacing;
-    const hy   = spacing * Math.sqrt(3) / 2;
-    const r    = Math.max(1, size / 2);
-    const cols = Math.ceil(maxDist / hx) + 2;
-    const rows = Math.ceil(maxDist / hy) + 2;
-    for (let row = -rows; row <= rows; row++) {
-        for (let col = -cols; col <= cols; col++) {
-            const x = col * hx + (row % 2 === 0 ? 0 : hx / 2);
-            const y = row * hy;
-            c.beginPath(); c.arc(x, y, r, 0, Math.PI * 2); c.stroke();
-        }
-    }
-}
-
-// Hex grid: grid positions fixed by spacing; circumradius = size/2
-function drawHexGrid(c, spacing, size, maxDist) {
-    const R    = Math.max(1, size / 2);  // draw circumradius, independent of spacing
-    const colW = spacing * 0.75;
-    const rowH = spacing * Math.sqrt(3) / 2;
-    const cols = Math.ceil(maxDist / colW) + 2;
-    const rows = Math.ceil(maxDist / rowH) + 2;
-    for (let row = -rows; row <= rows; row++) {
-        for (let col = -cols; col <= cols; col++) {
-            const cx = col * spacing * 0.75;
-            const cy = row * rowH + (Math.abs(col) % 2 === 1 ? rowH / 2 : 0);
-            strokeHex(c, cx, cy, R);
-        }
-    }
-}
-
-function strokeHex(c, cx, cy, R) {
-    c.beginPath();
-    for (let i = 0; i < 6; i++) {
-        const a = (Math.PI / 3) * i - Math.PI / 6;
-        const x = cx + R * Math.cos(a), y = cy + R * Math.sin(a);
-        i === 0 ? c.moveTo(x, y) : c.lineTo(x, y);
-    }
-    c.closePath(); c.stroke();
-}
-
-// Isometric triangle grid: triangles pointing alternately up/down
-// spacing = triangle cell pitch (centre-to-centre); size = triangle side length
-function drawTriGrid(c, spacing, size, maxDist) {
-    const h    = spacing * Math.sqrt(3) / 2;  // row height based on spacing grid
-    const cols = Math.ceil(maxDist * 2 / spacing) + 4;
-    const rows = Math.ceil(maxDist * 2 / h) + 4;
-    const s    = Math.max(2, size);
-    const th   = s * Math.sqrt(3) / 2;
-    for (let row = -rows; row <= rows; row++) {
-        for (let col = -cols; col <= cols; col++) {
-            const cx = col * spacing * 0.5;
-            const cy = row * h;
-            const up = (col + row) % 2 === 0;
+        if (isMesh()) {
+            // Subdivide arc
             c.beginPath();
-            if (up) {
-                c.moveTo(cx,         cy - th * 2/3);
-                c.lineTo(cx + s/2,   cy + th * 1/3);
-                c.lineTo(cx - s/2,   cy + th * 1/3);
+            const steps = 64;
+            for (let s = 0; s <= steps; s++) {
+                const a = (s / steps) * Math.PI * 2;
+                const raw = { x: Math.cos(a)*r, y: Math.sin(a)*r };
+                const p = mwarp(raw.x, raw.y, rot);
+                s === 0 ? c.moveTo(p.x, p.y) : c.lineTo(p.x, p.y);
+            }
+            c.closePath(); c.stroke();
+        } else {
+            c.beginPath(); c.arc(0, 0, r, 0, Math.PI*2); c.stroke();
+        }
+    }
+    const spokes = Math.max(2, Math.round(Math.PI*2*(maxDist/2)/spacing));
+    for (let i = 0; i < spokes; i++) {
+        const a = (i/spokes)*Math.PI*2;
+        const ex = Math.cos(a)*maxDist, ey = Math.sin(a)*maxDist;
+        if (isMesh()) {
+            c.beginPath();
+            const p = mwarp(ex, ey, rot);
+            c.moveTo(0,0); c.lineTo(p.x, p.y); c.stroke();
+        } else {
+            c.beginPath(); c.moveTo(0,0); c.lineTo(ex, ey); c.stroke();
+        }
+    }
+}
+
+function drawIsoCircles(c, spacing, size, maxDist, rot) {
+    const hx = spacing, hy = spacing * Math.sqrt(3)/2;
+    const r  = Math.max(1, size/2);
+    const cols = Math.ceil(maxDist/hx)+2, rows = Math.ceil(maxDist/hy)+2;
+    for (let row = -rows; row <= rows; row++) {
+        for (let col = -cols; col <= cols; col++) {
+            const cx = col*hx + (row%2===0 ? 0 : hx/2);
+            const cy = row*hy;
+            if (isMesh()) {
+                const p = mwarp(cx, cy, rot);
+                c.beginPath(); c.arc(p.x, p.y, r, 0, Math.PI*2); c.stroke();
             } else {
-                c.moveTo(cx,         cy + th * 2/3);
-                c.lineTo(cx + s/2,   cy - th * 1/3);
-                c.lineTo(cx - s/2,   cy - th * 1/3);
+                c.beginPath(); c.arc(cx, cy, r, 0, Math.PI*2); c.stroke();
+            }
+        }
+    }
+}
+
+function drawHexGrid(c, spacing, size, maxDist, rot) {
+    const R    = Math.max(1, size/2);
+    const colW = spacing*0.75, rowH = spacing*Math.sqrt(3)/2;
+    const cols = Math.ceil(maxDist/colW)+2, rows = Math.ceil(maxDist/rowH)+2;
+    for (let row = -rows; row <= rows; row++) {
+        for (let col = -cols; col <= cols; col++) {
+            const hcx = col*spacing*0.75;
+            const hcy = row*rowH + (Math.abs(col)%2===1 ? rowH/2 : 0);
+            c.beginPath();
+            for (let i = 0; i < 6; i++) {
+                const a = (Math.PI/3)*i - Math.PI/6;
+                const vx = hcx + R*Math.cos(a), vy = hcy + R*Math.sin(a);
+                const p = isMesh() ? mwarp(vx, vy, rot) : {x:vx, y:vy};
+                i === 0 ? c.moveTo(p.x, p.y) : c.lineTo(p.x, p.y);
             }
             c.closePath(); c.stroke();
         }
     }
 }
 
+function drawTriGrid(c, spacing, size, maxDist, rot) {
+    const h    = spacing*Math.sqrt(3)/2;
+    const cols = Math.ceil(maxDist*2/spacing)+4;
+    const rows = Math.ceil(maxDist*2/h)+4;
+    const s    = Math.max(2, size), th = s*Math.sqrt(3)/2;
+    for (let row = -rows; row <= rows; row++) {
+        for (let col = -cols; col <= cols; col++) {
+            const cx = col*spacing*0.5, cy = row*h;
+            const up = (col+row)%2 === 0;
+            const verts = up
+                ? [[cx, cy-th*2/3],[cx+s/2, cy+th/3],[cx-s/2, cy+th/3]]
+                : [[cx, cy+th*2/3],[cx+s/2, cy-th/3],[cx-s/2, cy-th/3]];
+            c.beginPath();
+            verts.forEach(([vx,vy], i) => {
+                const p = isMesh() ? mwarp(vx, vy, rot) : {x:vx, y:vy};
+                i === 0 ? c.moveTo(p.x, p.y) : c.lineTo(p.x, p.y);
+            });
+            c.closePath(); c.stroke();
+        }
+    }
+}
+
 // ════════════════════════════════════════════════════════════════════
-//  Segmented line helpers (enable warp curves)
+//  Segmented line helpers (global warp types: flag, sine, ripple)
 // ════════════════════════════════════════════════════════════════════
-function strokeVLine(c, lineX, maxDist, sg) {
+function strokeVLine(c, lineX, maxDist, sg, rot) {
     c.beginPath();
-    const dy = (maxDist * 2) / sg;
+    const dy = (maxDist*2)/sg;
     for (let s = 0; s <= sg; s++) {
-        const y = -maxDist + s * dy;
-        const x = lineX + warpDX(y, lineX);
+        const y  = -maxDist + s*dy;
+        let x = lineX;
+        if (isMesh()) {
+            const p = mwarp(lineX, y, rot); x = p.x;
+            s === 0 ? c.moveTo(p.x, p.y) : c.lineTo(p.x, p.y);
+            continue;
+        }
+        x = lineX + warpDX(y, lineX);
         s === 0 ? c.moveTo(x, y) : c.lineTo(x, y);
     }
     c.stroke();
 }
 
-function strokeHLine(c, lineY, maxDist, sg) {
+function strokeHLine(c, lineY, maxDist, sg, rot) {
     c.beginPath();
-    const dx = (maxDist * 2) / sg;
+    const dx = (maxDist*2)/sg;
     for (let s = 0; s <= sg; s++) {
-        const x = -maxDist + s * dx;
+        const x  = -maxDist + s*dx;
+        if (isMesh()) {
+            const p = mwarp(x, lineY, rot);
+            s === 0 ? c.moveTo(p.x, p.y) : c.lineTo(p.x, p.y);
+            continue;
+        }
         const y = lineY + warpDX(x, lineY);
         s === 0 ? c.moveTo(x, y) : c.lineTo(x, y);
     }
@@ -553,27 +1151,22 @@ function strokeHLine(c, lineY, maxDist, sg) {
 }
 
 // ════════════════════════════════════════════════════════════════════
-//  Warp displacement
+//  Warp displacement  (legacy flag / sine / ripple)
 // ════════════════════════════════════════════════════════════════════
 function warpDX(along, perp) {
-    if (params.warpStrength === 0 || params.warpType === 'none') return 0;
+    if (params.warpStrength === 0 || params.warpType === 'none' || params.warpType === 'mesh') return 0;
     const phase    = params.animateWarp ? warpPhase * 3 : 0;
     const halfSize = Math.max(canvas.width, canvas.height) / 2;
-    const freq     = (Math.PI * 2 * 3) / (halfSize * 2);
+    const freq     = (Math.PI*2*3)/(halfSize*2);
     switch (params.warpType) {
         case 'flag': {
-            const rPx    = params.warpRadius / 100 * halfSize;
-            const dist   = Math.sqrt(along * along + perp * perp);
-            const t      = Math.max(0, 1 - dist / rPx);
-            const falloff = t * t * (3 - 2 * t);  // smoothstep
-            return Math.sin(along * freq + phase) * params.warpStrength * falloff;
+            const rPx = params.warpRadius/100*halfSize;
+            const d   = Math.sqrt(along*along+perp*perp);
+            const t   = Math.max(0, 1 - d/rPx);
+            return Math.sin(along*freq+phase) * params.warpStrength * t*t*(3-2*t);
         }
-        case 'sine':
-            return Math.sin(along * freq + phase) * params.warpStrength;
-        case 'ripple': {
-            const d = Math.sqrt(along * along + perp * perp);
-            return Math.sin(d * freq + phase) * params.warpStrength;
-        }
+        case 'sine':   return Math.sin(along*freq+phase) * params.warpStrength;
+        case 'ripple': return Math.sin(Math.sqrt(along*along+perp*perp)*freq+phase) * params.warpStrength;
         default: return 0;
     }
 }
@@ -589,20 +1182,17 @@ function closeDownload() { document.getElementById('dlModal').classList.remove('
 // ════════════════════════════════════════════════════════════════════
 function exportLayer(layerNum) {
     const oc  = document.createElement('canvas');
-    oc.width  = canvas.width;
-    oc.height = canvas.height;
-    const oc2 = oc.getContext('2d');  // default alpha:true → transparent bg
-
+    oc.width  = canvas.width; oc.height = canvas.height;
+    const oc2 = oc.getContext('2d');
     if (layerNum === 0) {
-        oc2.drawImage(canvas, 0, 0);  // copy composite
+        oc2.drawImage(canvas, 0, 0);
     } else {
         oc2.clearRect(0, 0, oc.width, oc.height);
-        const cKey = 'layer' + layerNum + 'Color';
-        const xKey = 'layer' + layerNum + 'OffsetX';
-        const yKey = 'layer' + layerNum + 'OffsetY';
-        renderLayerOn(oc2, layerAngle[layerNum - 1], params[xKey], params[yKey], params[cKey]);
+        const cKey = 'layer'+layerNum+'Color';
+        const xKey = 'layer'+layerNum+'OffsetX';
+        const yKey = 'layer'+layerNum+'OffsetY';
+        renderLayerOn(oc2, layerAngle[layerNum-1], params[xKey], params[yKey], params[cKey]);
     }
-
     const link = document.createElement('a');
     link.download = layerNum === 0 ? 'moire-composite.png' : `moire-layer${layerNum}.png`;
     link.href = oc.toDataURL('image/png');
@@ -614,25 +1204,25 @@ function exportLayer(layerNum) {
 //  Export: SVG per layer
 // ════════════════════════════════════════════════════════════════════
 function exportSVG(layerNum) {
-    const cKey = 'layer' + layerNum + 'Color';
-    const xKey = 'layer' + layerNum + 'OffsetX';
-    const yKey = 'layer' + layerNum + 'OffsetY';
-    const ang  = layerAngle[layerNum - 1];
+    const cKey = 'layer'+layerNum+'Color';
+    const xKey = 'layer'+layerNum+'OffsetX';
+    const yKey = 'layer'+layerNum+'OffsetY';
+    const ang  = layerAngle[layerNum-1];
     const offX = params[xKey], offY = params[yKey];
     const color = params[cKey];
     const w = canvas.width, h = canvas.height;
-    const cx = w / 2 + offX, cy = h / 2 + offY;
+    const cx = w/2+offX, cy = h/2+offY;
 
     const paths = buildSVGPaths(w, h);
     const svg =
 `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
-  <g transform="translate(${cx.toFixed(1)},${cy.toFixed(1)}) rotate(${(ang % 360).toFixed(2)})"
+  <g transform="translate(${cx.toFixed(1)},${cy.toFixed(1)}) rotate(${(ang%360).toFixed(2)})"
      stroke="${color}" stroke-width="${params.stroke}" fill="none" stroke-linecap="square">
     ${paths}
   </g>
 </svg>`;
 
-    const blob = new Blob([svg], { type: 'image/svg+xml' });
+    const blob = new Blob([svg], { type:'image/svg+xml' });
     const link = document.createElement('a');
     link.download = `moire-layer${layerNum}.svg`;
     link.href = URL.createObjectURL(blob);
@@ -649,15 +1239,15 @@ function buildSVGPaths(w, h) {
 
     switch (params.shape) {
         case 'lines': {
-            const n = Math.ceil(maxDist * 2 / spacing) + 4;
+            const n = Math.ceil(maxDist*2/spacing)+4;
             for (let i = -n/2; i <= n/2; i++)
                 parts.push(`<line x1="${i*spacing}" y1="${-maxDist}" x2="${i*spacing}" y2="${maxDist}"/>`);
             break;
         }
         case 'grid': {
-            const n = Math.ceil(maxDist * 2 / spacing) + 4;
+            const n = Math.ceil(maxDist*2/spacing)+4;
             for (let i = -n/2; i <= n/2; i++) {
-                const p = i * spacing;
+                const p = i*spacing;
                 parts.push(`<line x1="${p}" y1="${-maxDist}" x2="${p}" y2="${maxDist}"/>`);
                 parts.push(`<line x1="${-maxDist}" y1="${p}" x2="${maxDist}" y2="${p}"/>`);
             }
@@ -666,53 +1256,53 @@ function buildSVGPaths(w, h) {
         case 'radial': {
             for (let r = spacing; r < maxDist; r += spacing)
                 parts.push(`<circle cx="0" cy="0" r="${r}"/>`);
-            const spokes = Math.max(2, Math.round(Math.PI * 2 * (maxDist / 2) / spacing));
+            const spokes = Math.max(2, Math.round(Math.PI*2*(maxDist/2)/spacing));
             for (let i = 0; i < spokes; i++) {
-                const a = (i / spokes) * Math.PI * 2;
+                const a = (i/spokes)*Math.PI*2;
                 parts.push(`<line x1="0" y1="0" x2="${(Math.cos(a)*maxDist).toFixed(1)}" y2="${(Math.sin(a)*maxDist).toFixed(1)}"/>`);
             }
             break;
         }
         case 'iso-circles': {
-            const hx = spacing, hy = spacing * Math.sqrt(3) / 2;
-            const r  = Math.max(1, size / 2);
-            const cols = Math.ceil(maxDist / hx) + 2, rows = Math.ceil(maxDist / hy) + 2;
+            const hx = spacing, hy = spacing*Math.sqrt(3)/2;
+            const r  = Math.max(1, size/2);
+            const cols = Math.ceil(maxDist/hx)+2, rows = Math.ceil(maxDist/hy)+2;
             for (let row = -rows; row <= rows; row++)
                 for (let col = -cols; col <= cols; col++) {
-                    const x = (col * hx + (row % 2 === 0 ? 0 : hx / 2)).toFixed(1);
-                    const y = (row * hy).toFixed(1);
+                    const x = (col*hx+(row%2===0?0:hx/2)).toFixed(1);
+                    const y = (row*hy).toFixed(1);
                     parts.push(`<circle cx="${x}" cy="${y}" r="${r.toFixed(1)}"/>`);
                 }
             break;
         }
         case 'hexagon': {
-            const R    = Math.max(1, size / 2);
-            const colW = spacing * 0.75, rowH = spacing * Math.sqrt(3) / 2;
-            const cols = Math.ceil(maxDist / colW) + 2, rows = Math.ceil(maxDist / rowH) + 2;
+            const R    = Math.max(1, size/2);
+            const colW = spacing*0.75, rowH = spacing*Math.sqrt(3)/2;
+            const cols = Math.ceil(maxDist/colW)+2, rows = Math.ceil(maxDist/rowH)+2;
             for (let row = -rows; row <= rows; row++)
                 for (let col = -cols; col <= cols; col++) {
-                    const cx = col * spacing * 0.75;
-                    const cy = row * rowH + (Math.abs(col) % 2 === 1 ? rowH / 2 : 0);
-                    const pts = Array.from({length:6}, (_,i) => {
-                        const a = (Math.PI/3)*i - Math.PI/6;
-                        return `${(cx+R*Math.cos(a)).toFixed(1)},${(cy+R*Math.sin(a)).toFixed(1)}`;
+                    const hcx = col*spacing*0.75;
+                    const hcy = row*rowH+(Math.abs(col)%2===1?rowH/2:0);
+                    const pts = Array.from({length:6},(_,i)=>{
+                        const a = (Math.PI/3)*i-Math.PI/6;
+                        return `${(hcx+R*Math.cos(a)).toFixed(1)},${(hcy+R*Math.sin(a)).toFixed(1)}`;
                     }).join(' ');
                     parts.push(`<polygon points="${pts}"/>`);
                 }
             break;
         }
         case 'triangle': {
-            const h2   = spacing * Math.sqrt(3) / 2;
-            const s    = Math.max(2, size), th = s * Math.sqrt(3) / 2;
-            const cols = Math.ceil(maxDist * 2 / spacing) + 4;
-            const rows = Math.ceil(maxDist * 2 / h2) + 4;
+            const h2   = spacing*Math.sqrt(3)/2;
+            const s    = Math.max(2, size), th = s*Math.sqrt(3)/2;
+            const cols = Math.ceil(maxDist*2/spacing)+4;
+            const rows = Math.ceil(maxDist*2/h2)+4;
             for (let row = -rows; row <= rows; row++)
                 for (let col = -cols; col <= cols; col++) {
-                    const cx = col * spacing * 0.5, cy = row * h2;
-                    const up = (col + row) % 2 === 0;
-                    let pts;
-                    if (up) pts = `${cx.toFixed(1)},${(cy-th*2/3).toFixed(1)} ${(cx+s/2).toFixed(1)},${(cy+th/3).toFixed(1)} ${(cx-s/2).toFixed(1)},${(cy+th/3).toFixed(1)}`;
-                    else    pts = `${cx.toFixed(1)},${(cy+th*2/3).toFixed(1)} ${(cx+s/2).toFixed(1)},${(cy-th/3).toFixed(1)} ${(cx-s/2).toFixed(1)},${(cy-th/3).toFixed(1)}`;
+                    const cx = col*spacing*0.5, cy = row*h2;
+                    const up = (col+row)%2===0;
+                    const pts = up
+                        ? `${cx.toFixed(1)},${(cy-th*2/3).toFixed(1)} ${(cx+s/2).toFixed(1)},${(cy+th/3).toFixed(1)} ${(cx-s/2).toFixed(1)},${(cy+th/3).toFixed(1)}`
+                        : `${cx.toFixed(1)},${(cy+th*2/3).toFixed(1)} ${(cx+s/2).toFixed(1)},${(cy-th/3).toFixed(1)} ${(cx-s/2).toFixed(1)},${(cy-th/3).toFixed(1)}`;
                     parts.push(`<polygon points="${pts}"/>`);
                 }
             break;
@@ -724,8 +1314,9 @@ function buildSVGPaths(w, h) {
 // ════════════════════════════════════════════════════════════════════
 //  Boot
 // ════════════════════════════════════════════════════════════════════
+resizeCanvas();  // sets up all canvases, inits WebGL & mesh knobs
 animationFrame = requestAnimationFrame(renderFrame);
-console.log('Moiré ready!');
+console.log('Moiré + Shaders ready!');
     </script>
 </body>
 </html>
