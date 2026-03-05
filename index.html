@@ -111,6 +111,8 @@
                     <input type="range" id="warpStrength" min="0" max="80" value="0" class="w-full accent-emerald-600 mb-2">
                     <div class="row"><span>Radius <span class="text-zinc-500 text-xs">(Flag %)</span></span><span id="val-warpRadius">50</span></div>
                     <input type="range" id="warpRadius" min="5" max="100" value="50" class="w-full accent-emerald-600 mb-2">
+                    <div class="row"><span>Osc Speed <span class="text-zinc-500 text-xs">(Hz, 0=off)</span></span><span id="val-warpOscSpeed">0.0</span></div>
+                    <input type="range" id="warpOscSpeed" min="0" max="5" step="0.1" value="0" class="w-full accent-purple-500 mb-2">
                 </div>
                 <div class="flex items-center justify-between">
                     <label class="text-xs text-zinc-400">Animate Warp</label>
@@ -348,6 +350,7 @@ const params = {
     warpType:      'none',
     meshStrength:  100,
     meshMode:      'fixed',
+    warpOscSpeed:  0,
     animateWarp:   false,
     cutout:        'none',
     bgColor:       '#0f172a',
@@ -385,7 +388,7 @@ window.addEventListener('resize', resizeCanvas);
 // ════════════════════════════════════════════════════════════════════
 const numericIds = new Set([
     'cellCount','cellSize','stroke','blendStrength',
-    'warpStrength','warpRadius','meshStrength',
+    'warpStrength','warpRadius','warpOscSpeed','meshStrength',
     'layer1Speed','layer1OffsetX','layer1OffsetY',
     'layer2Speed','layer2OffsetX','layer2OffsetY',
     'layer3Speed','layer3OffsetX','layer3OffsetY',
@@ -491,19 +494,26 @@ function toggleMeshEdit() {
     updateMeshKnobs();
 }
 
+// ── Catmull-Rom scalar interpolation ───────────────────────────
+function catmullRom1D(p0, p1, p2, p3, t) {
+    return 0.5 * (
+        2*p1 +
+        (p2 - p0) * t +
+        (2*p0 - 5*p1 + 4*p2 - p3) * t*t +
+        (3*p1 - p0 - 3*p2 + p3) * t*t*t
+    );
+}
+
 // Map a canvas pixel coordinate [0..size] → mesh-displaced coordinate
-// For fixed mode: displaces before layer rotation is applied.
-// For layer mode: displaces in layer-local space (after rotation).
+// Bicubic Catmull-Rom interpolation for smooth deformation.
 // Returns {dx, dy} offset to add to the canvas pixel.
 function meshDisplace(px, py, layerRot) {
     if (params.warpType !== 'mesh' || meshPoints.length === 0) return {dx:0, dy:0};
     const W = canvas.width, H = canvas.height;
     const strength = params.meshStrength / 100;
 
-    // Convert canvas coords to UV [0..1]
     let u = px / W, v = py / H;
     if (params.meshMode === 'layer' && layerRot !== 0) {
-        // rotate UV back to layer-local space
         const cx = 0.5, cy = 0.5;
         const rad = -layerRot * Math.PI / 180;
         const du = u - cx, dv = v - cy;
@@ -511,29 +521,34 @@ function meshDisplace(px, py, layerRot) {
         v = cy + du * Math.sin(rad) + dv * Math.cos(rad);
     }
 
-    // Bilinear interpolation across mesh
-    const tc = u * (MESH_COLS-1);
-    const tr = v * (MESH_ROWS-1);
-    const c0 = Math.min(MESH_COLS-2, Math.max(0, Math.floor(tc)));
-    const r0 = Math.min(MESH_ROWS-2, Math.max(0, Math.floor(tr)));
-    const fu = tc - c0, fv = tr - r0;
+    // Grid coords
+    const gu  = Math.max(0, Math.min(MESH_COLS-1, u * (MESH_COLS-1)));
+    const gv  = Math.max(0, Math.min(MESH_ROWS-1, v * (MESH_ROWS-1)));
+    const col = Math.min(MESH_COLS-2, Math.floor(gu));
+    const row = Math.min(MESH_ROWS-2, Math.floor(gv));
+    const tu  = gu - col;
+    const tv  = gv - row;
 
-    const p00 = meshPoints[r0  ][c0  ];
-    const p10 = meshPoints[r0  ][c0+1];
-    const p01 = meshPoints[r0+1][c0  ];
-    const p11 = meshPoints[r0+1][c0+1];
-
-    // Neutral target (what the point should map to without distortion)
-    const nu = c0 / (MESH_COLS-1) + fu / (MESH_COLS-1);
-    const nv = r0 / (MESH_ROWS-1) + fv / (MESH_ROWS-1);
-
-    // Displaced target
-    const du2 = p00.x*(1-fu)*(1-fv) + p10.x*fu*(1-fv) + p01.x*(1-fu)*fv + p11.x*fu*fv;
-    const dv2 = p00.y*(1-fu)*(1-fv) + p10.y*fu*(1-fv) + p01.y*(1-fu)*fv + p11.y*fu*fv;
+    // Catmull-Rom bicubic: 4 row passes along U, then 1 pass along V
+    const rowRes = [];
+    for (let ri = -1; ri <= 2; ri++) {
+        const r  = Math.max(0, Math.min(MESH_ROWS-1, row + ri));
+        const pts = meshPoints[r];
+        const c0 = Math.max(0, Math.min(MESH_COLS-1, col - 1));
+        const c1 = Math.max(0, Math.min(MESH_COLS-1, col));
+        const c2 = Math.max(0, Math.min(MESH_COLS-1, col + 1));
+        const c3 = Math.max(0, Math.min(MESH_COLS-1, col + 2));
+        rowRes.push({
+            x: catmullRom1D(pts[c0].x, pts[c1].x, pts[c2].x, pts[c3].x, tu),
+            y: catmullRom1D(pts[c0].y, pts[c1].y, pts[c2].y, pts[c3].y, tu),
+        });
+    }
+    const ix = catmullRom1D(rowRes[0].x, rowRes[1].x, rowRes[2].x, rowRes[3].x, tv);
+    const iy = catmullRom1D(rowRes[0].y, rowRes[1].y, rowRes[2].y, rowRes[3].y, tv);
 
     return {
-        dx: (du2 - nu) * W * strength,
-        dy: (dv2 - nv) * H * strength
+        dx: (ix - u) * W * strength,
+        dy: (iy - v) * H * strength
     };
 }
 
@@ -585,26 +600,32 @@ function drawMeshOverlay() {
     const mc = meshCanvas.getContext('2d');
     mc.clearRect(0, 0, meshCanvas.width, meshCanvas.height);
     if (!meshEditMode || params.warpType !== 'mesh') return;
-    mc.strokeStyle = 'rgba(251,191,36,0.5)';
-    mc.lineWidth   = 1;
+    mc.strokeStyle = 'rgba(251,191,36,0.55)';
+    mc.lineWidth   = 1.5;
     const W = canvas.width, H = canvas.height;
-    // Draw grid lines
-    for (let r = 0; r < MESH_ROWS; r++) {
+
+    // Draw a Catmull-Rom curve through an array of {x,y} UV points
+    function crCurve(pts) {
         mc.beginPath();
-        for (let c = 0; c < MESH_COLS; c++) {
-            const pt = meshPoints[r][c];
-            c === 0 ? mc.moveTo(pt.x*W, pt.y*H) : mc.lineTo(pt.x*W, pt.y*H);
+        mc.moveTo(pts[0].x * W, pts[0].y * H);
+        for (let i = 0; i < pts.length - 1; i++) {
+            const p0 = pts[Math.max(0, i - 1)];
+            const p1 = pts[i];
+            const p2 = pts[i + 1];
+            const p3 = pts[Math.min(pts.length - 1, i + 2)];
+            mc.bezierCurveTo(
+                (p1.x + (p2.x - p0.x) / 6) * W, (p1.y + (p2.y - p0.y) / 6) * H,
+                (p2.x - (p3.x - p1.x) / 6) * W, (p2.y - (p3.y - p1.y) / 6) * H,
+                p2.x * W, p2.y * H
+            );
         }
         mc.stroke();
     }
-    for (let c = 0; c < MESH_COLS; c++) {
-        mc.beginPath();
-        for (let r = 0; r < MESH_ROWS; r++) {
-            const pt = meshPoints[r][c];
-            r === 0 ? mc.moveTo(pt.x*W, pt.y*H) : mc.lineTo(pt.x*W, pt.y*H);
-        }
-        mc.stroke();
-    }
+
+    // Rows
+    for (let r = 0; r < MESH_ROWS; r++) crCurve(meshPoints[r]);
+    // Columns
+    for (let c = 0; c < MESH_COLS; c++) crCurve(meshPoints.map(row => row[c]));
 }
 
 // Pointer move/up on meshCanvas
@@ -994,17 +1015,29 @@ function renderLayerOn(c, angle, offX, offY, color) {
 // ════════════════════════════════════════════════════════════════════
 function segs()    { return (params.warpType !== 'none') ? 32 : 1; }
 function isMesh()  { return params.warpType === 'mesh'; }
+function hasWarp() { return params.warpType !== 'none' && (isMesh() || params.warpStrength > 0); }
 
 // World-to-canvas for mesh: add mesh displacement to a point
-// px,py are in layer-local space (centred, before canvas translation).
-// We convert to canvas UV, get displacement, then convert back.
 function mwarp(px, py, layerRot) {
     if (!isMesh()) return {x: px, y: py};
-    // Convert layer-local coords to canvas UV [0..1]
     const cpx = px + canvas.width/2;
     const cpy = py + canvas.height/2;
-    const d  = meshDisplace(cpx, cpy, layerRot);
+    const d   = meshDisplace(cpx, cpy, layerRot);
     return { x: px + d.dx, y: py + d.dy };
+}
+
+// Unified warp for any vertex: mesh OR legacy (flag/sine/ripple)
+// Legacy warps displace x based on y-position.
+function warpPt(x, y, rot) {
+    if (isMesh())  return mwarp(x, y, rot);
+    if (!hasWarp()) return {x, y};
+    return { x: x + warpDX(y, x), y };
+}
+
+// Warp strength with optional oscillator
+function effectiveWarpStrength() {
+    if (params.warpOscSpeed <= 0) return params.warpStrength;
+    return params.warpStrength * (1 + Math.sin(globalTime * params.warpOscSpeed * Math.PI * 2));
 }
 
 function drawLines(c, spacing, _size, maxDist, rot) {
@@ -1023,34 +1056,33 @@ function drawGrid(c, spacing, _size, maxDist, rot) {
 }
 
 function drawRadial(c, spacing, _size, maxDist, rot) {
-    const sg = segs();
+    const warp    = hasWarp();
+    const arcSeg  = warp ? 64 : 0;   // 0 = native arc()
+    const spokeSg = warp ? 16 : 1;
     for (let r = spacing; r < maxDist; r += spacing) {
-        if (isMesh()) {
-            // Subdivide arc
-            c.beginPath();
-            const steps = 64;
-            for (let s = 0; s <= steps; s++) {
-                const a = (s / steps) * Math.PI * 2;
-                const raw = { x: Math.cos(a)*r, y: Math.sin(a)*r };
-                const p = mwarp(raw.x, raw.y, rot);
+        c.beginPath();
+        if (arcSeg > 0) {
+            for (let s = 0; s <= arcSeg; s++) {
+                const a = (s / arcSeg) * Math.PI * 2;
+                const p = warpPt(Math.cos(a)*r, Math.sin(a)*r, rot);
                 s === 0 ? c.moveTo(p.x, p.y) : c.lineTo(p.x, p.y);
             }
-            c.closePath(); c.stroke();
+            c.closePath();
         } else {
-            c.beginPath(); c.arc(0, 0, r, 0, Math.PI*2); c.stroke();
+            c.arc(0, 0, r, 0, Math.PI*2);
         }
+        c.stroke();
     }
     const spokes = Math.max(2, Math.round(Math.PI*2*(maxDist/2)/spacing));
     for (let i = 0; i < spokes; i++) {
         const a = (i/spokes)*Math.PI*2;
-        const ex = Math.cos(a)*maxDist, ey = Math.sin(a)*maxDist;
-        if (isMesh()) {
-            c.beginPath();
-            const p = mwarp(ex, ey, rot);
-            c.moveTo(0,0); c.lineTo(p.x, p.y); c.stroke();
-        } else {
-            c.beginPath(); c.moveTo(0,0); c.lineTo(ex, ey); c.stroke();
+        c.beginPath();
+        for (let s = 0; s <= spokeSg; s++) {
+            const t = s / spokeSg;
+            const p = warpPt(Math.cos(a)*maxDist*t, Math.sin(a)*maxDist*t, rot);
+            s === 0 ? c.moveTo(p.x, p.y) : c.lineTo(p.x, p.y);
         }
+        c.stroke();
     }
 }
 
@@ -1058,16 +1090,23 @@ function drawIsoCircles(c, spacing, size, maxDist, rot) {
     const hx = spacing, hy = spacing * Math.sqrt(3)/2;
     const r  = Math.max(1, size/2);
     const cols = Math.ceil(maxDist/hx)+2, rows = Math.ceil(maxDist/hy)+2;
+    const arcSeg = hasWarp() ? 32 : 0;
     for (let row = -rows; row <= rows; row++) {
         for (let col = -cols; col <= cols; col++) {
             const cx = col*hx + (row%2===0 ? 0 : hx/2);
             const cy = row*hy;
-            if (isMesh()) {
-                const p = mwarp(cx, cy, rot);
-                c.beginPath(); c.arc(p.x, p.y, r, 0, Math.PI*2); c.stroke();
+            c.beginPath();
+            if (arcSeg > 0) {
+                for (let s = 0; s <= arcSeg; s++) {
+                    const a = (s / arcSeg) * Math.PI * 2;
+                    const p = warpPt(cx + Math.cos(a)*r, cy + Math.sin(a)*r, rot);
+                    s === 0 ? c.moveTo(p.x, p.y) : c.lineTo(p.x, p.y);
+                }
+                c.closePath();
             } else {
-                c.beginPath(); c.arc(cx, cy, r, 0, Math.PI*2); c.stroke();
+                c.arc(cx, cy, r, 0, Math.PI*2);
             }
+            c.stroke();
         }
     }
 }
@@ -1084,7 +1123,7 @@ function drawHexGrid(c, spacing, size, maxDist, rot) {
             for (let i = 0; i < 6; i++) {
                 const a = (Math.PI/3)*i - Math.PI/6;
                 const vx = hcx + R*Math.cos(a), vy = hcy + R*Math.sin(a);
-                const p = isMesh() ? mwarp(vx, vy, rot) : {x:vx, y:vy};
+                const p = warpPt(vx, vy, rot);
                 i === 0 ? c.moveTo(p.x, p.y) : c.lineTo(p.x, p.y);
             }
             c.closePath(); c.stroke();
@@ -1106,7 +1145,7 @@ function drawTriGrid(c, spacing, size, maxDist, rot) {
                 : [[cx, cy+th*2/3],[cx+s/2, cy-th/3],[cx-s/2, cy-th/3]];
             c.beginPath();
             verts.forEach(([vx,vy], i) => {
-                const p = isMesh() ? mwarp(vx, vy, rot) : {x:vx, y:vy};
+                const p = warpPt(vx, vy, rot);
                 i === 0 ? c.moveTo(p.x, p.y) : c.lineTo(p.x, p.y);
             });
             c.closePath(); c.stroke();
@@ -1121,15 +1160,9 @@ function strokeVLine(c, lineX, maxDist, sg, rot) {
     c.beginPath();
     const dy = (maxDist*2)/sg;
     for (let s = 0; s <= sg; s++) {
-        const y  = -maxDist + s*dy;
-        let x = lineX;
-        if (isMesh()) {
-            const p = mwarp(lineX, y, rot); x = p.x;
-            s === 0 ? c.moveTo(p.x, p.y) : c.lineTo(p.x, p.y);
-            continue;
-        }
-        x = lineX + warpDX(y, lineX);
-        s === 0 ? c.moveTo(x, y) : c.lineTo(x, y);
+        const y = -maxDist + s*dy;
+        const p = warpPt(lineX, y, rot);   // warpPt handles mesh + legacy
+        s === 0 ? c.moveTo(p.x, p.y) : c.lineTo(p.x, p.y);
     }
     c.stroke();
 }
@@ -1138,14 +1171,14 @@ function strokeHLine(c, lineY, maxDist, sg, rot) {
     c.beginPath();
     const dx = (maxDist*2)/sg;
     for (let s = 0; s <= sg; s++) {
-        const x  = -maxDist + s*dx;
+        const x = -maxDist + s*dx;
         if (isMesh()) {
             const p = mwarp(x, lineY, rot);
             s === 0 ? c.moveTo(p.x, p.y) : c.lineTo(p.x, p.y);
-            continue;
+        } else {
+            const y = lineY + warpDX(x, lineY);  // H-lines displace in Y
+            s === 0 ? c.moveTo(x, y) : c.lineTo(x, y);
         }
-        const y = lineY + warpDX(x, lineY);
-        s === 0 ? c.moveTo(x, y) : c.lineTo(x, y);
     }
     c.stroke();
 }
@@ -1155,6 +1188,7 @@ function strokeHLine(c, lineY, maxDist, sg, rot) {
 // ════════════════════════════════════════════════════════════════════
 function warpDX(along, perp) {
     if (params.warpStrength === 0 || params.warpType === 'none' || params.warpType === 'mesh') return 0;
+    const strength = effectiveWarpStrength();
     const phase    = params.animateWarp ? warpPhase * 3 : 0;
     const halfSize = Math.max(canvas.width, canvas.height) / 2;
     const freq     = (Math.PI*2*3)/(halfSize*2);
@@ -1163,10 +1197,10 @@ function warpDX(along, perp) {
             const rPx = params.warpRadius/100*halfSize;
             const d   = Math.sqrt(along*along+perp*perp);
             const t   = Math.max(0, 1 - d/rPx);
-            return Math.sin(along*freq+phase) * params.warpStrength * t*t*(3-2*t);
+            return Math.sin(along*freq+phase) * strength * t*t*(3-2*t);
         }
-        case 'sine':   return Math.sin(along*freq+phase) * params.warpStrength;
-        case 'ripple': return Math.sin(Math.sqrt(along*along+perp*perp)*freq+phase) * params.warpStrength;
+        case 'sine':   return Math.sin(along*freq+phase) * strength;
+        case 'ripple': return Math.sin(Math.sqrt(along*along+perp*perp)*freq+phase) * strength;
         default: return 0;
     }
 }
