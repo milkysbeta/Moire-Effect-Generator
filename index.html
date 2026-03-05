@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Moiré Lattice Generator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: system-ui, sans-serif; }
+        #canvas { image-rendering: crisp-edges; box-shadow: 0 10px 30px rgba(0,0,0,0.5); max-width: 100%; height: auto; }
+        @media (max-width: 768px) {
+            .controls { border-right: none !important; border-bottom: 1px solid #374151; }
+            .flex-row { flex-direction: column; }
+        }
+        input[type="range"] { cursor: pointer; }
+        select, input[type="color"] { cursor: pointer; }
+        button { cursor: pointer; transition: background-color 0.15s ease; }
+    </style>
+</head>
+<body class="bg-zinc-950 text-zinc-100 min-h-screen">
+    <div class="flex flex-col md:flex-row h-screen">
+        <!-- Controls sidebar -->
+        <div class="w-full md:w-80 bg-zinc-900 border-b md:border-r border-zinc-800 p-5 md:p-6 overflow-y-auto flex flex-col controls">
+            <div class="mb-6">
+                <h1 class="text-2xl font-bold tracking-tighter">MOIRÉ</h1>
+                <p class="text-zinc-400 text-sm">Live Lattice Generator</p>
+            </div>
+
+            <div class="space-y-5 flex-1">
+                <!-- Shape -->
+                <div>
+                    <label class="block text-xs uppercase tracking-widest text-zinc-400 mb-1">Shape</label>
+                    <select id="shape" class="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm">
+                        <option value="lines">Parallel Lines</option>
+                        <option value="radial">Radial / Circles</option>
+                        <option value="grid">Grid</option>
+                        <option value="hexagon">Hexagon</option>
+                    </select>
+                </div>
+
+                <!-- Blend Mode -->
+                <div>
+                    <label class="block text-xs uppercase tracking-widest text-zinc-400 mb-1">Blend Mode</label>
+                    <select id="blendMode" class="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm">
+                        <option value="difference">Difference</option>
+                        <option value="xor">XOR</option>
+                        <option value="screen">Screen</option>
+                        <option value="overlay">Overlay</option>
+                        <option value="multiply">Multiply</option>
+                        <option value="exclusion">Exclusion</option>
+                    </select>
+                </div>
+
+                <!-- Cell Size -->
+                <div>
+                    <div class="flex justify-between text-xs mb-1">
+                        <span>Cell Size</span><span id="val-cellSize">40</span>
+                    </div>
+                    <input type="range" id="cellSize" min="10" max="100" value="40" class="w-full accent-emerald-600">
+                </div>
+
+                <!-- Cell Count -->
+                <div>
+                    <div class="flex justify-between text-xs mb-1">
+                        <span>Cell Count</span><span id="val-cellCount">50</span>
+                    </div>
+                    <input type="range" id="cellCount" min="20" max="200" value="50" class="w-full accent-emerald-600">
+                </div>
+
+                <!-- Stroke -->
+                <div>
+                    <div class="flex justify-between text-xs mb-1">
+                        <span>Stroke Thickness</span><span id="val-stroke">4</span>
+                    </div>
+                    <input type="range" id="stroke" min="1" max="15" value="4" step="0.5" class="w-full accent-emerald-600">
+                </div>
+
+                <!-- Warp Amount -->
+                <div>
+                    <div class="flex justify-between text-xs mb-1">
+                        <span>Warp Amount</span><span id="val-warp">0</span>
+                    </div>
+                    <input type="range" id="warp" min="0" max="50" value="0" class="w-full accent-emerald-600">
+                </div>
+
+                <!-- Warp Type -->
+                <div>
+                    <label class="block text-xs uppercase tracking-widest text-zinc-400 mb-1">Warp Type</label>
+                    <select id="warpType" class="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm">
+                        <option value="none">None</option>
+                        <option value="sine">Sine</option>
+                        <option value="ripple">Ripple</option>
+                        <option value="twist">Twist</option>
+                    </select>
+                </div>
+
+                <!-- Rotation Speed -->
+                <div>
+                    <div class="flex justify-between text-xs mb-1">
+                        <span>Rotation Speed (°/s)</span><span id="val-rotSpeed">20</span>
+                    </div>
+                    <input type="range" id="rotSpeed" min="0" max="180" value="20" class="w-full accent-emerald-600">
+                </div>
+
+                <!-- Layer 2 Offset X -->
+                <div>
+                    <div class="flex justify-between text-xs mb-1">
+                        <span>Layer 2 Offset X</span><span id="val-offsetX">0</span>
+                    </div>
+                    <input type="range" id="offsetX" min="-100" max="100" value="0" class="w-full accent-emerald-600">
+                </div>
+
+                <!-- Layer 2 Offset Y -->
+                <div>
+                    <div class="flex justify-between text-xs mb-1">
+                        <span>Layer 2 Offset Y</span><span id="val-offsetY">0</span>
+                    </div>
+                    <input type="range" id="offsetY" min="-100" max="100" value="0" class="w-full accent-emerald-600">
+                </div>
+
+                <!-- Colors -->
+                <div class="grid grid-cols-3 gap-3">
+                    <div>
+                        <label class="block text-xs text-zinc-400 mb-1">BG Color</label>
+                        <input type="color" id="bgColor" value="#0f172a" class="w-full h-10 rounded border border-zinc-700">
+                    </div>
+                    <div>
+                        <label class="block text-xs text-zinc-400 mb-1">Layer 1</label>
+                        <input type="color" id="layer1Color" value="#000000" class="w-full h-10 rounded border border-zinc-700">
+                    </div>
+                    <div>
+                        <label class="block text-xs text-zinc-400 mb-1">Layer 2</label>
+                        <input type="color" id="layer2Color" value="#ffffff" class="w-full h-10 rounded border border-zinc-700">
+                    </div>
+                </div>
+
+                <!-- Cutout -->
+                <div>
+                    <label class="block text-xs uppercase tracking-widest text-zinc-400 mb-1">Cutout</label>
+                    <select id="cutout" class="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm">
+                        <option value="none">None</option>
+                        <option value="circle">Circle</option>
+                        <option value="square">Square</option>
+                        <option value="diamond">Diamond</option>
+                    </select>
+                </div>
+
+                <!-- Animate Warp -->
+                <div class="flex items-center justify-between">
+                    <label class="text-xs uppercase tracking-widest text-zinc-400">Animate Warp</label>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" id="animateWarp" class="sr-only peer">
+                        <div class="w-11 h-6 bg-zinc-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Download buttons -->
+            <div class="pt-6 mt-4 grid grid-cols-2 gap-3">
+                <button onclick="download('png')" class="py-3 bg-zinc-700 hover:bg-zinc-600 rounded-xl text-sm font-medium">⬇ PNG</button>
+                <button onclick="togglePause()" id="pauseBtn" class="py-3 bg-emerald-600 hover:bg-emerald-500 rounded-xl text-sm font-medium">⏸ Pause</button>
+            </div>
+        </div>
+
+        <!-- Canvas area -->
+        <div class="flex-1 flex items-center justify-center p-4 bg-zinc-950" id="canvasContainer">
+            <canvas id="canvas"></canvas>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d', { alpha: false });
+        let animationFrame = null;
+        let angle = 0;
+        let lastTime = 0;
+        let paused = false;
+        let warpPhase = 0;
+
+        const params = {
+            shape: 'lines',
+            blendMode: 'difference',
+            cellSize: 40,
+            cellCount: 50,
+            stroke: 4,
+            warp: 0,
+            warpType: 'none',
+            rotSpeed: 20,
+            offsetX: 0,
+            offsetY: 0,
+            cutout: 'none',
+            bgColor: '#0f172a',
+            layer1: '#000000',
+            layer2: '#ffffff',
+            animateWarp: false
+        };
+
+        function resizeCanvas() {
+            const container = document.getElementById('canvasContainer');
+            const size = Math.min(container.clientWidth * 0.95, container.clientHeight * 0.9, 800);
+            canvas.width = size;
+            canvas.height = size;
+            if (paused) draw(lastTime);
+        }
+
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // Bind all controls
+        document.querySelectorAll('input[type="range"], select, input[type="color"]').forEach(el => {
+            el.addEventListener('input', () => {
+                const id = el.id;
+                if (id === 'bgColor') params.bgColor = el.value;
+                else if (id === 'layer1Color') params.layer1 = el.value;
+                else if (id === 'layer2Color') params.layer2 = el.value;
+                else if (id === 'blendMode') params.blendMode = el.value;
+                else if (id === 'warpType') params.warpType = el.value;
+                else if (id === 'shape') params.shape = el.value;
+                else if (id === 'cutout') params.cutout = el.value;
+                else if (id in params) params[id] = +el.value;
+
+                const valEl = document.getElementById(`val-${id}`);
+                if (valEl) valEl.textContent = Math.round(el.type === 'range' ? +el.value : 0);
+
+                if (paused) draw(lastTime);
+            });
+        });
+
+        document.getElementById('animateWarp').addEventListener('change', e => {
+            params.animateWarp = e.target.checked;
+        });
+
+        function togglePause() {
+            paused = !paused;
+            document.getElementById('pauseBtn').textContent = paused ? '▶ Resume' : '⏸ Pause';
+            if (!paused) {
+                lastTime = 0;
+                animationFrame = requestAnimationFrame(draw);
+            } else {
+                if (animationFrame) cancelAnimationFrame(animationFrame);
+            }
+        }
+
+        function draw(time = 0) {
+            if (!lastTime) lastTime = time;
+            const delta = Math.min((time - lastTime) / 1000, 0.1); // cap delta to avoid jumps
+            lastTime = time;
+
+            if (!paused) {
+                if (params.rotSpeed > 0) {
+                    angle += params.rotSpeed * delta;
+                    if (angle >= 360) angle -= 360;
+                }
+                if (params.animateWarp) {
+                    warpPhase += delta;
+                }
+            }
+
+            ctx.fillStyle = params.bgColor;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            applyCutoutClip();
+
+            // Layer 1 (static)
+            drawLayer(0, 0, 0, params.layer1);
+
+            // Layer 2 (rotated + offset)
+            ctx.globalCompositeOperation = params.blendMode;
+            drawLayer(angle, params.offsetX, params.offsetY, params.layer2);
+            ctx.globalCompositeOperation = 'source-over';
+
+            if (params.cutout !== 'none') ctx.restore();
+
+            if (!paused) {
+                animationFrame = requestAnimationFrame(draw);
+            }
+        }
+
+        function applyCutoutClip() {
+            if (params.cutout === 'none') return;
+            ctx.save();
+            ctx.beginPath();
+            const cx = canvas.width / 2;
+            const cy = canvas.height / 2;
+            const radius = Math.min(canvas.width, canvas.height) / 2 * 0.85;
+            if (params.cutout === 'circle') {
+                ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+            } else if (params.cutout === 'square') {
+                const side = radius * 1.4;
+                ctx.rect(cx - side / 2, cy - side / 2, side, side);
+            } else if (params.cutout === 'diamond') {
+                ctx.moveTo(cx, cy - radius);
+                ctx.lineTo(cx + radius, cy);
+                ctx.lineTo(cx, cy + radius);
+                ctx.lineTo(cx - radius, cy);
+                ctx.closePath();
+            }
+            ctx.clip();
+        }
+
+        function drawLayer(rotation, offX, offY, color) {
+            ctx.save();
+            ctx.translate(canvas.width / 2 + offX, canvas.height / 2 + offY);
+            ctx.rotate(rotation * Math.PI / 180);
+            ctx.strokeStyle = color;
+            ctx.lineWidth = params.stroke;
+            ctx.lineCap = 'square';
+
+            const maxDist = Math.max(canvas.width, canvas.height) * 0.75;
+            const step = params.cellSize;
+
+            switch (params.shape) {
+                case 'lines':
+                    drawLines(step, maxDist);
+                    break;
+                case 'radial':
+                    drawRadial(step, maxDist);
+                    break;
+                case 'grid':
+                    drawGrid(step, maxDist);
+                    break;
+                case 'hexagon':
+                    drawHexGrid(step, maxDist);
+                    break;
+            }
+
+            ctx.restore();
+        }
+
+        function drawLines(step, maxDist) {
+            const count = params.cellCount;
+            for (let i = -count / 2; i < count / 2; i++) {
+                const x = i * step;
+                ctx.beginPath();
+                ctx.moveTo(x + getWarp(x, -maxDist), -maxDist);
+                ctx.lineTo(x + getWarp(x, maxDist), maxDist);
+                ctx.stroke();
+            }
+        }
+
+        function drawRadial(step, maxDist) {
+            for (let r = step; r < maxDist; r += step) {
+                ctx.beginPath();
+                ctx.arc(0, 0, r, 0, Math.PI * 2);
+                ctx.stroke();
+            }
+            const spokes = Math.round(params.cellCount / 2);
+            for (let i = 0; i < spokes; i++) {
+                const a = (i / spokes) * Math.PI * 2;
+                ctx.beginPath();
+                ctx.moveTo(0, 0);
+                ctx.lineTo(Math.cos(a) * maxDist, Math.sin(a) * maxDist);
+                ctx.stroke();
+            }
+        }
+
+        function drawGrid(step, maxDist) {
+            const count = params.cellCount;
+            // Vertical lines
+            for (let i = -count / 2; i < count / 2; i++) {
+                const x = i * step;
+                ctx.beginPath();
+                ctx.moveTo(x + getWarp(x, -maxDist), -maxDist);
+                ctx.lineTo(x + getWarp(x, maxDist), maxDist);
+                ctx.stroke();
+            }
+            // Horizontal lines
+            for (let i = -count / 2; i < count / 2; i++) {
+                const y = i * step;
+                ctx.beginPath();
+                ctx.moveTo(-maxDist, y + getWarp(-maxDist, y));
+                ctx.lineTo(maxDist, y + getWarp(maxDist, y));
+                ctx.stroke();
+            }
+        }
+
+        function drawHexGrid(step, maxDist) {
+            const hexSize = step;
+            const w = hexSize * 2;
+            const h = Math.sqrt(3) * hexSize;
+            const cols = Math.ceil(maxDist * 2 / w) + 2;
+            const rows = Math.ceil(maxDist * 2 / h) + 2;
+
+            for (let row = -rows; row < rows; row++) {
+                for (let col = -cols; col < cols; col++) {
+                    const x = col * w * 0.75;
+                    const y = row * h + (col % 2 === 0 ? 0 : h / 2);
+                    drawHexagon(x, y, hexSize);
+                }
+            }
+        }
+
+        function drawHexagon(cx, cy, size) {
+            ctx.beginPath();
+            for (let i = 0; i < 6; i++) {
+                const a = (Math.PI / 3) * i - Math.PI / 6;
+                const px = cx + size * Math.cos(a);
+                const py = cy + size * Math.sin(a);
+                i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+            }
+            ctx.closePath();
+            ctx.stroke();
+        }
+
+        function getWarp(baseX, baseY) {
+            if (params.warp === 0 || params.warpType === 'none') return 0;
+            const freq = 0.015;
+            const phase = params.animateWarp ? warpPhase * 2 : 0;
+            switch (params.warpType) {
+                case 'sine':
+                    return Math.sin(baseY * freq + phase) * params.warp;
+                case 'ripple':
+                    return Math.sin(Math.sqrt(baseX * baseX + baseY * baseY) * freq + phase) * params.warp;
+                case 'twist':
+                    return Math.sin(Math.atan2(baseY, baseX) * 3 + phase) * params.warp;
+                default:
+                    return 0;
+            }
+        }
+
+        function download(type) {
+            if (type === 'png') {
+                const link = document.createElement('a');
+                link.download = 'moire.png';
+                link.href = canvas.toDataURL('image/png');
+                link.click();
+            }
+        }
+
+        // Start animation
+        animationFrame = requestAnimationFrame(draw);
+
+        console.log("Moiré ready — try changing colors, shapes & blend modes!");
+    </script>
+</body>
+</html>
