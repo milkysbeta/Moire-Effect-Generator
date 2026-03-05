@@ -38,8 +38,13 @@
     <!-- ══ Sidebar ══════════════════════════════════════════════════ -->
     <div class="w-full md:w-80 bg-zinc-900 border-b md:border-r border-zinc-800 p-4 overflow-y-auto flex flex-col controls">
         <div class="mb-4">
-            <h1 class="text-2xl font-bold tracking-tighter">MOIRÉ</h1>
-            <p class="text-zinc-400 text-xs">Live Lattice Generator</p>
+            <div class="flex items-center justify-between">
+                <div>
+                    <h1 class="text-2xl font-bold tracking-tighter">MOIRÉ</h1>
+                    <p class="text-zinc-400 text-xs">Live Lattice Generator</p>
+                </div>
+                <button onclick="randomise()" class="px-3 py-1.5 bg-violet-700 hover:bg-violet-600 rounded-lg text-xs font-semibold tracking-wide" title="Randomise all parameters (shaders stay off)">&#x2684; Randomise</button>
+            </div>
         </div>
         <div class="space-y-3 flex-1">
 
@@ -496,6 +501,145 @@ function togglePause() {
     document.getElementById('pauseBtn').textContent = paused ? '▶ Resume' : '⏸ Pause';
     if (!paused) { lastTime = 0; animationFrame = requestAnimationFrame(renderFrame); }
     else if (animationFrame) cancelAnimationFrame(animationFrame);
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Randomise
+// ════════════════════════════════════════════════════════════════════
+function randomise() {
+    function rnd(min, max, step) {
+        if (step) {
+            const steps = Math.round((max - min) / step);
+            return min + Math.round(Math.random() * steps) * step;
+        }
+        return min + Math.random() * (max - min);
+    }
+    function rndInt(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
+    function rndColor() {
+        const h = rndInt(0, 360), s = rndInt(40, 100), l = rndInt(40, 90);
+        return `hsl(${h},${s}%,${l}%)`;
+    }
+    function hslToHex(hsl) {
+        // Convert e.g. "hsl(200,80%,60%)" → #rrggbb
+        const m = hsl.match(/(\d+),(\d+)%,(\d+)%/);
+        const h = +m[1]/360, s = +m[2]/100, l = +m[3]/100;
+        let r, g, b;
+        if (s === 0) { r = g = b = l; } else {
+            const hue2rgb = (p, q, t) => {
+                if (t < 0) t += 1; if (t > 1) t -= 1;
+                if (t < 1/6) return p + (q-p)*6*t;
+                if (t < 1/2) return q;
+                if (t < 2/3) return p + (q-p)*(2/3-t)*6;
+                return p;
+            };
+            const q = l < 0.5 ? l*(1+s) : l+s-l*s, p = 2*l-q;
+            r = hue2rgb(p,q,h+1/3); g = hue2rgb(p,q,h); b = hue2rgb(p,q,h-1/3);
+        }
+        return '#' + [r,g,b].map(v => Math.round(v*255).toString(16).padStart(2,'0')).join('');
+    }
+
+    const shapes = ['lines','radial','iso-circles','grid','hexagon','triangle'];
+    const blends = ['source-over','difference','xor','screen','overlay','multiply','exclusion','color-dodge','hard-light'];
+    const warps  = ['none','flag','sine','ripple'];
+    const cutouts = ['none','circle','square','diamond'];
+
+    // ── Randomise params ──
+    params.shape        = shapes[rndInt(0, shapes.length-1)];
+    params.blendMode    = blends[rndInt(0, blends.length-1)];
+    params.blendStrength = rndInt(60, 100);
+    params.cellCount    = rndInt(10, 80);
+    params.cellSize     = rndInt(10, 90);
+    params.stroke       = rnd(1, 12, 0.5);
+    params.cutout       = cutouts[rndInt(0, cutouts.length-1)];
+    params.bgColor      = hslToHex(rndColor());
+
+    // Layers — randomise all three, all ON
+    for (let i = 1; i <= 3; i++) {
+        params['layer'+i+'Color']   = hslToHex(rndColor());
+        params['layer'+i+'Speed']   = rnd(-120, 120, 1);
+        params['layer'+i+'OffsetX'] = rndInt(-80, 80);
+        params['layer'+i+'OffsetY'] = rndInt(-80, 80);
+        params['layer'+i+'Opacity'] = rndInt(60, 100);
+        params['layer'+i+'RgbShift'] = rnd(0, 15, 0.5);
+        params['layer'+i+'On']      = true;
+        const btn = document.getElementById('layer'+i+'Toggle');
+        btn.textContent = 'ON';
+        btn.classList.add('layer-on'); btn.classList.remove('layer-off');
+    }
+
+    // Warp
+    params.warpType     = warps[rndInt(0, warps.length-1)];
+    params.warpStrength = rndInt(5, 60);
+    params.warpRadius   = rndInt(20, 90);
+    params.warpOscSpeed = rnd(0, 2, 0.1);
+    params.warpRgbDrive = rnd(0, 2, 0.05);
+    params.warpLayers   = [Math.random()>0.3, Math.random()>0.3, Math.random()>0.3]
+                           .map((v,i,a) => a.every(x=>!x) ? true : v); // ensure ≥1 active
+
+    // Shaders — always OFF
+    params.shGrad = false; params.shNoise = false;
+    params.shColorNoise = false; params.shBlur = false;
+
+    // ── Sync all HTML controls ──
+    function setSlider(id, val) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.value = val;
+        const vEl = document.getElementById('val-'+id);
+        if (vEl) vEl.textContent = parseFloat(val).toFixed(el.step && parseFloat(el.step) < 1 ? 2 : 0);
+    }
+    function setSelect(id, val) {
+        const el = document.getElementById(id);
+        if (el) el.value = val;
+    }
+    function setColor(id, val) {
+        const el = document.getElementById(id);
+        if (el) el.value = val;
+    }
+
+    setSelect('shape',     params.shape);
+    setSelect('blendMode', params.blendMode);
+    setSlider('blendStrength', params.blendStrength);
+    setSlider('cellCount', params.cellCount);
+    setSlider('cellSize',  params.cellSize);
+    setSlider('stroke',    params.stroke);
+    setSelect('cutout',    params.cutout);
+    setColor('bgColor',    params.bgColor);
+
+    for (let i = 1; i <= 3; i++) {
+        setColor('layer'+i+'Color',    params['layer'+i+'Color']);
+        setSlider('layer'+i+'Speed',   params['layer'+i+'Speed']);
+        setSlider('layer'+i+'OffsetX', params['layer'+i+'OffsetX']);
+        setSlider('layer'+i+'OffsetY', params['layer'+i+'OffsetY']);
+        setSlider('layer'+i+'Opacity', params['layer'+i+'Opacity']);
+        setSlider('layer'+i+'RgbShift', params['layer'+i+'RgbShift']);
+    }
+
+    setSelect('warpType',    params.warpType);
+    setSlider('warpStrength', params.warpStrength);
+    setSlider('warpRadius',   params.warpRadius);
+    setSlider('warpOscSpeed', params.warpOscSpeed);
+    setSlider('warpRgbDrive', params.warpRgbDrive);
+
+    // Warp layer buttons
+    [1,2,3].forEach(n => {
+        const btn = document.getElementById('warpL'+n+'Btn');
+        btn.classList.toggle('warp-layer-on',  params.warpLayers[n-1]);
+        btn.classList.toggle('warp-layer-off', !params.warpLayers[n-1]);
+    });
+
+    // Warp type toggle (mesh vs global controls)
+    const isMesh = params.warpType === 'mesh';
+    document.getElementById('meshControls').classList.toggle('hidden', !isMesh);
+    document.getElementById('globalWarpControls').classList.toggle('hidden', isMesh);
+
+    // Shader buttons — all OFF
+    ['Grad','Noise','ColorNoise','Blur'].forEach(id => {
+        const btn = document.getElementById('sh'+id+'Toggle');
+        if (btn) { btn.textContent = 'OFF'; btn.classList.remove('shader-on'); btn.classList.add('shader-off'); }
+    });
+
+    if (paused) renderFrame(lastTime);
 }
 
 // ════════════════════════════════════════════════════════════════════
