@@ -8,7 +8,7 @@
     <style>
         body { font-family: system-ui, sans-serif; }
         #canvas { image-rendering: crisp-edges; max-width:100%; height:auto; }
-        #shaderCanvas { position:absolute; top:0; left:0; pointer-events:none; max-width:100%; height:auto; }
+        #shaderCanvas { position:absolute; top:0; left:0; pointer-events:none; max-width:100%; height:auto; display:none; }
         #meshCanvas   { position:absolute; top:0; left:0; cursor:crosshair; max-width:100%; height:auto; }
         #canvasWrap   { position:relative; box-shadow:0 10px 30px rgba(0,0,0,.5); display:inline-block; }
         @media (max-width:768px) { .controls { border-right:none !important; border-bottom:1px solid #374151; } }
@@ -50,7 +50,7 @@
                     <option value="lines">Parallel Lines</option>
                     <option value="radial">Radial / Circles</option>
                     <option value="iso-circles">Isometric Circles</option>
-                    <option value="grid">Square Grid</option>
+                    <option value="grid" selected>Square Grid</option>
                     <option value="hexagon">Hexagon</option>
                     <option value="triangle">Isometric Triangles</option>
                 </select>
@@ -73,12 +73,12 @@
             <!-- Grid -->
             <div class="sep">
                 <p class="slabel">Grid</p>
-                <div class="row"><span>Cell Spacing <span class="text-zinc-500">(centre-to-centre px)</span></span><span id="val-cellCount">40</span></div>
-                <input type="range" id="cellCount" min="5" max="120" value="40" class="w-full accent-emerald-600 mb-2">
-                <div class="row"><span>Cell Size <span class="text-zinc-500">(shape draw size px)</span></span><span id="val-cellSize">38</span></div>
-                <input type="range" id="cellSize" min="2" max="120" value="38" class="w-full accent-emerald-600 mb-2">
-                <div class="row"><span>Stroke</span><span id="val-stroke">4</span></div>
-                <input type="range" id="stroke" min="1" max="20" value="4" step="0.5" class="w-full accent-emerald-600">
+                <div class="row"><span>Cell Spacing <span class="text-zinc-500">(centre-to-centre px)</span></span><span id="val-cellCount">20</span></div>
+                <input type="range" id="cellCount" min="5" max="120" value="20" class="w-full accent-emerald-600 mb-2">
+                <div class="row"><span>Cell Size <span class="text-zinc-500">(shape draw size px)</span></span><span id="val-cellSize">50</span></div>
+                <input type="range" id="cellSize" min="2" max="120" value="50" class="w-full accent-emerald-600 mb-2">
+                <div class="row"><span>Stroke</span><span id="val-stroke">7.5</span></div>
+                <input type="range" id="stroke" min="1" max="20" value="7.5" step="0.5" class="w-full accent-emerald-600">
             </div>
 
             <!-- Warp -->
@@ -87,7 +87,7 @@
                 <select id="warpType" class="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm mb-2">
                     <option value="none">None</option>
                     <option value="mesh">Mesh (drag control points)</option>
-                    <option value="flag">Flag — Centre Bulge</option>
+                    <option value="flag" selected>Flag — Centre Bulge</option>
                     <option value="sine">Sine (global)</option>
                     <option value="ripple">Ripple (global)</option>
                 </select>
@@ -109,12 +109,14 @@
                 </div>
                 <!-- Global warp controls (sine/flag/ripple) -->
                 <div id="globalWarpControls">
-                    <div class="row"><span>Strength</span><span id="val-warpStrength">0</span></div>
-                    <input type="range" id="warpStrength" min="0" max="80" value="0" class="w-full accent-emerald-600 mb-2">
-                    <div class="row"><span>Radius <span class="text-zinc-500 text-xs">(Flag %)</span></span><span id="val-warpRadius">50</span></div>
-                    <input type="range" id="warpRadius" min="5" max="100" value="50" class="w-full accent-emerald-600 mb-2">
-                    <div class="row"><span>Osc Speed <span class="text-zinc-500 text-xs">(Hz, 0=off)</span></span><span id="val-warpOscSpeed">0.0</span></div>
-                    <input type="range" id="warpOscSpeed" min="0" max="5" step="0.1" value="0" class="w-full accent-purple-500 mb-2">
+                    <div class="row"><span>Strength</span><span id="val-warpStrength">10</span></div>
+                    <input type="range" id="warpStrength" min="0" max="80" value="10" class="w-full accent-emerald-600 mb-2">
+                    <div class="row"><span>Radius <span class="text-zinc-500 text-xs">(Flag %)</span></span><span id="val-warpRadius">45</span></div>
+                    <input type="range" id="warpRadius" min="5" max="100" value="45" class="w-full accent-emerald-600 mb-2">
+                    <div class="row"><span>Osc Speed <span class="text-zinc-500 text-xs">(Hz, 0=off)</span></span><span id="val-warpOscSpeed">0.20</span></div>
+                    <input type="range" id="warpOscSpeed" min="0" max="5" step="0.1" value="0.2" class="w-full accent-purple-500 mb-2">
+                    <div class="row"><span>Warp → RGB Drive <span class="text-zinc-500 text-xs">(multiplier)</span></span><span id="val-warpRgbDrive">0.00</span></div>
+                    <input type="range" id="warpRgbDrive" min="0" max="5" value="0" step="0.05" class="w-full accent-rose-500 mb-2">
                 </div>
                 <!-- Warp layer select -->
                 <div class="mt-2">
@@ -146,14 +148,14 @@
                     </div>
                     <div class="flex items-center gap-2 mb-2">
                         <span class="text-xs text-zinc-400 w-10">Color</span>
-                        <input type="color" id="layer1Color" value="#000000" class="flex-1 h-7 rounded border border-zinc-600">
+                        <input type="color" id="layer1Color" value="#ffffff" class="flex-1 h-7 rounded border border-zinc-600">
                     </div>
                     <div class="row"><span>Opacity</span><span id="val-layer1Opacity">100</span></div>
                     <input type="range" id="layer1Opacity" min="0" max="100" value="100" class="w-full accent-emerald-600 mb-2">
                     <div class="row"><span>RGB Shift</span><span id="val-layer1RgbShift">0</span></div>
-                    <input type="range" id="layer1RgbShift" min="0" max="20" value="0" step="0.5" class="w-full accent-rose-500 mb-2">
-                    <div class="row"><span>Rot Speed °/s</span><span id="val-layer1Speed">0</span></div>
-                    <input type="range" id="layer1Speed" min="-180" max="180" value="0" class="w-full accent-emerald-600 mb-2">
+                    <input type="range" id="layer1RgbShift" min="0" max="40" value="0" step="0.5" class="w-full accent-rose-500 mb-2">
+                    <div class="row"><span>Rot Speed °/s</span><span id="val-layer1Speed">10</span></div>
+                    <input type="range" id="layer1Speed" min="-180" max="180" value="10" class="w-full accent-emerald-600 mb-2">
                     <div class="row"><span>Offset X</span><span id="val-layer1OffsetX">0</span></div>
                     <input type="range" id="layer1OffsetX" min="-150" max="150" value="0" class="w-full accent-emerald-600 mb-2">
                     <div class="row"><span>Offset Y</span><span id="val-layer1OffsetY">0</span></div>
@@ -173,7 +175,7 @@
                     <div class="row"><span>Opacity</span><span id="val-layer2Opacity">100</span></div>
                     <input type="range" id="layer2Opacity" min="0" max="100" value="100" class="w-full accent-emerald-600 mb-2">
                     <div class="row"><span>RGB Shift</span><span id="val-layer2RgbShift">0</span></div>
-                    <input type="range" id="layer2RgbShift" min="0" max="20" value="0" step="0.5" class="w-full accent-rose-500 mb-2">
+                    <input type="range" id="layer2RgbShift" min="0" max="40" value="0" step="0.5" class="w-full accent-rose-500 mb-2">
                     <div class="row"><span>Rot Speed °/s</span><span id="val-layer2Speed">20</span></div>
                     <input type="range" id="layer2Speed" min="-180" max="180" value="20" class="w-full accent-emerald-600 mb-2">
                     <div class="row"><span>Offset X</span><span id="val-layer2OffsetX">0</span></div>
@@ -186,18 +188,18 @@
                 <div class="rounded-xl border border-zinc-700 bg-zinc-800/50 p-3">
                     <div class="flex items-center justify-between mb-2">
                         <span class="text-xs font-semibold">Layer 3</span>
-                        <button id="layer3Toggle" onclick="toggleLayer(3)" class="layer-off px-3 py-0.5 text-xs rounded-lg font-medium">OFF</button>
+                        <button id="layer3Toggle" onclick="toggleLayer(3)" class="layer-on px-3 py-0.5 text-xs rounded-lg font-medium">ON</button>
                     </div>
                     <div class="flex items-center gap-2 mb-2">
                         <span class="text-xs text-zinc-400 w-10">Color</span>
-                        <input type="color" id="layer3Color" value="#ff6600" class="flex-1 h-7 rounded border border-zinc-600">
+                        <input type="color" id="layer3Color" value="#ffffff" class="flex-1 h-7 rounded border border-zinc-600">
                     </div>
                     <div class="row"><span>Opacity</span><span id="val-layer3Opacity">100</span></div>
                     <input type="range" id="layer3Opacity" min="0" max="100" value="100" class="w-full accent-emerald-600 mb-2">
                     <div class="row"><span>RGB Shift</span><span id="val-layer3RgbShift">0</span></div>
-                    <input type="range" id="layer3RgbShift" min="0" max="20" value="0" step="0.5" class="w-full accent-rose-500 mb-2">
-                    <div class="row"><span>Rot Speed °/s</span><span id="val-layer3Speed">-20</span></div>
-                    <input type="range" id="layer3Speed" min="-180" max="180" value="-20" class="w-full accent-emerald-600 mb-2">
+                    <input type="range" id="layer3RgbShift" min="0" max="40" value="0" step="0.5" class="w-full accent-rose-500 mb-2">
+                    <div class="row"><span>Rot Speed °/s</span><span id="val-layer3Speed">-15</span></div>
+                    <input type="range" id="layer3Speed" min="-180" max="180" value="-15" class="w-full accent-emerald-600 mb-2">
                     <div class="row"><span>Offset X</span><span id="val-layer3OffsetX">0</span></div>
                     <input type="range" id="layer3OffsetX" min="-150" max="150" value="0" class="w-full accent-emerald-600 mb-2">
                     <div class="row"><span>Offset Y</span><span id="val-layer3OffsetY">0</span></div>
@@ -267,11 +269,11 @@
             <div class="sep">
                 <p class="slabel">Canvas</p>
                 <div class="row mb-1"><span class="text-xs text-zinc-400">Background</span></div>
-                <input type="color" id="bgColor" value="#0f172a" class="w-full h-9 rounded border border-zinc-700 mb-2">
+                <input type="color" id="bgColor" value="#000000" class="w-full h-9 rounded border border-zinc-700 mb-2">
                 <div class="row mb-1"><span class="text-xs text-zinc-400">Cutout</span></div>
                 <select id="cutout" class="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm">
                     <option value="none">None</option>
-                    <option value="circle">Circle</option>
+                    <option value="circle" selected>Circle</option>
                     <option value="square">Square</option>
                     <option value="diamond">Diamond</option>
                 </select>
@@ -346,26 +348,27 @@ const layerAngle = [0, 0, 0];
 //  Params
 // ════════════════════════════════════════════════════════════════════
 const params = {
-    shape:         'lines',
+    shape:         'grid',
     blendMode:     'difference',
     blendStrength: 100,
-    cellCount:     40,
-    cellSize:      38,
-    stroke:        4,
-    warpStrength:  0,
-    warpRadius:    50,
-    warpType:      'none',
+    cellCount:     20,
+    cellSize:      50,
+    stroke:        7.5,
+    warpStrength:  10,
+    warpRadius:    45,
+    warpType:      'flag',
     meshStrength:  100,
     meshMode:      'fixed',
-    warpOscSpeed:  0,
+    warpOscSpeed:  0.2,
+    warpRgbDrive:  0,
     animateWarp:   false,
-    cutout:        'none',
-    bgColor:       '#0f172a',
-    layer1Color: '#000000', layer1Speed:  0,  layer1OffsetX: 0, layer1OffsetY: 0, layer1On: true,
+    cutout:        'circle',
+    bgColor:       '#000000',
+    layer1Color: '#ffffff', layer1Speed:  10, layer1OffsetX: 0, layer1OffsetY: 0, layer1On: true,
     layer1Opacity: 100, layer1RgbShift: 0,
     layer2Color: '#ffffff', layer2Speed:  20, layer2OffsetX: 0, layer2OffsetY: 0, layer2On: true,
     layer2Opacity: 100, layer2RgbShift: 0,
-    layer3Color: '#ff6600', layer3Speed: -20, layer3OffsetX: 0, layer3OffsetY: 0, layer3On: false,
+    layer3Color: '#ffffff', layer3Speed: -15, layer3OffsetX: 0, layer3OffsetY: 0, layer3On: true,
     layer3Opacity: 100, layer3RgbShift: 0,
     warpLayers: [true, true, true],  // which layers warp applies to
     // Shaders
@@ -398,7 +401,7 @@ window.addEventListener('resize', resizeCanvas);
 // ════════════════════════════════════════════════════════════════════
 const numericIds = new Set([
     'cellCount','cellSize','stroke','blendStrength',
-    'warpStrength','warpRadius','warpOscSpeed','meshStrength',
+    'warpStrength','warpRadius','warpOscSpeed','warpRgbDrive','meshStrength',
     'layer1Speed','layer1OffsetX','layer1OffsetY','layer1Opacity','layer1RgbShift',
     'layer2Speed','layer2OffsetX','layer2OffsetY','layer2Opacity','layer2RgbShift',
     'layer3Speed','layer3OffsetX','layer3OffsetY','layer3Opacity','layer3RgbShift',
@@ -429,6 +432,7 @@ document.getElementById('warpType').addEventListener('change', e => {
     document.getElementById('meshControls').classList.toggle('hidden', !isMesh);
     document.getElementById('globalWarpControls').classList.toggle('hidden', isMesh);
     meshCanvas.style.pointerEvents = (isMesh && meshEditMode) ? 'auto' : 'none';
+    params.warpType = e.target.value;
 });
 document.getElementById('meshMode').addEventListener('change', e => { params.meshMode = e.target.value; });
 
@@ -938,12 +942,18 @@ function renderFrame(time = 0) {
         ctx.globalAlpha = blendAlpha * (params.layer3Opacity / 100);
         renderLayerOn(ctx, layerAngle[2], params.layer3OffsetX, params.layer3OffsetY, params.layer3Color, 2);
     }
+
+    // ── WebGL shader overlay (composited inside the same clip region) ──
+    drawShaders(globalTime);
+    if (params.shNoise || params.shColorNoise || params.shBlur) {
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.globalAlpha = 1;
+        ctx.drawImage(shaderCanvas, 0, 0);
+    }
+
     ctx.globalCompositeOperation = 'source-over';
     ctx.globalAlpha = 1;
     if (clipped) ctx.restore();
-
-    // ── WebGL shader overlay ──
-    drawShaders(globalTime);
 
     if (!paused) animationFrame = requestAnimationFrame(renderFrame);
 }
@@ -991,9 +1001,19 @@ function gradientForLayer(c, angle, offX, offY) {
     return g;
 }
 
+// Compute extra RGB shift contributed by the current warp displacement magnitude
+function warpRgbExtra(layerIdx) {
+    if (layerIdx === undefined || params.warpRgbDrive <= 0) return 0;
+    if (!params.warpLayers[layerIdx]) return 0;
+    if (params.warpType === 'none' || params.warpType === 'mesh') return 0;
+    const strength = Math.abs(effectiveWarpStrength());
+    return strength * params.warpRgbDrive * 0.25;
+}
+
 function renderLayerOn(c, angle, offX, offY, color, layerIdx) {
-    const layerOpaque = !params.shGrad && (layerIdx === undefined || params['layer'+(layerIdx+1)+'RgbShift'] === 0);
-    const rgbShift = layerIdx !== undefined ? (params['layer'+(layerIdx+1)+'RgbShift'] || 0) : 0;
+    const baseRgbShift = layerIdx !== undefined ? (params['layer'+(layerIdx+1)+'RgbShift'] || 0) : 0;
+    const rgbShift = baseRgbShift + warpRgbExtra(layerIdx);
+    const layerOpaque = !params.shGrad && rgbShift === 0;
     const warpOn = layerIdx !== undefined ? params.warpLayers[layerIdx] : true;
 
     if (rgbShift > 0) {
@@ -1106,7 +1126,7 @@ function _renderLayerCore(c, angle, offX, offY, color, warpOn) {
 // ════════════════════════════════════════════════════════════════════
 //  Shape renderers  (pass layerRot so mesh warp can choose mode)
 // ════════════════════════════════════════════════════════════════════
-function segs(warpOn)    { return (warpOn && params.warpType !== 'none') ? 32 : 1; }
+function segs(warpOn)    { return (warpOn && params.warpType !== 'none') ? 64 : 1; }
 function isMesh()        { return params.warpType === 'mesh'; }
 function hasWarp(warpOn) { return warpOn && params.warpType !== 'none' && (isMesh() || params.warpStrength > 0); }
 
@@ -1290,10 +1310,14 @@ function warpDX(along, perp) {
     const freq     = (Math.PI*2*3)/(halfSize*2);
     switch (params.warpType) {
         case 'flag': {
-            const rPx = params.warpRadius/100*halfSize;
-            const d   = Math.sqrt(along*along+perp*perp);
-            const t   = Math.max(0, 1 - d/rPx);
-            return Math.sin(along*freq+phase) * strength * t*t*(3-2*t);
+            const rPx  = params.warpRadius/100*halfSize;
+            const d    = Math.sqrt(along*along+perp*perp);
+            const tRaw = Math.max(0, 1 - d/rPx);
+            // Quintic smoothstep — zero first AND second derivative at edges
+            // Gives a tight, Bézier-like smooth bell falloff
+            const t    = tRaw*tRaw*tRaw*(tRaw*(tRaw*6 - 15) + 10);
+            const freq2 = (Math.PI*2*2)/(halfSize*2);
+            return Math.sin(along*freq2+phase) * strength * t;
         }
         case 'sine':   return Math.sin(along*freq+phase) * strength;
         case 'ripple': return Math.sin(Math.sqrt(along*along+perp*perp)*freq+phase) * strength;
