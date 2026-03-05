@@ -8,492 +8,724 @@
     <style>
         body { font-family: system-ui, sans-serif; }
         #canvas { image-rendering: crisp-edges; box-shadow: 0 10px 30px rgba(0,0,0,0.5); max-width: 100%; height: auto; }
-        @media (max-width: 768px) {
-            .controls { border-right: none !important; border-bottom: 1px solid #374151; }
-        }
+        @media (max-width: 768px) { .controls { border-right: none !important; border-bottom: 1px solid #374151; } }
         input[type="range"] { cursor: pointer; }
         select, input[type="color"] { cursor: pointer; }
         button { cursor: pointer; transition: background-color 0.15s ease; }
         .layer-on  { background-color: #059669; }
         .layer-off { background-color: #52525b; }
-        .section-label { font-size: 0.65rem; letter-spacing: 0.12em; text-transform: uppercase; color: #71717a; margin-bottom: 0.5rem; }
-        .row { display: flex; justify-content: space-between; font-size: 0.75rem; margin-bottom: 0.25rem; }
+        .slabel { font-size: 0.62rem; letter-spacing: 0.1em; text-transform: uppercase; color: #71717a; margin-bottom: 0.4rem; }
+        .row { display: flex; justify-content: space-between; font-size: 0.72rem; margin-bottom: 0.2rem; }
+        .sep { border-top: 1px solid #27272a; padding-top: 0.75rem; margin-top: 0.25rem; }
+        #dlModal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.7); z-index:100; align-items:center; justify-content:center; }
+        #dlModal.open { display:flex; }
+        #dlBox { background:#18181b; border:1px solid #3f3f46; border-radius:1rem; padding:1.5rem; width:300px; }
     </style>
 </head>
 <body class="bg-zinc-950 text-zinc-100 min-h-screen">
-    <div class="flex flex-col md:flex-row h-screen">
-        <!-- Controls sidebar -->
-        <div class="w-full md:w-80 bg-zinc-900 border-b md:border-r border-zinc-800 p-5 overflow-y-auto flex flex-col controls">
-            <div class="mb-5">
-                <h1 class="text-2xl font-bold tracking-tighter">MOIRÉ</h1>
-                <p class="text-zinc-400 text-sm">Live Lattice Generator</p>
+<div class="flex flex-col md:flex-row h-screen">
+
+    <!-- ══ Sidebar ══════════════════════════════════════════════════ -->
+    <div class="w-full md:w-80 bg-zinc-900 border-b md:border-r border-zinc-800 p-4 overflow-y-auto flex flex-col controls">
+        <div class="mb-4">
+            <h1 class="text-2xl font-bold tracking-tighter">MOIRÉ</h1>
+            <p class="text-zinc-400 text-xs">Live Lattice Generator</p>
+        </div>
+        <div class="space-y-3 flex-1">
+
+            <!-- Pattern & Blend -->
+            <div>
+                <p class="slabel">Pattern</p>
+                <select id="shape" class="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm mb-2">
+                    <option value="lines">Parallel Lines</option>
+                    <option value="radial">Radial / Circles</option>
+                    <option value="iso-circles">Isometric Circles</option>
+                    <option value="grid">Square Grid</option>
+                    <option value="hexagon">Hexagon</option>
+                    <option value="triangle">Isometric Triangles</option>
+                </select>
+                <div class="row"><span>Blend Mode</span></div>
+                <select id="blendMode" class="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm mb-2">
+                    <option value="source-over">Normal</option>
+                    <option value="difference" selected>Difference</option>
+                    <option value="xor">XOR</option>
+                    <option value="screen">Screen</option>
+                    <option value="overlay">Overlay</option>
+                    <option value="multiply">Multiply</option>
+                    <option value="exclusion">Exclusion</option>
+                    <option value="color-dodge">Color Dodge</option>
+                    <option value="hard-light">Hard Light</option>
+                </select>
+                <div class="row"><span>Blend Strength</span><span id="val-blendStrength">100</span></div>
+                <input type="range" id="blendStrength" min="0" max="100" value="100" class="w-full accent-emerald-600">
             </div>
 
-            <div class="space-y-4 flex-1">
-
-                <!-- ── Shape & Blend ──────────────────── -->
-                <div>
-                    <p class="section-label">Pattern</p>
-                    <select id="shape" class="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm mb-2">
-                        <option value="lines">Parallel Lines</option>
-                        <option value="radial">Radial / Circles</option>
-                        <option value="grid">Grid</option>
-                        <option value="hexagon">Hexagon</option>
-                    </select>
-                    <select id="blendMode" class="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm">
-                        <option value="difference">Difference</option>
-                        <option value="xor">XOR</option>
-                        <option value="screen">Screen</option>
-                        <option value="overlay">Overlay</option>
-                        <option value="multiply">Multiply</option>
-                        <option value="exclusion">Exclusion</option>
-                    </select>
-                </div>
-
-                <!-- ── Grid ──────────────────────────── -->
-                <div class="border-t border-zinc-800 pt-3">
-                    <p class="section-label">Grid</p>
-
-                    <!-- Cell Count = spacing between lines in px -->
-                    <div class="row"><span>Cell Count <span class="text-zinc-500">(line spacing px)</span></span><span id="val-cellCount">40</span></div>
-                    <input type="range" id="cellCount" min="5" max="120" value="40" class="w-full accent-emerald-600 mb-3">
-
-                    <!-- Cell Size = spread % (100 = natural, <100 contracts toward centre, >100 expands) -->
-                    <div class="row"><span>Cell Size <span class="text-zinc-500">(spread %)</span></span><span id="val-cellSize">100</span></div>
-                    <input type="range" id="cellSize" min="10" max="200" value="100" class="w-full accent-emerald-600 mb-3">
-
-                    <div class="row"><span>Stroke</span><span id="val-stroke">4</span></div>
-                    <input type="range" id="stroke" min="1" max="20" value="4" step="0.5" class="w-full accent-emerald-600">
-                </div>
-
-                <!-- ── Warp ───────────────────────────── -->
-                <div class="border-t border-zinc-800 pt-3">
-                    <p class="section-label">Warp</p>
-
-                    <select id="warpType" class="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm mb-3">
-                        <option value="none">None</option>
-                        <option value="flag">Flag — Centre Bulge</option>
-                        <option value="sine">Sine (global)</option>
-                        <option value="ripple">Ripple (global)</option>
-                    </select>
-
-                    <div class="row"><span>Strength</span><span id="val-warpStrength">0</span></div>
-                    <input type="range" id="warpStrength" min="0" max="80" value="0" class="w-full accent-emerald-600 mb-3">
-
-                    <div class="row">
-                        <span>Radius <span class="text-zinc-500 text-xs">(Flag only, %)</span></span>
-                        <span id="val-warpRadius">50</span>
-                    </div>
-                    <input type="range" id="warpRadius" min="5" max="100" value="50" class="w-full accent-emerald-600 mb-3">
-
-                    <div class="flex items-center justify-between">
-                        <label class="text-xs text-zinc-400">Animate Warp</label>
-                        <label class="relative inline-flex items-center cursor-pointer">
-                            <input type="checkbox" id="animateWarp" class="sr-only peer">
-                            <div class="w-10 h-5 bg-zinc-700 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-600"></div>
-                        </label>
-                    </div>
-                </div>
-
-                <!-- ── Layers ─────────────────────────── -->
-                <div class="border-t border-zinc-800 pt-3 space-y-3">
-                    <p class="section-label">Layers</p>
-
-                    <!-- Layer 1 -->
-                    <div class="rounded-xl border border-zinc-700 bg-zinc-800/50 p-3">
-                        <div class="flex items-center justify-between mb-2">
-                            <span class="text-xs font-semibold">Layer 1 — Base</span>
-                            <button id="layer1Toggle" onclick="toggleLayer(1)" class="layer-on px-3 py-0.5 text-xs rounded-lg font-medium">ON</button>
-                        </div>
-                        <div class="flex items-center gap-2">
-                            <span class="text-xs text-zinc-400 w-10">Color</span>
-                            <input type="color" id="layer1Color" value="#000000" class="flex-1 h-8 rounded border border-zinc-600">
-                        </div>
-                    </div>
-
-                    <!-- Layer 2 -->
-                    <div class="rounded-xl border border-zinc-700 bg-zinc-800/50 p-3">
-                        <div class="flex items-center justify-between mb-2">
-                            <span class="text-xs font-semibold">Layer 2 — Rotating</span>
-                            <button id="layer2Toggle" onclick="toggleLayer(2)" class="layer-on px-3 py-0.5 text-xs rounded-lg font-medium">ON</button>
-                        </div>
-                        <div class="flex items-center gap-2 mb-2">
-                            <span class="text-xs text-zinc-400 w-10">Color</span>
-                            <input type="color" id="layer2Color" value="#ffffff" class="flex-1 h-8 rounded border border-zinc-600">
-                        </div>
-                        <div class="row"><span>Rot Speed °/s</span><span id="val-rotSpeed">20</span></div>
-                        <input type="range" id="rotSpeed" min="0" max="180" value="20" class="w-full accent-emerald-600 mb-2">
-                        <div class="row"><span>Offset X</span><span id="val-offsetX">0</span></div>
-                        <input type="range" id="offsetX" min="-150" max="150" value="0" class="w-full accent-emerald-600 mb-2">
-                        <div class="row"><span>Offset Y</span><span id="val-offsetY">0</span></div>
-                        <input type="range" id="offsetY" min="-150" max="150" value="0" class="w-full accent-emerald-600">
-                    </div>
-
-                    <!-- Layer 3 -->
-                    <div class="rounded-xl border border-zinc-700 bg-zinc-800/50 p-3">
-                        <div class="flex items-center justify-between mb-2">
-                            <span class="text-xs font-semibold">Layer 3 — Counter-Rotate</span>
-                            <button id="layer3Toggle" onclick="toggleLayer(3)" class="layer-off px-3 py-0.5 text-xs rounded-lg font-medium">OFF</button>
-                        </div>
-                        <div class="flex items-center gap-2 mb-2">
-                            <span class="text-xs text-zinc-400 w-10">Color</span>
-                            <input type="color" id="layer3Color" value="#ff6600" class="flex-1 h-8 rounded border border-zinc-600">
-                        </div>
-                        <div class="row"><span>Angle Offset °</span><span id="val-layer3Angle">45</span></div>
-                        <input type="range" id="layer3Angle" min="-180" max="180" value="45" class="w-full accent-emerald-600 mb-2">
-                        <div class="row"><span>Offset X</span><span id="val-layer3OffsetX">0</span></div>
-                        <input type="range" id="layer3OffsetX" min="-150" max="150" value="0" class="w-full accent-emerald-600 mb-2">
-                        <div class="row"><span>Offset Y</span><span id="val-layer3OffsetY">0</span></div>
-                        <input type="range" id="layer3OffsetY" min="-150" max="150" value="0" class="w-full accent-emerald-600">
-                    </div>
-                </div>
-
-                <!-- ── Canvas ─────────────────────────── -->
-                <div class="border-t border-zinc-800 pt-3">
-                    <p class="section-label">Canvas</p>
-                    <label class="text-xs text-zinc-400 mb-1 block">Background</label>
-                    <input type="color" id="bgColor" value="#0f172a" class="w-full h-10 rounded border border-zinc-700 mb-3">
-                    <label class="text-xs text-zinc-400 mb-1 block">Cutout</label>
-                    <select id="cutout" class="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm">
-                        <option value="none">None</option>
-                        <option value="circle">Circle</option>
-                        <option value="square">Square</option>
-                        <option value="diamond">Diamond</option>
-                    </select>
-                </div>
-
-            </div><!-- end space-y -->
-
-            <!-- Buttons -->
-            <div class="pt-5 mt-4 grid grid-cols-2 gap-3">
-                <button onclick="download()" class="py-3 bg-zinc-700 hover:bg-zinc-600 rounded-xl text-sm font-medium">⬇ PNG</button>
-                <button onclick="togglePause()" id="pauseBtn" class="py-3 bg-emerald-600 hover:bg-emerald-500 rounded-xl text-sm font-medium">⏸ Pause</button>
+            <!-- Grid -->
+            <div class="sep">
+                <p class="slabel">Grid</p>
+                <div class="row"><span>Cell Spacing <span class="text-zinc-500">(centre-to-centre px)</span></span><span id="val-cellCount">40</span></div>
+                <input type="range" id="cellCount" min="5" max="120" value="40" class="w-full accent-emerald-600 mb-2">
+                <div class="row"><span>Cell Size <span class="text-zinc-500">(shape draw size px)</span></span><span id="val-cellSize">38</span></div>
+                <input type="range" id="cellSize" min="2" max="120" value="38" class="w-full accent-emerald-600 mb-2">
+                <div class="row"><span>Stroke</span><span id="val-stroke">4</span></div>
+                <input type="range" id="stroke" min="1" max="20" value="4" step="0.5" class="w-full accent-emerald-600">
             </div>
+
+            <!-- Warp -->
+            <div class="sep">
+                <p class="slabel">Warp</p>
+                <select id="warpType" class="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm mb-2">
+                    <option value="none">None</option>
+                    <option value="flag">Flag — Centre Bulge</option>
+                    <option value="sine">Sine (global)</option>
+                    <option value="ripple">Ripple (global)</option>
+                </select>
+                <div class="row"><span>Strength</span><span id="val-warpStrength">0</span></div>
+                <input type="range" id="warpStrength" min="0" max="80" value="0" class="w-full accent-emerald-600 mb-2">
+                <div class="row"><span>Radius <span class="text-zinc-500 text-xs">(Flag %)</span></span><span id="val-warpRadius">50</span></div>
+                <input type="range" id="warpRadius" min="5" max="100" value="50" class="w-full accent-emerald-600 mb-2">
+                <div class="flex items-center justify-between">
+                    <label class="text-xs text-zinc-400">Animate Warp</label>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" id="animateWarp" class="sr-only peer">
+                        <div class="w-10 h-5 bg-zinc-700 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-600"></div>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Layers -->
+            <div class="sep space-y-3">
+                <p class="slabel">Layers</p>
+
+                <!-- Layer 1 -->
+                <div class="rounded-xl border border-zinc-700 bg-zinc-800/50 p-3">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-semibold">Layer 1</span>
+                        <button id="layer1Toggle" onclick="toggleLayer(1)" class="layer-on px-3 py-0.5 text-xs rounded-lg font-medium">ON</button>
+                    </div>
+                    <div class="flex items-center gap-2 mb-2">
+                        <span class="text-xs text-zinc-400 w-10">Color</span>
+                        <input type="color" id="layer1Color" value="#000000" class="flex-1 h-7 rounded border border-zinc-600">
+                    </div>
+                    <div class="row"><span>Rot Speed °/s</span><span id="val-layer1Speed">0</span></div>
+                    <input type="range" id="layer1Speed" min="-180" max="180" value="0" class="w-full accent-emerald-600 mb-2">
+                    <div class="row"><span>Offset X</span><span id="val-layer1OffsetX">0</span></div>
+                    <input type="range" id="layer1OffsetX" min="-150" max="150" value="0" class="w-full accent-emerald-600 mb-2">
+                    <div class="row"><span>Offset Y</span><span id="val-layer1OffsetY">0</span></div>
+                    <input type="range" id="layer1OffsetY" min="-150" max="150" value="0" class="w-full accent-emerald-600">
+                </div>
+
+                <!-- Layer 2 -->
+                <div class="rounded-xl border border-zinc-700 bg-zinc-800/50 p-3">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-semibold">Layer 2</span>
+                        <button id="layer2Toggle" onclick="toggleLayer(2)" class="layer-on px-3 py-0.5 text-xs rounded-lg font-medium">ON</button>
+                    </div>
+                    <div class="flex items-center gap-2 mb-2">
+                        <span class="text-xs text-zinc-400 w-10">Color</span>
+                        <input type="color" id="layer2Color" value="#ffffff" class="flex-1 h-7 rounded border border-zinc-600">
+                    </div>
+                    <div class="row"><span>Rot Speed °/s</span><span id="val-layer2Speed">20</span></div>
+                    <input type="range" id="layer2Speed" min="-180" max="180" value="20" class="w-full accent-emerald-600 mb-2">
+                    <div class="row"><span>Offset X</span><span id="val-layer2OffsetX">0</span></div>
+                    <input type="range" id="layer2OffsetX" min="-150" max="150" value="0" class="w-full accent-emerald-600 mb-2">
+                    <div class="row"><span>Offset Y</span><span id="val-layer2OffsetY">0</span></div>
+                    <input type="range" id="layer2OffsetY" min="-150" max="150" value="0" class="w-full accent-emerald-600">
+                </div>
+
+                <!-- Layer 3 -->
+                <div class="rounded-xl border border-zinc-700 bg-zinc-800/50 p-3">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs font-semibold">Layer 3</span>
+                        <button id="layer3Toggle" onclick="toggleLayer(3)" class="layer-off px-3 py-0.5 text-xs rounded-lg font-medium">OFF</button>
+                    </div>
+                    <div class="flex items-center gap-2 mb-2">
+                        <span class="text-xs text-zinc-400 w-10">Color</span>
+                        <input type="color" id="layer3Color" value="#ff6600" class="flex-1 h-7 rounded border border-zinc-600">
+                    </div>
+                    <div class="row"><span>Rot Speed °/s</span><span id="val-layer3Speed">-20</span></div>
+                    <input type="range" id="layer3Speed" min="-180" max="180" value="-20" class="w-full accent-emerald-600 mb-2">
+                    <div class="row"><span>Offset X</span><span id="val-layer3OffsetX">0</span></div>
+                    <input type="range" id="layer3OffsetX" min="-150" max="150" value="0" class="w-full accent-emerald-600 mb-2">
+                    <div class="row"><span>Offset Y</span><span id="val-layer3OffsetY">0</span></div>
+                    <input type="range" id="layer3OffsetY" min="-150" max="150" value="0" class="w-full accent-emerald-600">
+                </div>
+            </div>
+
+            <!-- Canvas -->
+            <div class="sep">
+                <p class="slabel">Canvas</p>
+                <div class="row mb-1"><span class="text-xs text-zinc-400">Background</span></div>
+                <input type="color" id="bgColor" value="#0f172a" class="w-full h-9 rounded border border-zinc-700 mb-2">
+                <div class="row mb-1"><span class="text-xs text-zinc-400">Cutout</span></div>
+                <select id="cutout" class="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm">
+                    <option value="none">None</option>
+                    <option value="circle">Circle</option>
+                    <option value="square">Square</option>
+                    <option value="diamond">Diamond</option>
+                </select>
+            </div>
+
         </div>
 
-        <!-- Canvas area -->
-        <div class="flex-1 flex items-center justify-center p-4 bg-zinc-950" id="canvasContainer">
-            <canvas id="canvas"></canvas>
+        <!-- Footer -->
+        <div class="pt-4 mt-3 grid grid-cols-2 gap-2">
+            <button onclick="openDownload()" class="py-3 bg-zinc-700 hover:bg-zinc-600 rounded-xl text-sm font-medium">⬇ Export</button>
+            <button onclick="togglePause()" id="pauseBtn" class="py-3 bg-emerald-600 hover:bg-emerald-500 rounded-xl text-sm font-medium">⏸ Pause</button>
         </div>
     </div>
 
+    <!-- Canvas area -->
+    <div class="flex-1 flex items-center justify-center p-4 bg-zinc-950" id="canvasContainer">
+        <canvas id="canvas"></canvas>
+    </div>
+</div>
+
+<!-- ══ Download Modal ══════════════════════════════════════════════ -->
+<div id="dlModal" onclick="if(event.target===this)closeDownload()">
+    <div id="dlBox">
+        <h2 class="font-bold mb-1">Export</h2>
+        <p class="text-xs text-zinc-400 mb-4">Export a single layer (transparent BG) or the full composite.</p>
+        <div class="space-y-2">
+            <button onclick="exportLayer(0)"  class="w-full py-2 bg-zinc-700 hover:bg-zinc-600 rounded-lg text-sm">🖼 Composite PNG (all visible)</button>
+            <div class="border-t border-zinc-700 pt-2">
+                <p class="text-xs text-zinc-500 mb-1">Per-layer PNG (transparent)</p>
+                <div class="grid grid-cols-3 gap-1">
+                    <button onclick="exportLayer(1)" class="py-1.5 bg-zinc-700 hover:bg-zinc-600 rounded-lg text-xs">L1 PNG</button>
+                    <button onclick="exportLayer(2)" class="py-1.5 bg-zinc-700 hover:bg-zinc-600 rounded-lg text-xs">L2 PNG</button>
+                    <button onclick="exportLayer(3)" class="py-1.5 bg-zinc-700 hover:bg-zinc-600 rounded-lg text-xs">L3 PNG</button>
+                </div>
+            </div>
+            <div class="border-t border-zinc-700 pt-2">
+                <p class="text-xs text-zinc-500 mb-1">Per-layer SVG (vector)</p>
+                <div class="grid grid-cols-3 gap-1">
+                    <button onclick="exportSVG(1)" class="py-1.5 bg-zinc-700 hover:bg-zinc-600 rounded-lg text-xs">L1 SVG</button>
+                    <button onclick="exportSVG(2)" class="py-1.5 bg-zinc-700 hover:bg-zinc-600 rounded-lg text-xs">L2 SVG</button>
+                    <button onclick="exportSVG(3)" class="py-1.5 bg-zinc-700 hover:bg-zinc-600 rounded-lg text-xs">L3 SVG</button>
+                </div>
+            </div>
+        </div>
+        <button onclick="closeDownload()" class="mt-4 w-full py-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-sm text-zinc-400">Cancel</button>
+    </div>
+</div>
+
     <script>
-        const canvas = document.getElementById('canvas');
-        const ctx = canvas.getContext('2d', { alpha: false });
-        let animationFrame = null;
-        let angle = 0;
-        let lastTime = 0;
-        let paused = false;
-        let warpPhase = 0;
+// ════════════════════════════════════════════════════════════════════
+//  State
+// ════════════════════════════════════════════════════════════════════
+const canvas = document.getElementById('canvas');
+const ctx    = canvas.getContext('2d', { alpha: false });
+let animationFrame = null;
+let lastTime = 0;
+let paused   = false;
+let warpPhase = 0;
 
-        const params = {
-            shape:          'lines',
-            blendMode:      'difference',
-            cellCount:      40,     // spacing between lines in px  (was cellSize's role)
-            cellSize:       100,    // spread %: 100 = natural, <100 contracts toward centre, >100 expands
-            stroke:         4,
-            warpStrength:   0,
-            warpRadius:     50,     // % of canvas half-size (Flag warp only)
-            warpType:       'none',
-            rotSpeed:       20,
-            offsetX:        0,
-            offsetY:        0,
-            layer3Angle:    45,
-            layer3OffsetX:  0,
-            layer3OffsetY:  0,
-            cutout:         'none',
-            bgColor:        '#0f172a',
-            layer1Color:    '#000000',
-            layer2Color:    '#ffffff',
-            layer3Color:    '#ff6600',
-            layer1On:       true,
-            layer2On:       true,
-            layer3On:       false,
-            animateWarp:    false
-        };
+// Per-layer accumulated rotation angles (degrees)
+const layerAngle = [0, 0, 0];  // [L1, L2, L3]
 
-        // ── Canvas resize ────────────────────────────────────────────
-        function resizeCanvas() {
-            const c = document.getElementById('canvasContainer');
-            const size = Math.min(c.clientWidth * 0.95, c.clientHeight * 0.9, 800);
-            canvas.width = size;
-            canvas.height = size;
-            if (paused) draw(lastTime);
+const params = {
+    shape:          'lines',
+    blendMode:      'difference',
+    blendStrength:  100,
+    cellCount:      40,    // centre-to-centre spacing (px) — grid density
+    cellSize:       38,    // shape draw size (px) — independent of spacing
+    stroke:         4,
+    warpStrength:   0,
+    warpRadius:     50,
+    warpType:       'none',
+    animateWarp:    false,
+    cutout:         'none',
+    bgColor:        '#0f172a',
+    // Layer 1
+    layer1Color:    '#000000',
+    layer1Speed:    0,
+    layer1OffsetX:  0,
+    layer1OffsetY:  0,
+    layer1On:       true,
+    // Layer 2
+    layer2Color:    '#ffffff',
+    layer2Speed:    20,
+    layer2OffsetX:  0,
+    layer2OffsetY:  0,
+    layer2On:       true,
+    // Layer 3
+    layer3Color:    '#ff6600',
+    layer3Speed:    -20,
+    layer3OffsetX:  0,
+    layer3OffsetY:  0,
+    layer3On:       false,
+};
+
+// ════════════════════════════════════════════════════════════════════
+//  Canvas resize
+// ════════════════════════════════════════════════════════════════════
+function resizeCanvas() {
+    const c    = document.getElementById('canvasContainer');
+    const size = Math.min(c.clientWidth * 0.95, c.clientHeight * 0.9, 800);
+    canvas.width  = size;
+    canvas.height = size;
+    if (paused) renderFrame(lastTime);
+}
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+
+// ════════════════════════════════════════════════════════════════════
+//  Control wiring
+// ════════════════════════════════════════════════════════════════════
+const numericIds = new Set([
+    'cellCount','cellSize','stroke','blendStrength',
+    'warpStrength','warpRadius',
+    'layer1Speed','layer1OffsetX','layer1OffsetY',
+    'layer2Speed','layer2OffsetX','layer2OffsetY',
+    'layer3Speed','layer3OffsetX','layer3OffsetY',
+]);
+const selectIds = new Set(['shape','blendMode','warpType','cutout']);
+const colorIds  = new Set(['bgColor','layer1Color','layer2Color','layer3Color']);
+
+document.querySelectorAll('input[type="range"], select, input[type="color"]').forEach(el => {
+    el.addEventListener('input', () => {
+        const id = el.id;
+        if      (colorIds.has(id))   params[id] = el.value;
+        else if (selectIds.has(id))  params[id] = el.value;
+        else if (numericIds.has(id)) params[id] = +el.value;
+        const valEl = document.getElementById('val-' + id);
+        if (valEl && el.type === 'range') valEl.textContent = Math.round(+el.value);
+        if (paused) renderFrame(lastTime);
+    });
+});
+
+document.getElementById('animateWarp').addEventListener('change', e => {
+    params.animateWarp = e.target.checked;
+});
+
+// ════════════════════════════════════════════════════════════════════
+//  Layer toggles
+// ════════════════════════════════════════════════════════════════════
+function toggleLayer(n) {
+    const key = 'layer' + n + 'On';
+    params[key] = !params[key];
+    const btn = document.getElementById('layer' + n + 'Toggle');
+    btn.textContent = params[key] ? 'ON' : 'OFF';
+    btn.classList.toggle('layer-on',  params[key]);
+    btn.classList.toggle('layer-off', !params[key]);
+    if (paused) renderFrame(lastTime);
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Pause / Resume
+// ════════════════════════════════════════════════════════════════════
+function togglePause() {
+    paused = !paused;
+    document.getElementById('pauseBtn').textContent = paused ? '▶ Resume' : '⏸ Pause';
+    if (!paused) {
+        lastTime = 0;
+        animationFrame = requestAnimationFrame(renderFrame);
+    } else {
+        if (animationFrame) cancelAnimationFrame(animationFrame);
+    }
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Main render loop
+// ════════════════════════════════════════════════════════════════════
+function renderFrame(time = 0) {
+    if (!lastTime) lastTime = time;
+    const delta = Math.min((time - lastTime) / 1000, 0.1);
+    lastTime = time;
+
+    if (!paused) {
+        layerAngle[0] = (layerAngle[0] + params.layer1Speed * delta) % 360;
+        layerAngle[1] = (layerAngle[1] + params.layer2Speed * delta) % 360;
+        layerAngle[2] = (layerAngle[2] + params.layer3Speed * delta) % 360;
+        if (params.animateWarp) warpPhase += delta;
+    }
+
+    ctx.fillStyle = params.bgColor;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    const clipped = applyClip(ctx);
+
+    // Layer 1 always source-over at full opacity
+    if (params.layer1On) {
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.globalAlpha = 1;
+        renderLayerOn(ctx, layerAngle[0], params.layer1OffsetX, params.layer1OffsetY, params.layer1Color);
+    }
+    // Layers 2+3 use chosen blend mode and strength
+    const alpha = params.blendStrength / 100;
+    if (params.layer2On) {
+        ctx.globalCompositeOperation = params.blendMode;
+        ctx.globalAlpha = alpha;
+        renderLayerOn(ctx, layerAngle[1], params.layer2OffsetX, params.layer2OffsetY, params.layer2Color);
+    }
+    if (params.layer3On) {
+        ctx.globalCompositeOperation = params.blendMode;
+        ctx.globalAlpha = alpha;
+        renderLayerOn(ctx, layerAngle[2], params.layer3OffsetX, params.layer3OffsetY, params.layer3Color);
+    }
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = 1;
+    if (clipped) ctx.restore();
+
+    if (!paused) animationFrame = requestAnimationFrame(renderFrame);
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Cutout clip
+// ════════════════════════════════════════════════════════════════════
+function applyClip(c) {
+    if (params.cutout === 'none') return false;
+    const cx = canvas.width / 2, cy = canvas.height / 2;
+    const r  = Math.min(canvas.width, canvas.height) / 2 * 0.85;
+    c.save();
+    c.beginPath();
+    if (params.cutout === 'circle') {
+        c.arc(cx, cy, r, 0, Math.PI * 2);
+    } else if (params.cutout === 'square') {
+        const s = r * 1.4; c.rect(cx - s/2, cy - s/2, s, s);
+    } else if (params.cutout === 'diamond') {
+        c.moveTo(cx, cy - r); c.lineTo(cx + r, cy);
+        c.lineTo(cx, cy + r); c.lineTo(cx - r, cy);
+        c.closePath();
+    }
+    c.clip();
+    return true;
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Render one layer onto any 2D context (uses canvas.width/height)
+// ════════════════════════════════════════════════════════════════════
+function renderLayerOn(c, angle, offX, offY, color) {
+    c.save();
+    c.translate(canvas.width / 2 + offX, canvas.height / 2 + offY);
+    c.rotate(angle * Math.PI / 180);
+    c.strokeStyle = color;
+    c.lineWidth   = params.stroke;
+    c.lineCap     = 'square';
+
+    const maxDist = Math.max(canvas.width, canvas.height) * 0.82;
+    const spacing = params.cellCount;  // centre-to-centre grid step (px)
+    const size    = params.cellSize;   // shape draw size (px), independent of spacing
+
+    switch (params.shape) {
+        case 'lines':       drawLines(c, spacing, size, maxDist);       break;
+        case 'radial':      drawRadial(c, spacing, size, maxDist);      break;
+        case 'iso-circles': drawIsoCircles(c, spacing, size, maxDist);  break;
+        case 'grid':        drawGrid(c, spacing, size, maxDist);        break;
+        case 'hexagon':     drawHexGrid(c, spacing, size, maxDist);     break;
+        case 'triangle':    drawTriGrid(c, spacing, size, maxDist);     break;
+    }
+    c.restore();
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Shape renderers
+//  spacing = centre-to-centre grid step (cellCount, px)
+//  size    = shape draw size (cellSize, px), independent of spacing
+// ════════════════════════════════════════════════════════════════════
+function segs() { return params.warpType === 'none' ? 1 : 32; }
+
+// Parallel vertical lines
+// spacing = gap between line centres; size not applicable (infinite lines)
+function drawLines(c, spacing, _size, maxDist) {
+    const n  = Math.ceil(maxDist * 2 / spacing) + 4;
+    const sg = segs();
+    for (let i = -n/2; i <= n/2; i++) strokeVLine(c, i * spacing, maxDist, sg);
+}
+
+// Square grid
+function drawGrid(c, spacing, _size, maxDist) {
+    const n  = Math.ceil(maxDist * 2 / spacing) + 4;
+    const sg = segs();
+    for (let i = -n/2; i <= n/2; i++) {
+        strokeVLine(c, i * spacing, maxDist, sg);
+        strokeHLine(c, i * spacing, maxDist, sg);
+    }
+}
+
+// Radial: concentric rings spaced by 'spacing', spokes independent of size
+function drawRadial(c, spacing, _size, maxDist) {
+    for (let r = spacing; r < maxDist; r += spacing) {
+        c.beginPath(); c.arc(0, 0, r, 0, Math.PI * 2); c.stroke();
+    }
+    const spokes = Math.max(2, Math.round(Math.PI * 2 * (maxDist / 2) / spacing));
+    for (let i = 0; i < spokes; i++) {
+        const a = (i / spokes) * Math.PI * 2;
+        c.beginPath(); c.moveTo(0, 0);
+        c.lineTo(Math.cos(a) * maxDist, Math.sin(a) * maxDist); c.stroke();
+    }
+}
+
+// Isometric circles: circles at triangular grid positions
+// spacing = centre-to-centre distance; size = circle diameter (radius = size/2)
+function drawIsoCircles(c, spacing, size, maxDist) {
+    const hx   = spacing;
+    const hy   = spacing * Math.sqrt(3) / 2;
+    const r    = Math.max(1, size / 2);
+    const cols = Math.ceil(maxDist / hx) + 2;
+    const rows = Math.ceil(maxDist / hy) + 2;
+    for (let row = -rows; row <= rows; row++) {
+        for (let col = -cols; col <= cols; col++) {
+            const x = col * hx + (row % 2 === 0 ? 0 : hx / 2);
+            const y = row * hy;
+            c.beginPath(); c.arc(x, y, r, 0, Math.PI * 2); c.stroke();
         }
-        window.addEventListener('resize', resizeCanvas);
-        resizeCanvas();
+    }
+}
 
-        // ── Wire up all controls ─────────────────────────────────────
-        const numericIds = new Set([
-            'cellCount','cellSize','stroke',
-            'warpStrength','warpRadius',
-            'rotSpeed','offsetX','offsetY',
-            'layer3Angle','layer3OffsetX','layer3OffsetY'
-        ]);
-        const selectIds  = new Set(['shape','blendMode','warpType','cutout']);
-        const colorIds   = new Set(['bgColor','layer1Color','layer2Color','layer3Color']);
-
-        document.querySelectorAll('input[type="range"], select, input[type="color"]').forEach(el => {
-            el.addEventListener('input', () => {
-                const id = el.id;
-                if      (colorIds.has(id))   params[id] = el.value;
-                else if (selectIds.has(id))  params[id] = el.value;
-                else if (numericIds.has(id)) params[id] = +el.value;
-
-                const valEl = document.getElementById('val-' + id);
-                if (valEl && el.type === 'range') valEl.textContent = Math.round(+el.value);
-
-                if (paused) draw(lastTime);
-            });
-        });
-
-        document.getElementById('animateWarp').addEventListener('change', e => {
-            params.animateWarp = e.target.checked;
-        });
-
-        // ── Layer toggles ────────────────────────────────────────────
-        function toggleLayer(n) {
-            const key = 'layer' + n + 'On';
-            params[key] = !params[key];
-            const btn = document.getElementById('layer' + n + 'Toggle');
-            btn.textContent = params[key] ? 'ON' : 'OFF';
-            btn.classList.toggle('layer-on',  params[key]);
-            btn.classList.toggle('layer-off', !params[key]);
-            if (paused) draw(lastTime);
+// Hex grid: grid positions fixed by spacing; circumradius = size/2
+function drawHexGrid(c, spacing, size, maxDist) {
+    const R    = Math.max(1, size / 2);  // draw circumradius, independent of spacing
+    const colW = spacing * 0.75;
+    const rowH = spacing * Math.sqrt(3) / 2;
+    const cols = Math.ceil(maxDist / colW) + 2;
+    const rows = Math.ceil(maxDist / rowH) + 2;
+    for (let row = -rows; row <= rows; row++) {
+        for (let col = -cols; col <= cols; col++) {
+            const cx = col * spacing * 0.75;
+            const cy = row * rowH + (Math.abs(col) % 2 === 1 ? rowH / 2 : 0);
+            strokeHex(c, cx, cy, R);
         }
+    }
+}
 
-        // ── Pause / resume ───────────────────────────────────────────
-        function togglePause() {
-            paused = !paused;
-            document.getElementById('pauseBtn').textContent = paused ? '▶ Resume' : '⏸ Pause';
-            if (!paused) {
-                lastTime = 0;
-                animationFrame = requestAnimationFrame(draw);
+function strokeHex(c, cx, cy, R) {
+    c.beginPath();
+    for (let i = 0; i < 6; i++) {
+        const a = (Math.PI / 3) * i - Math.PI / 6;
+        const x = cx + R * Math.cos(a), y = cy + R * Math.sin(a);
+        i === 0 ? c.moveTo(x, y) : c.lineTo(x, y);
+    }
+    c.closePath(); c.stroke();
+}
+
+// Isometric triangle grid: triangles pointing alternately up/down
+// spacing = triangle cell pitch (centre-to-centre); size = triangle side length
+function drawTriGrid(c, spacing, size, maxDist) {
+    const h    = spacing * Math.sqrt(3) / 2;  // row height based on spacing grid
+    const cols = Math.ceil(maxDist * 2 / spacing) + 4;
+    const rows = Math.ceil(maxDist * 2 / h) + 4;
+    const s    = Math.max(2, size);
+    const th   = s * Math.sqrt(3) / 2;
+    for (let row = -rows; row <= rows; row++) {
+        for (let col = -cols; col <= cols; col++) {
+            const cx = col * spacing * 0.5;
+            const cy = row * h;
+            const up = (col + row) % 2 === 0;
+            c.beginPath();
+            if (up) {
+                c.moveTo(cx,         cy - th * 2/3);
+                c.lineTo(cx + s/2,   cy + th * 1/3);
+                c.lineTo(cx - s/2,   cy + th * 1/3);
             } else {
-                if (animationFrame) cancelAnimationFrame(animationFrame);
+                c.moveTo(cx,         cy + th * 2/3);
+                c.lineTo(cx + s/2,   cy - th * 1/3);
+                c.lineTo(cx - s/2,   cy - th * 1/3);
             }
+            c.closePath(); c.stroke();
         }
+    }
+}
 
-        // ── Main draw loop ───────────────────────────────────────────
-        function draw(time = 0) {
-            if (!lastTime) lastTime = time;
-            const delta = Math.min((time - lastTime) / 1000, 0.1);
-            lastTime = time;
+// ════════════════════════════════════════════════════════════════════
+//  Segmented line helpers (enable warp curves)
+// ════════════════════════════════════════════════════════════════════
+function strokeVLine(c, lineX, maxDist, sg) {
+    c.beginPath();
+    const dy = (maxDist * 2) / sg;
+    for (let s = 0; s <= sg; s++) {
+        const y = -maxDist + s * dy;
+        const x = lineX + warpDX(y, lineX);
+        s === 0 ? c.moveTo(x, y) : c.lineTo(x, y);
+    }
+    c.stroke();
+}
 
-            if (!paused) {
-                if (params.rotSpeed > 0) {
-                    angle = (angle + params.rotSpeed * delta) % 360;
-                }
-                if (params.animateWarp) warpPhase += delta;
-            }
+function strokeHLine(c, lineY, maxDist, sg) {
+    c.beginPath();
+    const dx = (maxDist * 2) / sg;
+    for (let s = 0; s <= sg; s++) {
+        const x = -maxDist + s * dx;
+        const y = lineY + warpDX(x, lineY);
+        s === 0 ? c.moveTo(x, y) : c.lineTo(x, y);
+    }
+    c.stroke();
+}
 
-            ctx.fillStyle = params.bgColor;
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-            const clipped = applyCutoutClip();
-
-            ctx.globalCompositeOperation = 'source-over';
-            if (params.layer1On) drawLayer(0, 0, 0, params.layer1Color);
-
-            ctx.globalCompositeOperation = params.blendMode;
-            if (params.layer2On) drawLayer(angle, params.offsetX, params.offsetY, params.layer2Color);
-
-            if (params.layer3On) drawLayer(-angle + params.layer3Angle, params.layer3OffsetX, params.layer3OffsetY, params.layer3Color);
-
-            ctx.globalCompositeOperation = 'source-over';
-            if (clipped) ctx.restore();
-
-            if (!paused) animationFrame = requestAnimationFrame(draw);
+// ════════════════════════════════════════════════════════════════════
+//  Warp displacement
+// ════════════════════════════════════════════════════════════════════
+function warpDX(along, perp) {
+    if (params.warpStrength === 0 || params.warpType === 'none') return 0;
+    const phase    = params.animateWarp ? warpPhase * 3 : 0;
+    const halfSize = Math.max(canvas.width, canvas.height) / 2;
+    const freq     = (Math.PI * 2 * 3) / (halfSize * 2);
+    switch (params.warpType) {
+        case 'flag': {
+            const rPx    = params.warpRadius / 100 * halfSize;
+            const dist   = Math.sqrt(along * along + perp * perp);
+            const t      = Math.max(0, 1 - dist / rPx);
+            const falloff = t * t * (3 - 2 * t);  // smoothstep
+            return Math.sin(along * freq + phase) * params.warpStrength * falloff;
         }
-
-        // ── Cutout clip ──────────────────────────────────────────────
-        function applyCutoutClip() {
-            if (params.cutout === 'none') return false;
-            const cx = canvas.width / 2, cy = canvas.height / 2;
-            const r  = Math.min(canvas.width, canvas.height) / 2 * 0.85;
-            ctx.save();
-            ctx.beginPath();
-            if (params.cutout === 'circle') {
-                ctx.arc(cx, cy, r, 0, Math.PI * 2);
-            } else if (params.cutout === 'square') {
-                const s = r * 1.4;
-                ctx.rect(cx - s/2, cy - s/2, s, s);
-            } else if (params.cutout === 'diamond') {
-                ctx.moveTo(cx, cy - r);
-                ctx.lineTo(cx + r, cy);
-                ctx.lineTo(cx, cy + r);
-                ctx.lineTo(cx - r, cy);
-                ctx.closePath();
-            }
-            ctx.clip();
-            return true;
+        case 'sine':
+            return Math.sin(along * freq + phase) * params.warpStrength;
+        case 'ripple': {
+            const d = Math.sqrt(along * along + perp * perp);
+            return Math.sin(d * freq + phase) * params.warpStrength;
         }
+        default: return 0;
+    }
+}
 
-        // ── Per-layer draw ───────────────────────────────────────────
-        function drawLayer(rotation, offX, offY, color) {
-            ctx.save();
-            ctx.translate(canvas.width / 2 + offX, canvas.height / 2 + offY);
-            ctx.rotate(rotation * Math.PI / 180);
-            ctx.strokeStyle = color;
-            ctx.lineWidth  = params.stroke;
-            ctx.lineCap    = 'square';
+// ════════════════════════════════════════════════════════════════════
+//  Export: Modal open/close
+// ════════════════════════════════════════════════════════════════════
+function openDownload()  { document.getElementById('dlModal').classList.add('open'); }
+function closeDownload() { document.getElementById('dlModal').classList.remove('open'); }
 
-            // baseStep = spacing between line centres (from cellCount slider, in px)
-            // spread   = how lines are positioned relative to their natural grid points
-            //            100% = natural full-coverage; <100% contracts toward centre
-            const maxDist  = Math.max(canvas.width, canvas.height) * 0.8;
-            const baseStep = params.cellCount;
-            const spread   = params.cellSize / 100;
+// ════════════════════════════════════════════════════════════════════
+//  Export: PNG  (0 = composite, 1/2/3 = single layer on transparent)
+// ════════════════════════════════════════════════════════════════════
+function exportLayer(layerNum) {
+    const oc  = document.createElement('canvas');
+    oc.width  = canvas.width;
+    oc.height = canvas.height;
+    const oc2 = oc.getContext('2d');  // default alpha:true → transparent bg
 
-            switch (params.shape) {
-                case 'lines':   drawLines(baseStep, spread, maxDist);   break;
-                case 'radial':  drawRadial(baseStep, spread, maxDist);  break;
-                case 'grid':    drawGrid(baseStep, spread, maxDist);    break;
-                case 'hexagon': drawHexGrid(baseStep, spread, maxDist); break;
-            }
-            ctx.restore();
+    if (layerNum === 0) {
+        oc2.drawImage(canvas, 0, 0);  // copy composite
+    } else {
+        oc2.clearRect(0, 0, oc.width, oc.height);
+        const cKey = 'layer' + layerNum + 'Color';
+        const xKey = 'layer' + layerNum + 'OffsetX';
+        const yKey = 'layer' + layerNum + 'OffsetY';
+        renderLayerOn(oc2, layerAngle[layerNum - 1], params[xKey], params[yKey], params[cKey]);
+    }
+
+    const link = document.createElement('a');
+    link.download = layerNum === 0 ? 'moire-composite.png' : `moire-layer${layerNum}.png`;
+    link.href = oc.toDataURL('image/png');
+    link.click();
+    closeDownload();
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Export: SVG per layer
+// ════════════════════════════════════════════════════════════════════
+function exportSVG(layerNum) {
+    const cKey = 'layer' + layerNum + 'Color';
+    const xKey = 'layer' + layerNum + 'OffsetX';
+    const yKey = 'layer' + layerNum + 'OffsetY';
+    const ang  = layerAngle[layerNum - 1];
+    const offX = params[xKey], offY = params[yKey];
+    const color = params[cKey];
+    const w = canvas.width, h = canvas.height;
+    const cx = w / 2 + offX, cy = h / 2 + offY;
+
+    const paths = buildSVGPaths(w, h);
+    const svg =
+`<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
+  <g transform="translate(${cx.toFixed(1)},${cy.toFixed(1)}) rotate(${(ang % 360).toFixed(2)})"
+     stroke="${color}" stroke-width="${params.stroke}" fill="none" stroke-linecap="square">
+    ${paths}
+  </g>
+</svg>`;
+
+    const blob = new Blob([svg], { type: 'image/svg+xml' });
+    const link = document.createElement('a');
+    link.download = `moire-layer${layerNum}.svg`;
+    link.href = URL.createObjectURL(blob);
+    link.click();
+    URL.revokeObjectURL(link.href);
+    closeDownload();
+}
+
+function buildSVGPaths(w, h) {
+    const maxDist = Math.max(w, h) * 0.82;
+    const spacing = params.cellCount;
+    const size    = params.cellSize;
+    const parts   = [];
+
+    switch (params.shape) {
+        case 'lines': {
+            const n = Math.ceil(maxDist * 2 / spacing) + 4;
+            for (let i = -n/2; i <= n/2; i++)
+                parts.push(`<line x1="${i*spacing}" y1="${-maxDist}" x2="${i*spacing}" y2="${maxDist}"/>`);
+            break;
         }
-
-        // ── Shape renderers ──────────────────────────────────────────
-
-        // Number of segments per line (more = smoother warp curves)
-        function segCount() { return params.warpType === 'none' ? 1 : 32; }
-
-        function drawLines(baseStep, spread, maxDist) {
-            const count = Math.ceil(maxDist * 2 / baseStep) + 4;
-            const segs  = segCount();
-            for (let i = -count / 2; i <= count / 2; i++) {
-                strokeVLine(i * baseStep * spread, maxDist, segs);
+        case 'grid': {
+            const n = Math.ceil(maxDist * 2 / spacing) + 4;
+            for (let i = -n/2; i <= n/2; i++) {
+                const p = i * spacing;
+                parts.push(`<line x1="${p}" y1="${-maxDist}" x2="${p}" y2="${maxDist}"/>`);
+                parts.push(`<line x1="${-maxDist}" y1="${p}" x2="${maxDist}" y2="${p}"/>`);
             }
+            break;
         }
-
-        function drawGrid(baseStep, spread, maxDist) {
-            const count = Math.ceil(maxDist * 2 / baseStep) + 4;
-            const segs  = segCount();
-            for (let i = -count / 2; i <= count / 2; i++) {
-                const pos = i * baseStep * spread;
-                strokeVLine(pos, maxDist, segs);
-                strokeHLine(pos, maxDist, segs);
-            }
-        }
-
-        function drawRadial(baseStep, spread, maxDist) {
-            // Rings — spread scales the radius of each ring
-            for (let r = baseStep; r < maxDist; r += baseStep) {
-                ctx.beginPath();
-                ctx.arc(0, 0, r * spread, 0, Math.PI * 2);
-                ctx.stroke();
-            }
-            // Spokes
-            const spokes = Math.max(2, Math.round(maxDist / baseStep));
+        case 'radial': {
+            for (let r = spacing; r < maxDist; r += spacing)
+                parts.push(`<circle cx="0" cy="0" r="${r}"/>`);
+            const spokes = Math.max(2, Math.round(Math.PI * 2 * (maxDist / 2) / spacing));
             for (let i = 0; i < spokes; i++) {
                 const a = (i / spokes) * Math.PI * 2;
-                ctx.beginPath();
-                ctx.moveTo(0, 0);
-                ctx.lineTo(Math.cos(a) * maxDist, Math.sin(a) * maxDist);
-                ctx.stroke();
+                parts.push(`<line x1="0" y1="0" x2="${(Math.cos(a)*maxDist).toFixed(1)}" y2="${(Math.sin(a)*maxDist).toFixed(1)}"/>`);
             }
+            break;
         }
-
-        function drawHexGrid(baseStep, spread, maxDist) {
-            const hexSize = baseStep * spread;
-            if (hexSize < 1) return;
-            const w    = hexSize * 2;
-            const h    = Math.sqrt(3) * hexSize;
-            const cols = Math.ceil(maxDist / (w * 0.75)) + 2;
-            const rows = Math.ceil(maxDist / (h * 0.5)) + 2;
-            for (let row = -rows; row <= rows; row++) {
+        case 'iso-circles': {
+            const hx = spacing, hy = spacing * Math.sqrt(3) / 2;
+            const r  = Math.max(1, size / 2);
+            const cols = Math.ceil(maxDist / hx) + 2, rows = Math.ceil(maxDist / hy) + 2;
+            for (let row = -rows; row <= rows; row++)
                 for (let col = -cols; col <= cols; col++) {
-                    const x = col * w * 0.75;
-                    const y = row * h + (col % 2 === 0 ? 0 : h / 2);
-                    strokeHex(x, y, hexSize);
+                    const x = (col * hx + (row % 2 === 0 ? 0 : hx / 2)).toFixed(1);
+                    const y = (row * hy).toFixed(1);
+                    parts.push(`<circle cx="${x}" cy="${y}" r="${r.toFixed(1)}"/>`);
                 }
-            }
+            break;
         }
-
-        function strokeHex(cx, cy, size) {
-            ctx.beginPath();
-            for (let i = 0; i < 6; i++) {
-                const a  = (Math.PI / 3) * i - Math.PI / 6;
-                const px = cx + size * Math.cos(a);
-                const py = cy + size * Math.sin(a);
-                i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
-            }
-            ctx.closePath();
-            ctx.stroke();
-        }
-
-        // Draw a vertical line at lineX, subdivided so warp can curve it
-        function strokeVLine(lineX, maxDist, segs) {
-            ctx.beginPath();
-            const dy = (maxDist * 2) / segs;
-            for (let s = 0; s <= segs; s++) {
-                const y  = -maxDist + s * dy;
-                const wx = lineX + warpDisplace(y, lineX);
-                s === 0 ? ctx.moveTo(wx, y) : ctx.lineTo(wx, y);
-            }
-            ctx.stroke();
-        }
-
-        // Draw a horizontal line at lineY, subdivided so warp can curve it
-        function strokeHLine(lineY, maxDist, segs) {
-            ctx.beginPath();
-            const dx = (maxDist * 2) / segs;
-            for (let s = 0; s <= segs; s++) {
-                const x  = -maxDist + s * dx;
-                const wy = lineY + warpDisplace(x, lineY);
-                s === 0 ? ctx.moveTo(x, wy) : ctx.lineTo(x, wy);
-            }
-            ctx.stroke();
-        }
-
-        // ── Warp displacement ────────────────────────────────────────
-        // along = position along the line's main axis  (y for vertical lines, x for horizontal)
-        // perp  = position on the perpendicular axis   (x for vertical lines, y for horizontal)
-        // Returns: offset in the perpendicular direction
-        function warpDisplace(along, perp) {
-            if (params.warpStrength === 0 || params.warpType === 'none') return 0;
-
-            const phase    = params.animateWarp ? warpPhase * 3 : 0;
-            const halfSize = Math.max(canvas.width, canvas.height) / 2;
-            // ~3 full waves across the canvas
-            const freq     = (Math.PI * 2 * 3) / (halfSize * 2);
-
-            switch (params.warpType) {
-
-                case 'flag': {
-                    // Sine wave, attenuated outside a radius from the canvas centre
-                    const radiusPx = params.warpRadius / 100 * halfSize;
-                    const dist     = Math.sqrt(along * along + perp * perp);
-                    const t        = Math.max(0, 1 - dist / radiusPx);
-                    const falloff  = t * t * (3 - 2 * t);   // smoothstep
-                    return Math.sin(along * freq + phase) * params.warpStrength * falloff;
+        case 'hexagon': {
+            const R    = Math.max(1, size / 2);
+            const colW = spacing * 0.75, rowH = spacing * Math.sqrt(3) / 2;
+            const cols = Math.ceil(maxDist / colW) + 2, rows = Math.ceil(maxDist / rowH) + 2;
+            for (let row = -rows; row <= rows; row++)
+                for (let col = -cols; col <= cols; col++) {
+                    const cx = col * spacing * 0.75;
+                    const cy = row * rowH + (Math.abs(col) % 2 === 1 ? rowH / 2 : 0);
+                    const pts = Array.from({length:6}, (_,i) => {
+                        const a = (Math.PI/3)*i - Math.PI/6;
+                        return `${(cx+R*Math.cos(a)).toFixed(1)},${(cy+R*Math.sin(a)).toFixed(1)}`;
+                    }).join(' ');
+                    parts.push(`<polygon points="${pts}"/>`);
                 }
-
-                case 'sine':
-                    return Math.sin(along * freq + phase) * params.warpStrength;
-
-                case 'ripple': {
-                    const dist = Math.sqrt(along * along + perp * perp);
-                    return Math.sin(dist * freq + phase) * params.warpStrength;
+            break;
+        }
+        case 'triangle': {
+            const h2   = spacing * Math.sqrt(3) / 2;
+            const s    = Math.max(2, size), th = s * Math.sqrt(3) / 2;
+            const cols = Math.ceil(maxDist * 2 / spacing) + 4;
+            const rows = Math.ceil(maxDist * 2 / h2) + 4;
+            for (let row = -rows; row <= rows; row++)
+                for (let col = -cols; col <= cols; col++) {
+                    const cx = col * spacing * 0.5, cy = row * h2;
+                    const up = (col + row) % 2 === 0;
+                    let pts;
+                    if (up) pts = `${cx.toFixed(1)},${(cy-th*2/3).toFixed(1)} ${(cx+s/2).toFixed(1)},${(cy+th/3).toFixed(1)} ${(cx-s/2).toFixed(1)},${(cy+th/3).toFixed(1)}`;
+                    else    pts = `${cx.toFixed(1)},${(cy+th*2/3).toFixed(1)} ${(cx+s/2).toFixed(1)},${(cy-th/3).toFixed(1)} ${(cx-s/2).toFixed(1)},${(cy-th/3).toFixed(1)}`;
+                    parts.push(`<polygon points="${pts}"/>`);
                 }
-
-                default:
-                    return 0;
-            }
+            break;
         }
+    }
+    return parts.join('\n    ');
+}
 
-        // ── PNG download ─────────────────────────────────────────────
-        function download() {
-            const link = document.createElement('a');
-            link.download = 'moire.png';
-            link.href = canvas.toDataURL('image/png');
-            link.click();
-        }
-
-        // Start
-        animationFrame = requestAnimationFrame(draw);
-        console.log('Moiré ready!');
+// ════════════════════════════════════════════════════════════════════
+//  Boot
+// ════════════════════════════════════════════════════════════════════
+animationFrame = requestAnimationFrame(renderFrame);
+console.log('Moiré ready!');
     </script>
 </body>
 </html>
