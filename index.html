@@ -70,7 +70,17 @@
                     <option value="hexagon">Hexagon (isolated)</option>
                     <option value="hex-tile">Hex Tile (honeycomb)</option>
                     <option value="triangle" selected>Isometric Triangles</option>
+                    <option value="svg-import">SVG Import…</option>
                 </select>
+                <!-- SVG import panel -->
+                <div id="svgImportUI" class="hidden mb-2 p-2 rounded-lg bg-zinc-900 border border-dashed border-violet-600">
+                    <div class="flex gap-1.5">
+                        <button onclick="document.getElementById('svgFileInput').click()" class="flex-1 py-1.5 text-xs rounded bg-violet-700 hover:bg-violet-600 font-medium">📂 Load SVG file…</button>
+                        <input type="file" id="svgFileInput" accept=".svg,image/svg+xml" class="hidden">
+                    </div>
+                    <p id="svgImportName" class="text-xs text-emerald-400 mt-1 truncate"></p>
+                    <p class="text-xs text-zinc-500 mt-0.5">Cell Spacing = tile gap &nbsp;·&nbsp; Cell Size = motif scale</p>
+                </div>
                 <div class="row"><span>Blend Mode</span></div>
                 <select id="blendMode" class="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm mb-2">
                     <option value="source-over">Normal</option>
@@ -501,6 +511,12 @@ document.getElementById('warpType').addEventListener('change', e => {
     params.warpType = e.target.value;
 });
 document.getElementById('meshMode').addEventListener('change', e => { params.meshMode = e.target.value; });
+document.getElementById('shape').addEventListener('change', e => {
+    document.getElementById('svgImportUI').classList.toggle('hidden', e.target.value !== 'svg-import');
+});
+document.getElementById('svgFileInput').addEventListener('change', e => {
+    if (e.target.files[0]) loadSVGFile(e.target.files[0]);
+});
 
 // ════════════════════════════════════════════════════════════════════
 //  Layer toggles
@@ -1354,6 +1370,7 @@ function renderLayerOn(c, angle, offX, offY, color, layerIdx) {
         case 'hexagon':     drawHexGrid(c, spacing, size, maxDist, angle, warpOn);     break;
         case 'hex-tile':    drawHexTile(c, spacing, size, maxDist, angle, warpOn);     break;
         case 'triangle':    drawTriGrid(c, spacing, size, maxDist, angle, warpOn);     break;
+        case 'svg-import':  drawSvgImport(c, spacing, size, maxDist, angle, warpOn);   break;
     }
     c.restore();
 }
@@ -1397,6 +1414,7 @@ function _renderLayerCore(c, angle, offX, offY, color, warpOn) {
         case 'hexagon':     drawHexGrid(c, spacing2, size2, maxDist2, angle, warpOn);     break;
         case 'hex-tile':    drawHexTile(c, spacing2, size2, maxDist2, angle, warpOn);     break;
         case 'triangle':    drawTriGrid(c, spacing2, size2, maxDist2, angle, warpOn);     break;
+        case 'svg-import':  drawSvgImport(c, spacing2, size2, maxDist2, angle, warpOn);   break;
     }
     c.restore();
 }
@@ -1689,6 +1707,217 @@ function exportSVG(layerNum) {
     closeDownload();
 }
 
+// ════════════════════════════════════════════════════════════════════
+//  SVG Import
+// ════════════════════════════════════════════════════════════════════
+let importedSVG = null; // { shapes:[{type:'poly'|'open', pts:[[x,y],...]}], bbox:{cx,cy,w,h} }
+
+function loadSVGFile(file) {
+    const reader = new FileReader();
+    reader.onload = e => {
+        try {
+            const result = parseSVGContent(e.target.result);
+            if (!result || !result.shapes.length) {
+                alert('No drawable shapes found in SVG. (Transforms and <use> are not supported.)');
+                return;
+            }
+            importedSVG = result;
+            params.shape = 'svg-import';
+            document.getElementById('shape').value = 'svg-import';
+            document.getElementById('svgImportUI').classList.remove('hidden');
+            document.getElementById('svgImportName').textContent =
+                '\u2714 ' + file.name + '  (' + result.shapes.length + ' shape' + (result.shapes.length !== 1 ? 's' : '') + ')';
+            if (paused) renderFrame(lastTime);
+        } catch(err) {
+            alert('Could not parse SVG: ' + err.message);
+        }
+    };
+    reader.readAsText(file);
+}
+
+function parseSVGContent(svgText) {
+    const doc = new DOMParser().parseFromString(svgText, 'image/svg+xml');
+    const svgEl = doc.querySelector('svg');
+    if (!svgEl) throw new Error('No <svg> element found');
+    const shapes = [];
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    function addPts(pts) {
+        pts.forEach(([x,y]) => {
+            if (x < minX) minX=x; if (x > maxX) maxX=x;
+            if (y < minY) minY=y; if (y > maxY) maxY=y;
+        });
+    }
+    function push(type, pts) { if (pts.length >= 2) { addPts(pts); shapes.push({type, pts}); } }
+    function f(el, n) { return parseFloat(el.getAttribute(n)) || 0; }
+    function processEl(el) {
+        const tag = (el.tagName || '').toLowerCase().replace(/.*:/,'');
+        if (tag === 'g' || tag === 'svg') { Array.from(el.children).forEach(processEl); return; }
+        if (tag === 'line') {
+            push('open', [[f(el,'x1'),f(el,'y1')],[f(el,'x2'),f(el,'y2')]]);
+        } else if (tag === 'polyline') {
+            push('open', parsePointsList(el.getAttribute('points')||''));
+        } else if (tag === 'polygon') {
+            push('poly', parsePointsList(el.getAttribute('points')||''));
+        } else if (tag === 'rect') {
+            const x=f(el,'x'),y=f(el,'y'),w=f(el,'width'),h=f(el,'height');
+            push('poly', [[x,y],[x+w,y],[x+w,y+h],[x,y+h]]);
+        } else if (tag === 'circle') {
+            const cx=f(el,'cx'),cy=f(el,'cy'),r=f(el,'r');
+            push('poly', Array.from({length:32},(_,i)=>{const a=i/32*Math.PI*2;return[cx+Math.cos(a)*r,cy+Math.sin(a)*r];}));
+        } else if (tag === 'ellipse') {
+            const cx=f(el,'cx'),cy=f(el,'cy'),rx=f(el,'rx'),ry=f(el,'ry');
+            push('poly', Array.from({length:32},(_,i)=>{const a=i/32*Math.PI*2;return[cx+Math.cos(a)*rx,cy+Math.sin(a)*ry];}));
+        } else if (tag === 'path') {
+            const d = el.getAttribute('d');
+            if (d) parseSVGPath(d).forEach(s => push(s.type, s.pts));
+        }
+    }
+    processEl(svgEl);
+    if (!shapes.length) return null;
+    const cx=(minX+maxX)/2, cy=(minY+maxY)/2;
+    return { shapes, bbox: { cx, cy, w: Math.max(maxX-minX,1), h: Math.max(maxY-minY,1) } };
+}
+
+function parsePointsList(str) {
+    const ns = (str||'').trim().split(/[\s,]+/).map(Number).filter(n=>!isNaN(n));
+    const pts = [];
+    for (let i=0;i+1<ns.length;i+=2) pts.push([ns[i],ns[i+1]]);
+    return pts;
+}
+
+function parseSVGPath(d) {
+    const subpaths = [];
+    const toks = [];
+    const re = /([MmZzLlHhVvCcSsQqTtAa])|([+-]?(?:\d*\.\d+|\d+\.?)(?:[eE][+-]?\d+)?)/g;
+    let m; while ((m = re.exec(d))) toks.push(m[1] !== undefined ? m[1] : +m[2]);
+    let ti = 0;
+    const num  = () => +toks[ti++];
+    const isN  = () => ti < toks.length && typeof toks[ti] === 'number';
+    let x=0,y=0,x0=0,y0=0,lc2x=null,lc2y=null,lq1x=null,lq1y=null,cur=[];
+    function flush(close) {
+        if (cur.length >= 2) subpaths.push({ type: close?'poly':'open', pts: cur.slice() });
+        cur = []; if (close) { x=x0; y=y0; }
+    }
+    while (ti < toks.length) {
+        let tok = toks[ti];
+        if (typeof tok !== 'string') { ti++; continue; }
+        const cmd = toks[ti++];
+        const abs = cmd === cmd.toUpperCase();
+        const ax = v => abs ? v : x + v;
+        const ay = v => abs ? v : y + v;
+        switch (cmd.toUpperCase()) {
+            case 'M': {
+                flush(false);
+                x = ax(num()); y = ay(num()); x0=x; y0=y; cur=[[x,y]];
+                while (isN()) { x=ax(num()); y=ay(num()); cur.push([x,y]); }
+                lc2x=lc2y=lq1x=lq1y=null; break;
+            }
+            case 'Z': {
+                cur.push([x0,y0]); flush(true); cur=[[x0,y0]];
+                lc2x=lc2y=lq1x=lq1y=null; break;
+            }
+            case 'L': {
+                while (isN()) { x=ax(num()); y=ay(num()); cur.push([x,y]); }
+                lc2x=lc2y=lq1x=lq1y=null; break;
+            }
+            case 'H': {
+                while (isN()) { x = abs?num():x+num(); cur.push([x,y]); }
+                lc2x=lc2y=lq1x=lq1y=null; break;
+            }
+            case 'V': {
+                while (isN()) { y = abs?num():y+num(); cur.push([x,y]); }
+                lc2x=lc2y=lq1x=lq1y=null; break;
+            }
+            case 'C': {
+                while (isN()) {
+                    const x1=ax(num()),y1=ay(num()),x2=ax(num()),y2=ay(num()),ex=ax(num()),ey=ay(num());
+                    _svgCubic(cur,x,y,x1,y1,x2,y2,ex,ey); lc2x=x2;lc2y=y2;x=ex;y=ey;lq1x=lq1y=null;
+                } break;
+            }
+            case 'S': {
+                while (isN()) {
+                    const x2=ax(num()),y2=ay(num()),ex=ax(num()),ey=ay(num());
+                    _svgCubic(cur,x,y,lc2x!==null?2*x-lc2x:x,lc2y!==null?2*y-lc2y:y,x2,y2,ex,ey);
+                    lc2x=x2;lc2y=y2;x=ex;y=ey;lq1x=lq1y=null;
+                } break;
+            }
+            case 'Q': {
+                while (isN()) {
+                    const x1=ax(num()),y1=ay(num()),ex=ax(num()),ey=ay(num());
+                    _svgQuad(cur,x,y,x1,y1,ex,ey); lq1x=x1;lq1y=y1;x=ex;y=ey;lc2x=lc2y=null;
+                } break;
+            }
+            case 'T': {
+                while (isN()) {
+                    const ex=ax(num()),ey=ay(num());
+                    _svgQuad(cur,x,y,lq1x!==null?2*x-lq1x:x,lq1y!==null?2*y-lq1y:y,ex,ey);
+                    lq1x=2*x-(lq1x!==null?lq1x:x);lq1y=2*y-(lq1y!==null?lq1y:y);x=ex;y=ey;lc2x=lc2y=null;
+                } break;
+            }
+            case 'A': {
+                while (isN()) {
+                    const rx=num(),ry=num(),xr=num(),la=num(),sf=num(),ex=ax(num()),ey=ay(num());
+                    _svgArc(cur,x,y,rx,ry,xr,!!la,!!sf,ex,ey); x=ex;y=ey;lc2x=lc2y=lq1x=lq1y=null;
+                } break;
+            }
+        }
+    }
+    flush(false);
+    return subpaths;
+}
+
+function _svgCubic(pts,x0,y0,x1,y1,x2,y2,x3,y3,n=16){
+    for(let i=1;i<=n;i++){const t=i/n,mt=1-t;
+        pts.push([mt*mt*mt*x0+3*mt*mt*t*x1+3*mt*t*t*x2+t*t*t*x3,
+                  mt*mt*mt*y0+3*mt*mt*t*y1+3*mt*t*t*y2+t*t*t*y3]);}
+}
+function _svgQuad(pts,x0,y0,x1,y1,x2,y2,n=12){
+    for(let i=1;i<=n;i++){const t=i/n,mt=1-t;
+        pts.push([mt*mt*x0+2*mt*t*x1+t*t*x2, mt*mt*y0+2*mt*t*y1+t*t*y2]);}
+}
+function _svgArc(pts,x1,y1,rx,ry,xRot,laf,sf,x2,y2,n=16){
+    if(rx===0||ry===0){pts.push([x2,y2]);return;}
+    const ph=xRot*Math.PI/180,cs=Math.cos(ph),sn=Math.sin(ph);
+    const dx=(x1-x2)/2,dy=(y1-y2)/2;
+    const x1p=cs*dx+sn*dy,y1p=-sn*dx+cs*dy;
+    let rx2=rx*rx,ry2=ry*ry,xp2=x1p*x1p,yp2=y1p*y1p;
+    const cr=xp2/rx2+yp2/ry2; if(cr>1){const s=Math.sqrt(cr);rx*=s;ry*=s;rx2=rx*rx;ry2=ry*ry;}
+    const dq=(rx2*ry2-rx2*yp2-ry2*xp2)/(rx2*yp2+ry2*xp2);
+    const sq=Math.sqrt(Math.max(0,dq))*(laf===sf?-1:1);
+    const cxp=sq*rx*y1p/ry,cyp=-sq*ry*x1p/rx;
+    const cx=(x1+x2)/2+cs*cxp-sn*cyp,cy=(y1+y2)/2+sn*cxp+cs*cyp;
+    const ang=([a,b])=>Math.atan2(b,a);
+    let a1=ang([(x1p-cxp)/rx,(y1p-cyp)/ry]);
+    let dA=ang([(-x1p-cxp)/rx,(-y1p-cyp)/ry])-a1;
+    if(!sf&&dA>0)dA-=Math.PI*2; if(sf&&dA<0)dA+=Math.PI*2;
+    for(let i=1;i<=n;i++){const a=a1+dA*i/n;
+        pts.push([cs*rx*Math.cos(a)-sn*ry*Math.sin(a)+cx,sn*rx*Math.cos(a)+cs*ry*Math.sin(a)+cy]);}
+}
+
+function drawSvgImport(c, spacing, size, maxDist, rot, warpOn) {
+    if (!importedSVG) return;
+    const { shapes, bbox } = importedSVG;
+    const scale = Math.max(1, size) / Math.max(bbox.w, bbox.h);
+    const n = Math.ceil(maxDist / spacing) + 2;
+    for (let row = -n; row <= n; row++) {
+        for (let col = -n; col <= n; col++) {
+            const ox = col * spacing;
+            const oy = row * spacing;
+            for (const sh of shapes) {
+                c.beginPath();
+                sh.pts.forEach(([px, py], i) => {
+                    const sx = (px - bbox.cx) * scale + ox;
+                    const sy = (py - bbox.cy) * scale + oy;
+                    const p = warpPt(sx, sy, rot, warpOn);
+                    i === 0 ? c.moveTo(p.x, p.y) : c.lineTo(p.x, p.y);
+                });
+                if (sh.type === 'poly') c.closePath();
+                c.stroke();
+            }
+        }
+    }
+}
+
 function buildSVGPaths(w, h) {
     const maxDist = Math.max(w, h) * 0.82;
     const spacing = params.cellCount;
@@ -1780,6 +2009,27 @@ function buildSVGPaths(w, h) {
                         : `${cx.toFixed(1)},${(cy+th*2/3).toFixed(1)} ${(cx+s/2).toFixed(1)},${(cy-th/3).toFixed(1)} ${(cx-s/2).toFixed(1)},${(cy-th/3).toFixed(1)}`;
                     parts.push(`<polygon points="${pts}"/>`);
                 }
+            break;
+        }
+        case 'svg-import': {
+            if (importedSVG) {
+                const { shapes: svgShapes, bbox } = importedSVG;
+                const scale = Math.max(1, size) / Math.max(bbox.w, bbox.h);
+                const n = Math.ceil(maxDist / spacing) + 2;
+                for (let row = -n; row <= n; row++) {
+                    for (let col = -n; col <= n; col++) {
+                        const ox = col * spacing, oy = row * spacing;
+                        for (const sh of svgShapes) {
+                            const pStr = sh.pts.map(([px,py]) =>
+                                `${((px-bbox.cx)*scale+ox).toFixed(1)},${((py-bbox.cy)*scale+oy).toFixed(1)}`
+                            ).join(' ');
+                            parts.push(sh.type === 'poly'
+                                ? `<polygon points="${pStr}"/>`
+                                : `<polyline points="${pStr}"/>`);
+                        }
+                    }
+                }
+            }
             break;
         }
     }
