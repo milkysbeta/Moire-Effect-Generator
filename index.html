@@ -28,8 +28,9 @@
         .cp-knob:active { cursor:grabbing; }
         .shader-on  { background-color:#7c3aed; }
         .shader-off { background-color:#52525b; }
-        .warp-layer-on  { background-color:#059669; color:#fff; }
-        .warp-layer-off { background-color:#52525b; color:#888; }
+        .lock-btn { background:none; border:none; cursor:pointer; font-size:0.75rem; opacity:0.4; padding:0 2px; transition:opacity 0.15s, color 0.15s; line-height:1; }
+        .lock-btn:hover { opacity:0.85; }
+        .lock-btn.locked { opacity:1; color:#f59e0b; }
     </style>
 </head>
 <body class="bg-zinc-950 text-zinc-100 min-h-screen">
@@ -43,6 +44,7 @@
                     <h1 class="text-2xl font-bold tracking-tighter">MOIRÉ</h1>
                     <p class="text-zinc-400 text-xs">Live Lattice Generator</p>
                 </div>
+                <button onclick="resetLocks()" class="px-2 py-1.5 bg-zinc-700 hover:bg-zinc-600 rounded-lg text-xs" title="Clear all section locks">🔓 Unlock</button>
                 <button onclick="randomise()" class="px-3 py-1.5 bg-violet-700 hover:bg-violet-600 rounded-lg text-xs font-semibold tracking-wide" title="Randomise all parameters (shaders stay off)">&#x2684; Randomise</button>
             </div>
         </div>
@@ -50,13 +52,17 @@
 
             <!-- Pattern & Blend -->
             <div>
-                <p class="slabel">Pattern</p>
+                <div class="flex items-center justify-between">
+                    <p class="slabel mb-0">Pattern</p>
+                    <button class="lock-btn" id="lock-pattern" onclick="toggleLock('pattern')" title="Lock Pattern from randomise">🔓</button>
+                </div>
                 <select id="shape" class="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm mb-2">
                     <option value="lines">Parallel Lines</option>
                     <option value="radial">Radial / Circles</option>
                     <option value="iso-circles">Isometric Circles</option>
                     <option value="grid">Square Grid</option>
-                    <option value="hexagon">Hexagon</option>
+                    <option value="hexagon">Hexagon (isolated)</option>
+                    <option value="hex-tile">Hex Tile (honeycomb)</option>
                     <option value="triangle" selected>Isometric Triangles</option>
                 </select>
                 <div class="row"><span>Blend Mode</span></div>
@@ -77,7 +83,10 @@
 
             <!-- Grid -->
             <div class="sep">
-                <p class="slabel">Grid</p>
+                <div class="flex items-center justify-between">
+                    <p class="slabel mb-0">Grid</p>
+                    <button class="lock-btn" id="lock-grid" onclick="toggleLock('grid')" title="Lock Grid from randomise">🔓</button>
+                </div>
                 <div class="row"><span>Cell Spacing <span class="text-zinc-500">(centre-to-centre px)</span></span><span id="val-cellCount">50</span></div>
                 <input type="range" id="cellCount" min="5" max="120" value="50" class="w-full accent-emerald-600 mb-2">
                 <div class="row"><span>Cell Size <span class="text-zinc-500">(shape draw size px)</span></span><span id="val-cellSize">50</span></div>
@@ -88,7 +97,10 @@
 
             <!-- Warp -->
             <div class="sep">
-                <p class="slabel">Warp</p>
+                <div class="flex items-center justify-between">
+                    <p class="slabel mb-0">Warp</p>
+                    <button class="lock-btn" id="lock-warp" onclick="toggleLock('warp')" title="Lock Warp from randomise">🔓</button>
+                </div>
                 <select id="warpType" class="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm mb-2">
                     <option value="none">None</option>
                     <option value="mesh">Mesh (drag control points)</option>
@@ -144,7 +156,10 @@
 
             <!-- Layers -->
             <div class="sep space-y-3">
-                <p class="slabel">Layers</p>
+                <div class="flex items-center justify-between">
+                    <p class="slabel mb-0">Layers</p>
+                    <button class="lock-btn" id="lock-layers" onclick="toggleLock('layers')" title="Lock Layers from randomise">🔓</button>
+                </div>
 
                 <!-- Layer 1 -->
                 <div class="rounded-xl border border-zinc-700 bg-zinc-800/50 p-3">
@@ -273,7 +288,10 @@
 
             <!-- Canvas -->
             <div class="sep">
-                <p class="slabel">Canvas</p>
+                <div class="flex items-center justify-between">
+                    <p class="slabel mb-0">Canvas</p>
+                    <button class="lock-btn" id="lock-canvas" onclick="toggleLock('canvas')" title="Lock Canvas from randomise">🔓</button>
+                </div>
                 <div class="row mb-1"><span class="text-xs text-zinc-400">Background</span></div>
                 <input type="color" id="bgColor" value="#000000" class="w-full h-9 rounded border border-zinc-700 mb-2">
                 <div class="row mb-1"><span class="text-xs text-zinc-400">Cutout</span></div>
@@ -525,6 +543,24 @@ function togglePause() {
 }
 
 // ════════════════════════════════════════════════════════════════════
+//  Randomise section locks
+// ════════════════════════════════════════════════════════════════════
+const locks = { pattern: false, grid: false, warp: false, layers: false, canvas: false };
+function toggleLock(section) {
+    locks[section] = !locks[section];
+    const btn = document.getElementById('lock-' + section);
+    btn.textContent = locks[section] ? '🔒' : '🔓';
+    btn.classList.toggle('locked', locks[section]);
+}
+function resetLocks() {
+    Object.keys(locks).forEach(k => {
+        locks[k] = false;
+        const btn = document.getElementById('lock-' + k);
+        if (btn) { btn.textContent = '🔓'; btn.classList.remove('locked'); }
+    });
+}
+
+// ════════════════════════════════════════════════════════════════════
 //  Randomise
 // ════════════════════════════════════════════════════════════════════
 function randomise() {
@@ -559,43 +595,53 @@ function randomise() {
         return '#' + [r,g,b].map(v => Math.round(v*255).toString(16).padStart(2,'0')).join('');
     }
 
-    const shapes = ['lines','radial','iso-circles','grid','hexagon','triangle'];
+    const shapes = ['lines','radial','iso-circles','grid','hexagon','hex-tile','triangle'];
     const blends = ['source-over','difference','xor','screen','overlay','multiply','exclusion','color-dodge','hard-light'];
     const warps  = ['none','flag','sine','ripple'];
     const cutouts = ['none','circle','square','diamond'];
 
     // ── Randomise params ──
-    params.shape        = shapes[rndInt(0, shapes.length-1)];
-    params.blendMode    = blends[rndInt(0, blends.length-1)];
-    params.blendStrength = rndInt(60, 100);
-    params.cellCount    = rndInt(10, 80);
-    params.cellSize     = rndInt(10, 90);
-    params.stroke       = rnd(1, 12, 0.5);
-    params.cutout       = cutouts[rndInt(0, cutouts.length-1)];
-    params.bgColor      = hslToHex(rndColor());
+    if (!locks.pattern) {
+        params.shape     = shapes[rndInt(0, shapes.length-1)];
+        params.blendMode = blends[rndInt(0, blends.length-1)];
+        params.blendStrength = rndInt(60, 100);
+    }
+    if (!locks.grid) {
+        params.cellCount = rndInt(10, 80);
+        params.cellSize  = rndInt(10, 90);
+        params.stroke    = rnd(1, 12, 0.5);
+    }
+    if (!locks.canvas) {
+        params.cutout  = cutouts[rndInt(0, cutouts.length-1)];
+        params.bgColor = hslToHex(rndColor());
+    }
 
     // Layers — randomise all three, all ON
-    for (let i = 1; i <= 3; i++) {
-        params['layer'+i+'Color']   = hslToHex(rndColor());
-        params['layer'+i+'Speed']   = rnd(-120, 120, 1);
-        params['layer'+i+'OffsetX'] = rndInt(-80, 80);
-        params['layer'+i+'OffsetY'] = rndInt(-80, 80);
-        params['layer'+i+'Opacity'] = rndInt(60, 100);
-        params['layer'+i+'RgbShift'] = rnd(0, 15, 0.5);
-        params['layer'+i+'On']      = true;
-        const btn = document.getElementById('layer'+i+'Toggle');
-        btn.textContent = 'ON';
-        btn.classList.add('layer-on'); btn.classList.remove('layer-off');
+    if (!locks.layers) {
+        for (let i = 1; i <= 3; i++) {
+            params['layer'+i+'Color']    = hslToHex(rndColor());
+            params['layer'+i+'Speed']    = rnd(-120, 120, 1);
+            params['layer'+i+'OffsetX']  = rndInt(-80, 80);
+            params['layer'+i+'OffsetY']  = rndInt(-80, 80);
+            params['layer'+i+'Opacity']  = rndInt(60, 100);
+            params['layer'+i+'RgbShift'] = rnd(0, 15, 0.5);
+            params['layer'+i+'On']       = true;
+            const btn = document.getElementById('layer'+i+'Toggle');
+            btn.textContent = 'ON';
+            btn.classList.add('layer-on'); btn.classList.remove('layer-off');
+        }
     }
 
     // Warp
-    params.warpType     = warps[rndInt(0, warps.length-1)];
-    params.warpStrength = rndInt(5, 60);
-    params.warpRadius   = rndInt(20, 90);
-    params.warpOscSpeed = rnd(0, 2, 0.1);
-    params.warpRgbDrive = rnd(0, 2, 0.05);
-    params.warpLayers   = [Math.random()>0.3, Math.random()>0.3, Math.random()>0.3]
-                           .map((v,i,a) => a.every(x=>!x) ? true : v); // ensure ≥1 active
+    if (!locks.warp) {
+        params.warpType     = warps[rndInt(0, warps.length-1)];
+        params.warpStrength = rndInt(5, 60);
+        params.warpRadius   = rndInt(20, 90);
+        params.warpOscSpeed = rnd(0, 2, 0.1);
+        params.warpRgbDrive = rnd(0, 2, 0.05);
+        params.warpLayers   = [Math.random()>0.3, Math.random()>0.3, Math.random()>0.3]
+                               .map((v,i,a) => a.every(x=>!x) ? true : v);
+    }
 
     // Shaders — always OFF
     params.shGrad = false; params.shNoise = false;
@@ -618,45 +664,55 @@ function randomise() {
         if (el) el.value = val;
     }
 
-    setSelect('shape',     params.shape);
-    setSelect('blendMode', params.blendMode);
-    setSlider('blendStrength', params.blendStrength);
-    setSlider('cellCount', params.cellCount);
-    setSlider('cellSize',  params.cellSize);
-    setSlider('stroke',    params.stroke);
-    setSelect('cutout',    params.cutout);
-    setColor('bgColor',    params.bgColor);
-
-    for (let i = 1; i <= 3; i++) {
-        setColor('layer'+i+'Color',    params['layer'+i+'Color']);
-        // Speed slider uses log mapping — set raw slider position + display actual value
-        const spEl = document.getElementById('layer'+i+'Speed');
-        if (spEl) { spEl.value = speedToSlider(params['layer'+i+'Speed']); }
-        const spVEl = document.getElementById('val-layer'+i+'Speed');
-        if (spVEl) spVEl.textContent = fmtSpeed(params['layer'+i+'Speed']);
-        setSlider('layer'+i+'OffsetX', params['layer'+i+'OffsetX']);
-        setSlider('layer'+i+'OffsetY', params['layer'+i+'OffsetY']);
-        setSlider('layer'+i+'Opacity', params['layer'+i+'Opacity']);
-        setSlider('layer'+i+'RgbShift', params['layer'+i+'RgbShift']);
+    if (!locks.pattern) {
+        setSelect('shape',     params.shape);
+        setSelect('blendMode', params.blendMode);
+        setSlider('blendStrength', params.blendStrength);
+    }
+    if (!locks.grid) {
+        setSlider('cellCount', params.cellCount);
+        setSlider('cellSize',  params.cellSize);
+        setSlider('stroke',    params.stroke);
+    }
+    if (!locks.canvas) {
+        setSelect('cutout',  params.cutout);
+        setColor('bgColor',  params.bgColor);
     }
 
-    setSelect('warpType',    params.warpType);
-    setSlider('warpStrength', params.warpStrength);
-    setSlider('warpRadius',   params.warpRadius);
-    setSlider('warpOscSpeed', params.warpOscSpeed);
-    setSlider('warpRgbDrive', params.warpRgbDrive);
+    if (!locks.layers) {
+        for (let i = 1; i <= 3; i++) {
+            setColor('layer'+i+'Color',    params['layer'+i+'Color']);
+            // Speed slider uses log mapping — set raw slider position + display actual value
+            const spEl = document.getElementById('layer'+i+'Speed');
+            if (spEl) { spEl.value = speedToSlider(params['layer'+i+'Speed']); }
+            const spVEl = document.getElementById('val-layer'+i+'Speed');
+            if (spVEl) spVEl.textContent = fmtSpeed(params['layer'+i+'Speed']);
+            setSlider('layer'+i+'OffsetX', params['layer'+i+'OffsetX']);
+            setSlider('layer'+i+'OffsetY', params['layer'+i+'OffsetY']);
+            setSlider('layer'+i+'Opacity', params['layer'+i+'Opacity']);
+            setSlider('layer'+i+'RgbShift', params['layer'+i+'RgbShift']);
+        }
+    }
 
-    // Warp layer buttons
-    [1,2,3].forEach(n => {
-        const btn = document.getElementById('warpL'+n+'Btn');
-        btn.classList.toggle('warp-layer-on',  params.warpLayers[n-1]);
-        btn.classList.toggle('warp-layer-off', !params.warpLayers[n-1]);
-    });
+    if (!locks.warp) {
+        setSelect('warpType',    params.warpType);
+        setSlider('warpStrength', params.warpStrength);
+        setSlider('warpRadius',   params.warpRadius);
+        setSlider('warpOscSpeed', params.warpOscSpeed);
+        setSlider('warpRgbDrive', params.warpRgbDrive);
 
-    // Warp type toggle (mesh vs global controls)
-    const isMesh = params.warpType === 'mesh';
-    document.getElementById('meshControls').classList.toggle('hidden', !isMesh);
-    document.getElementById('globalWarpControls').classList.toggle('hidden', isMesh);
+        // Warp layer buttons
+        [1,2,3].forEach(n => {
+            const btn = document.getElementById('warpL'+n+'Btn');
+            btn.classList.toggle('warp-layer-on',  params.warpLayers[n-1]);
+            btn.classList.toggle('warp-layer-off', !params.warpLayers[n-1]);
+        });
+
+        // Warp type toggle (mesh vs global controls)
+        const isMesh = params.warpType === 'mesh';
+        document.getElementById('meshControls').classList.toggle('hidden', !isMesh);
+        document.getElementById('globalWarpControls').classList.toggle('hidden', isMesh);
+    }
 
     // Shader buttons — all OFF
     ['Grad','Noise','ColorNoise','Blur'].forEach(id => {
@@ -1259,6 +1315,7 @@ function renderLayerOn(c, angle, offX, offY, color, layerIdx) {
         case 'iso-circles': drawIsoCircles(c, spacing, size, maxDist, angle, warpOn);  break;
         case 'grid':        drawGrid(c, spacing, size, maxDist, angle, warpOn);        break;
         case 'hexagon':     drawHexGrid(c, spacing, size, maxDist, angle, warpOn);     break;
+        case 'hex-tile':    drawHexTile(c, spacing, size, maxDist, angle, warpOn);     break;
         case 'triangle':    drawTriGrid(c, spacing, size, maxDist, angle, warpOn);     break;
     }
     c.restore();
@@ -1301,6 +1358,7 @@ function _renderLayerCore(c, angle, offX, offY, color, warpOn) {
         case 'iso-circles': drawIsoCircles(c, spacing2, size2, maxDist2, angle, warpOn);  break;
         case 'grid':        drawGrid(c, spacing2, size2, maxDist2, angle, warpOn);        break;
         case 'hexagon':     drawHexGrid(c, spacing2, size2, maxDist2, angle, warpOn);     break;
+        case 'hex-tile':    drawHexTile(c, spacing2, size2, maxDist2, angle, warpOn);     break;
         case 'triangle':    drawTriGrid(c, spacing2, size2, maxDist2, angle, warpOn);     break;
     }
     c.restore();
@@ -1420,6 +1478,32 @@ function drawHexGrid(c, spacing, size, maxDist, rot, warpOn) {
             for (let i = 0; i < 6; i++) {
                 const a = (Math.PI/3)*i - Math.PI/6;
                 const vx = hcx + R*Math.cos(a), vy = hcy + R*Math.sin(a);
+                const p = warpPt(vx, vy, rot, warpOn);
+                i === 0 ? c.moveTo(p.x, p.y) : c.lineTo(p.x, p.y);
+            }
+            c.closePath(); c.stroke();
+        }
+    }
+}
+
+// Isometric honeycomb tiling — hexagons always perfectly tile.
+// spacing = horizontal centre-to-centre; size >= spacing tiles flush, size < spacing adds gaps.
+function drawHexTile(c, spacing, size, maxDist, rot, warpOn) {
+    const R0  = spacing / Math.sqrt(3);              // circumradius for perfect tile
+    const R   = Math.min(R0, Math.max(1, size / Math.sqrt(3)));
+    const colPitch = spacing;
+    const rowPitch = spacing * Math.sqrt(3) / 2;
+    const cols = Math.ceil(maxDist / colPitch) + 2;
+    const rows = Math.ceil(maxDist / rowPitch) + 2;
+    for (let row = -rows; row <= rows; row++) {
+        for (let col = -cols; col <= cols; col++) {
+            const cx = col * colPitch + (row % 2 !== 0 ? colPitch / 2 : 0);
+            const cy = row * rowPitch;
+            c.beginPath();
+            for (let i = 0; i < 6; i++) {
+                const a = (Math.PI / 3) * i - Math.PI / 6;
+                const vx = cx + R * Math.cos(a);
+                const vy = cy + R * Math.sin(a);
                 const p = warpPt(vx, vy, rot, warpOn);
                 i === 0 ? c.moveTo(p.x, p.y) : c.lineTo(p.x, p.y);
             }
@@ -1623,6 +1707,23 @@ function buildSVGPaths(w, h) {
                     const pts = Array.from({length:6},(_,i)=>{
                         const a = (Math.PI/3)*i-Math.PI/6;
                         return `${(hcx+R*Math.cos(a)).toFixed(1)},${(hcy+R*Math.sin(a)).toFixed(1)}`;
+                    }).join(' ');
+                    parts.push(`<polygon points="${pts}"/>`);
+                }
+            break;
+        }
+        case 'hex-tile': {
+            const R0  = spacing / Math.sqrt(3);
+            const R   = Math.min(R0, Math.max(1, size / Math.sqrt(3)));
+            const colPitch = spacing, rowPitch = spacing * Math.sqrt(3) / 2;
+            const cols = Math.ceil(maxDist/colPitch)+2, rows = Math.ceil(maxDist/rowPitch)+2;
+            for (let row = -rows; row <= rows; row++)
+                for (let col = -cols; col <= cols; col++) {
+                    const cx = col*colPitch + (row%2!==0 ? colPitch/2 : 0);
+                    const cy = row*rowPitch;
+                    const pts = Array.from({length:6},(_,i)=>{
+                        const a = (Math.PI/3)*i-Math.PI/6;
+                        return `${(cx+R*Math.cos(a)).toFixed(1)},${(cy+R*Math.sin(a)).toFixed(1)}`;
                     }).join(' ');
                     parts.push(`<polygon points="${pts}"/>`);
                 }
