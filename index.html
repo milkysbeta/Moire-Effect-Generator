@@ -160,8 +160,8 @@
                     <input type="range" id="layer1Opacity" min="0" max="100" value="100" class="w-full accent-emerald-600 mb-2">
                     <div class="row"><span>RGB Shift</span><span id="val-layer1RgbShift">0</span></div>
                     <input type="range" id="layer1RgbShift" min="0" max="40" value="0" step="0.5" class="w-full accent-rose-500 mb-2">
-                    <div class="row"><span>Rot Speed °/s</span><span id="val-layer1Speed">10</span></div>
-                    <input type="range" id="layer1Speed" min="-180" max="180" value="10" class="w-full accent-emerald-600 mb-2">
+                    <div class="row"><span>Rot Speed °/s</span><span id="val-layer1Speed">10.0</span></div>
+                    <input type="range" id="layer1Speed" min="-100" max="100" value="46" class="w-full accent-emerald-600 mb-2">
                     <div class="row"><span>Offset X</span><span id="val-layer1OffsetX">0</span></div>
                     <input type="range" id="layer1OffsetX" min="-150" max="150" value="0" class="w-full accent-emerald-600 mb-2">
                     <div class="row"><span>Offset Y</span><span id="val-layer1OffsetY">0</span></div>
@@ -183,7 +183,7 @@
                     <div class="row"><span>RGB Shift</span><span id="val-layer2RgbShift">0</span></div>
                     <input type="range" id="layer2RgbShift" min="0" max="40" value="0" step="0.5" class="w-full accent-rose-500 mb-2">
                     <div class="row"><span>Rot Speed °/s</span><span id="val-layer2Speed">20</span></div>
-                    <input type="range" id="layer2Speed" min="-180" max="180" value="20" class="w-full accent-emerald-600 mb-2">
+                    <input type="range" id="layer2Speed" min="-100" max="100" value="59" class="w-full accent-emerald-600 mb-2">
                     <div class="row"><span>Offset X</span><span id="val-layer2OffsetX">0</span></div>
                     <input type="range" id="layer2OffsetX" min="-150" max="150" value="0" class="w-full accent-emerald-600 mb-2">
                     <div class="row"><span>Offset Y</span><span id="val-layer2OffsetY">0</span></div>
@@ -204,8 +204,8 @@
                     <input type="range" id="layer3Opacity" min="0" max="100" value="100" class="w-full accent-emerald-600 mb-2">
                     <div class="row"><span>RGB Shift</span><span id="val-layer3RgbShift">0</span></div>
                     <input type="range" id="layer3RgbShift" min="0" max="40" value="0" step="0.5" class="w-full accent-rose-500 mb-2">
-                    <div class="row"><span>Rot Speed °/s</span><span id="val-layer3Speed">-15</span></div>
-                    <input type="range" id="layer3Speed" min="-180" max="180" value="-15" class="w-full accent-emerald-600 mb-2">
+                    <div class="row"><span>Rot Speed °/s</span><span id="val-layer3Speed">-15.0</span></div>
+                    <input type="range" id="layer3Speed" min="-100" max="100" value="-53" class="w-full accent-emerald-600 mb-2">
                     <div class="row"><span>Offset X</span><span id="val-layer3OffsetX">0</span></div>
                     <input type="range" id="layer3OffsetX" min="-150" max="150" value="0" class="w-full accent-emerald-600 mb-2">
                     <div class="row"><span>Offset Y</span><span id="val-layer3OffsetY">0</span></div>
@@ -408,12 +408,27 @@ window.addEventListener('resize', resizeCanvas);
 // ════════════════════════════════════════════════════════════════════
 //  Control wiring
 // ════════════════════════════════════════════════════════════════════
+// Log-scale helpers for rotation speed sliders (raw -100..100 → actual °/s)
+const SPEED_LOG_MAX = 180;
+function sliderToSpeed(s) {
+    const sign = s < 0 ? -1 : s > 0 ? 1 : 0;
+    return sign * (Math.exp(Math.abs(s) / 100 * Math.log(SPEED_LOG_MAX + 1)) - 1);
+}
+function speedToSlider(v) {
+    const sign = v < 0 ? -1 : v > 0 ? 1 : 0;
+    return sign * (Math.log(Math.abs(v) + 1) / Math.log(SPEED_LOG_MAX + 1)) * 100;
+}
+function fmtSpeed(v) {
+    return Math.abs(v) < 10 ? v.toFixed(1) : Math.round(v).toString();
+}
+const speedIds = new Set(['layer1Speed','layer2Speed','layer3Speed']);
+
 const numericIds = new Set([
     'cellCount','cellSize','stroke','blendStrength',
     'warpStrength','warpRadius','warpOscSpeed','warpRgbDrive','meshStrength',
-    'layer1Speed','layer1OffsetX','layer1OffsetY','layer1Opacity','layer1RgbShift',
-    'layer2Speed','layer2OffsetX','layer2OffsetY','layer2Opacity','layer2RgbShift',
-    'layer3Speed','layer3OffsetX','layer3OffsetY','layer3Opacity','layer3RgbShift',
+    'layer1OffsetX','layer1OffsetY','layer1Opacity','layer1RgbShift',
+    'layer2OffsetX','layer2OffsetY','layer2Opacity','layer2RgbShift',
+    'layer3OffsetX','layer3OffsetY','layer3Opacity','layer3RgbShift',
     'gradAngle','gradOpacity',
     'noiseScale','noiseSpeed','noiseOpacity',
     'colorNoiseScale','colorNoiseSpeed','colorNoiseExpand','colorNoiseOpacity',
@@ -428,9 +443,15 @@ document.querySelectorAll('input[type="range"], select, input[type="color"]').fo
         const id = el.id;
         if      (colorIds.has(id))   params[id] = el.value;
         else if (selectIds.has(id))  params[id] = el.value;
-        else if (numericIds.has(id)) params[id] = +el.value;
-        const valEl = document.getElementById('val-' + id);
-        if (valEl && el.type === 'range') valEl.textContent = parseFloat(el.value).toFixed(el.step && el.step < 1 ? 2 : 0);
+        else if (speedIds.has(id)) {
+            params[id] = sliderToSpeed(+el.value);
+            const vEl = document.getElementById('val-' + id);
+            if (vEl) vEl.textContent = fmtSpeed(params[id]);
+        } else if (numericIds.has(id)) params[id] = +el.value;
+        if (!speedIds.has(id)) {
+            const valEl = document.getElementById('val-' + id);
+            if (valEl && el.type === 'range') valEl.textContent = parseFloat(el.value).toFixed(el.step && parseFloat(el.step) < 1 ? 2 : 0);
+        }
         if (paused) renderFrame(lastTime);
     });
 });
@@ -608,7 +629,11 @@ function randomise() {
 
     for (let i = 1; i <= 3; i++) {
         setColor('layer'+i+'Color',    params['layer'+i+'Color']);
-        setSlider('layer'+i+'Speed',   params['layer'+i+'Speed']);
+        // Speed slider uses log mapping — set raw slider position + display actual value
+        const spEl = document.getElementById('layer'+i+'Speed');
+        if (spEl) { spEl.value = speedToSlider(params['layer'+i+'Speed']); }
+        const spVEl = document.getElementById('val-layer'+i+'Speed');
+        if (spVEl) spVEl.textContent = fmtSpeed(params['layer'+i+'Speed']);
         setSlider('layer'+i+'OffsetX', params['layer'+i+'OffsetX']);
         setSlider('layer'+i+'OffsetY', params['layer'+i+'OffsetY']);
         setSlider('layer'+i+'Opacity', params['layer'+i+'Opacity']);
