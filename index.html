@@ -28,6 +28,12 @@
         .cp-knob:active { cursor:grabbing; }
         .shader-on  { background-color:#7c3aed; }
         .shader-off { background-color:#52525b; }
+        .warp-layer-on  { background-color:#0891b2; color:#fff; }
+        .warp-layer-off { background-color:#3f3f46; color:#71717a; }
+        .layer-warp-on  { background:#7c3aed; color:#fff; }
+        .layer-warp-off { background:#3f3f46; color:#71717a; }
+        .layer-flip-btn { background:#44403c; color:#a8a29e; }
+        .layer-flip-btn:hover { background:#57534e; color:#e7e5e4; }
         .lock-btn { background:none; border:none; cursor:pointer; font-size:0.75rem; opacity:0.4; padding:0 2px; transition:opacity 0.15s, color 0.15s; line-height:1; }
         .lock-btn:hover { opacity:0.85; }
         .lock-btn.locked { opacity:1; color:#f59e0b; }
@@ -180,7 +186,11 @@
                     <div class="row"><span>Offset X</span><span id="val-layer1OffsetX">0</span></div>
                     <input type="range" id="layer1OffsetX" min="-150" max="150" value="0" class="w-full accent-emerald-600 mb-2">
                     <div class="row"><span>Offset Y</span><span id="val-layer1OffsetY">0</span></div>
-                    <input type="range" id="layer1OffsetY" min="-150" max="150" value="0" class="w-full accent-emerald-600">
+                    <input type="range" id="layer1OffsetY" min="-150" max="150" value="0" class="w-full accent-emerald-600 mb-2">
+                    <div class="flex gap-1.5">
+                        <button id="layerWarp1Btn" onclick="toggleLayerWarp(1)" class="flex-1 py-1 text-xs rounded font-medium layer-warp-on" title="Toggle warp for this layer">⦲ Warp</button>
+                        <button onclick="flipLayerSpeed(1)" class="layer-flip-btn px-3 py-1 text-xs rounded" title="Reverse rotation direction">⇄ Rev</button>
+                    </div>
                 </div>
 
                 <!-- Layer 2 -->
@@ -202,7 +212,11 @@
                     <div class="row"><span>Offset X</span><span id="val-layer2OffsetX">0</span></div>
                     <input type="range" id="layer2OffsetX" min="-150" max="150" value="0" class="w-full accent-emerald-600 mb-2">
                     <div class="row"><span>Offset Y</span><span id="val-layer2OffsetY">0</span></div>
-                    <input type="range" id="layer2OffsetY" min="-150" max="150" value="0" class="w-full accent-emerald-600">
+                    <input type="range" id="layer2OffsetY" min="-150" max="150" value="0" class="w-full accent-emerald-600 mb-2">
+                    <div class="flex gap-1.5">
+                        <button id="layerWarp2Btn" onclick="toggleLayerWarp(2)" class="flex-1 py-1 text-xs rounded font-medium layer-warp-on" title="Toggle warp for this layer">⦲ Warp</button>
+                        <button onclick="flipLayerSpeed(2)" class="layer-flip-btn px-3 py-1 text-xs rounded" title="Reverse rotation direction">⇄ Rev</button>
+                    </div>
                 </div>
 
                 <!-- Layer 3 -->
@@ -224,7 +238,11 @@
                     <div class="row"><span>Offset X</span><span id="val-layer3OffsetX">0</span></div>
                     <input type="range" id="layer3OffsetX" min="-150" max="150" value="0" class="w-full accent-emerald-600 mb-2">
                     <div class="row"><span>Offset Y</span><span id="val-layer3OffsetY">0</span></div>
-                    <input type="range" id="layer3OffsetY" min="-150" max="150" value="0" class="w-full accent-emerald-600">
+                    <input type="range" id="layer3OffsetY" min="-150" max="150" value="0" class="w-full accent-emerald-600 mb-2">
+                    <div class="flex gap-1.5">
+                        <button id="layerWarp3Btn" onclick="toggleLayerWarp(3)" class="flex-1 py-1 text-xs rounded font-medium layer-warp-on" title="Toggle warp for this layer">⦲ Warp</button>
+                        <button onclick="flipLayerSpeed(3)" class="layer-flip-btn px-3 py-1 text-xs rounded" title="Reverse rotation direction">⇄ Rev</button>
+                    </div>
                 </div>
             </div>
 
@@ -500,21 +518,39 @@ function toggleLayer(n) {
 // ════════════════════════════════════════════════════════════════════
 //  Warp layer select
 // ════════════════════════════════════════════════════════════════════
+function _syncWarpBtn(n) {
+    const on  = params.warpLayers[n-1];
+    const wb  = document.getElementById('warpL'+n+'Btn');
+    wb.classList.toggle('warp-layer-on',  on);
+    wb.classList.toggle('warp-layer-off', !on);
+    const lpb = document.getElementById('layerWarp'+n+'Btn');
+    if (lpb) { lpb.classList.toggle('layer-warp-on', on); lpb.classList.toggle('layer-warp-off', !on); }
+}
+
 function toggleWarpLayer(n) {
     params.warpLayers[n-1] = !params.warpLayers[n-1];
-    const btn = document.getElementById('warpL' + n + 'Btn');
-    btn.classList.toggle('warp-layer-on',  params.warpLayers[n-1]);
-    btn.classList.toggle('warp-layer-off', !params.warpLayers[n-1]);
+    _syncWarpBtn(n);
+    if (paused) renderFrame(lastTime);
+}
+
+function toggleLayerWarp(n) {
+    params.warpLayers[n-1] = !params.warpLayers[n-1];
+    _syncWarpBtn(n);
+    if (paused) renderFrame(lastTime);
+}
+
+function flipLayerSpeed(n) {
+    params['layer'+n+'Speed'] = -(params['layer'+n+'Speed']);
+    const el = document.getElementById('layer'+n+'Speed');
+    if (el) el.value = speedToSlider(params['layer'+n+'Speed']);
+    const vEl = document.getElementById('val-layer'+n+'Speed');
+    if (vEl) vEl.textContent = fmtSpeed(params['layer'+n+'Speed']);
     if (paused) renderFrame(lastTime);
 }
 
 function invertWarpLayers() {
     params.warpLayers = params.warpLayers.map(v => !v);
-    [1, 2, 3].forEach(n => {
-        const btn = document.getElementById('warpL' + n + 'Btn');
-        btn.classList.toggle('warp-layer-on',  params.warpLayers[n-1]);
-        btn.classList.toggle('warp-layer-off', !params.warpLayers[n-1]);
-    });
+    [1, 2, 3].forEach(n => _syncWarpBtn(n));
     if (paused) renderFrame(lastTime);
 }
 
@@ -691,6 +727,7 @@ function randomise() {
             setSlider('layer'+i+'OffsetY', params['layer'+i+'OffsetY']);
             setSlider('layer'+i+'Opacity', params['layer'+i+'Opacity']);
             setSlider('layer'+i+'RgbShift', params['layer'+i+'RgbShift']);
+            _syncWarpBtn(i);
         }
     }
 
