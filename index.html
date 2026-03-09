@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -337,11 +338,13 @@
         <div class="pt-4 mt-3 grid grid-cols-2 gap-2">
             <button onclick="openDownload()" class="py-3 bg-zinc-700 hover:bg-zinc-600 rounded-xl text-sm font-medium">⬇ Export</button>
             <button onclick="togglePause()" id="pauseBtn" class="py-3 bg-emerald-600 hover:bg-emerald-500 rounded-xl text-sm font-medium">⏸ Pause</button>
+            <button onclick="saveState()" id="saveBtn" class="py-3 bg-blue-700 hover:bg-blue-600 rounded-xl text-sm font-medium">💾 Save</button>
+            <button onclick="loadState()" id="loadBtn" class="py-3 bg-zinc-700 hover:bg-zinc-600 rounded-xl text-sm font-medium">📂 Load</button>
         </div>
     </div>
 
     <!-- Canvas area -->
-    <div class="flex-1 flex items-center justify-center p-4 bg-zinc-950" id="canvasContainer">
+    <div class="flex-1 flex items-center justify-center p-1 bg-zinc-950" id="canvasContainer">
         <div id="canvasWrap">
             <canvas id="canvas"></canvas>
             <canvas id="shaderCanvas"></canvas>
@@ -438,7 +441,7 @@ const params = {
 // ════════════════════════════════════════════════════════════════════
 function resizeCanvas() {
     const c    = document.getElementById('canvasContainer');
-    const size = Math.min(c.clientWidth * 0.95, c.clientHeight * 0.9, 800);
+    const size = Math.min(c.clientWidth * 0.99, c.clientHeight * 0.98);
     [canvas, shaderCanvas, meshCanvas].forEach(cv => {
         cv.width  = size;
         cv.height = size;
@@ -2034,6 +2037,120 @@ function buildSVGPaths(w, h) {
         }
     }
     return parts.join('\n    ');
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Save / Load State
+// ════════════════════════════════════════════════════════════════════
+function saveState() {
+    const state = {
+        v: 1,
+        params: Object.assign({}, params),
+        meshPoints: JSON.parse(JSON.stringify(meshPoints)),
+        layerAngle: layerAngle.slice()
+    };
+    try { localStorage.setItem('moireState', JSON.stringify(state)); } catch(e) {}
+    const btn = document.getElementById('saveBtn');
+    const orig = btn.textContent;
+    btn.textContent = '\u2714 Saved!';
+    setTimeout(() => btn.textContent = orig, 1400);
+}
+
+function loadState() {
+    const raw = localStorage.getItem('moireState');
+    const btn = document.getElementById('loadBtn');
+    const orig = btn.textContent;
+    if (!raw) {
+        btn.textContent = '\u2717 No save';
+        setTimeout(() => btn.textContent = orig, 1400);
+        return;
+    }
+    try {
+        applyFullState(JSON.parse(raw));
+        btn.textContent = '\u2714 Loaded!';
+        setTimeout(() => btn.textContent = orig, 1400);
+    } catch(e) {
+        alert('Could not load state: ' + e.message);
+    }
+}
+
+function applyFullState(state) {
+    Object.assign(params, state.params);
+    if (state.meshPoints && state.meshPoints.length)
+        meshPoints = JSON.parse(JSON.stringify(state.meshPoints));
+    if (state.layerAngle)
+        state.layerAngle.forEach((v, i) => { layerAngle[i] = v; });
+
+    function setSlider(id, val) {
+        const el = document.getElementById(id); if (!el) return;
+        el.value = val;
+        const vEl = document.getElementById('val-'+id);
+        if (vEl) vEl.textContent = parseFloat(val).toFixed(el.step && parseFloat(el.step) < 1 ? 2 : 0);
+    }
+    function setSelect(id, val) { const el = document.getElementById(id); if (el) el.value = val; }
+    function setColor(id, val)  { const el = document.getElementById(id); if (el) el.value = val; }
+
+    setSelect('shape', params.shape);
+    document.getElementById('svgImportUI').classList.toggle('hidden', params.shape !== 'svg-import');
+    setSelect('blendMode', params.blendMode);
+    setSlider('blendStrength', params.blendStrength);
+    setSlider('cellCount', params.cellCount);
+    setSlider('cellSize',  params.cellSize);
+    setSlider('stroke',    params.stroke);
+    setSelect('cutout',  params.cutout);
+    setColor('bgColor',  params.bgColor);
+    setSelect('warpType',    params.warpType);
+    setSlider('warpStrength', params.warpStrength);
+    setSlider('warpRadius',   params.warpRadius);
+    setSlider('warpOscSpeed', params.warpOscSpeed);
+    setSlider('warpRgbDrive', params.warpRgbDrive);
+    setSlider('meshStrength', params.meshStrength);
+    setSelect('meshMode',     params.meshMode);
+    document.getElementById('animateWarp').checked = !!params.animateWarp;
+    const isMesh = params.warpType === 'mesh';
+    document.getElementById('meshControls').classList.toggle('hidden', !isMesh);
+    document.getElementById('globalWarpControls').classList.toggle('hidden', isMesh);
+    meshCanvas.style.pointerEvents = (isMesh && meshEditMode) ? 'auto' : 'none';
+    [1,2,3].forEach(n => _syncWarpBtn(n));
+    for (let i = 1; i <= 3; i++) {
+        setColor('layer'+i+'Color',    params['layer'+i+'Color']);
+        const spEl  = document.getElementById('layer'+i+'Speed');
+        if (spEl)  spEl.value = speedToSlider(params['layer'+i+'Speed']);
+        const spVEl = document.getElementById('val-layer'+i+'Speed');
+        if (spVEl) spVEl.textContent = fmtSpeed(params['layer'+i+'Speed']);
+        setSlider('layer'+i+'OffsetX',  params['layer'+i+'OffsetX']);
+        setSlider('layer'+i+'OffsetY',  params['layer'+i+'OffsetY']);
+        setSlider('layer'+i+'Opacity',  params['layer'+i+'Opacity']);
+        setSlider('layer'+i+'RgbShift', params['layer'+i+'RgbShift']);
+        const tb = document.getElementById('layer'+i+'Toggle');
+        if (tb) {
+            tb.textContent = params['layer'+i+'On'] ? 'ON' : 'OFF';
+            tb.classList.toggle('layer-on',  !!params['layer'+i+'On']);
+            tb.classList.toggle('layer-off', !params['layer'+i+'On']);
+        }
+    }
+    [['Grad','shGrad'],['Noise','shNoise'],['ColorNoise','shColorNoise'],['Blur','shBlur']].forEach(([k,p]) => {
+        const sb = document.getElementById('sh'+k+'Toggle');
+        if (sb) {
+            sb.textContent = params[p] ? 'ON' : 'OFF';
+            sb.classList.toggle('shader-on',  !!params[p]);
+            sb.classList.toggle('shader-off', !params[p]);
+        }
+    });
+    setColor('gradColorA', params.gradColorA);
+    setColor('gradColorB', params.gradColorB);
+    setSlider('gradAngle',         params.gradAngle);
+    setSlider('gradOpacity',       params.gradOpacity);
+    setSlider('noiseScale',        params.noiseScale);
+    setSlider('noiseSpeed',        params.noiseSpeed);
+    setSlider('noiseOpacity',      params.noiseOpacity);
+    setSlider('colorNoiseScale',   params.colorNoiseScale);
+    setSlider('colorNoiseSpeed',   params.colorNoiseSpeed);
+    setSlider('colorNoiseExpand',  params.colorNoiseExpand);
+    setSlider('colorNoiseOpacity', params.colorNoiseOpacity);
+    setSlider('blurPersist',       params.blurPersist);
+    updateMeshKnobs();
+    if (paused) renderFrame(lastTime);
 }
 
 // ════════════════════════════════════════════════════════════════════
