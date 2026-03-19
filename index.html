@@ -38,6 +38,14 @@
         .lock-btn { background:none; border:none; cursor:pointer; font-size:0.75rem; opacity:0.4; padding:0 2px; transition:opacity 0.15s, color 0.15s; line-height:1; }
         .lock-btn:hover { opacity:0.85; }
         .lock-btn.locked { opacity:1; color:#f59e0b; }
+        /* Editable value fields */
+        input[type="number"] { -moz-appearance:textfield; }
+        input[type="number"]::-webkit-inner-spin-button,
+        input[type="number"]::-webkit-outer-spin-button { -webkit-appearance:none; margin:0; }
+        .val-edit { width:52px; text-align:right; font-size:0.72rem; background:#27272a; border:1px solid #3f3f46; border-radius:4px; padding:1px 4px; color:#d4d4d8; cursor:text; }
+        .val-edit:focus { outline:none; border-color:#059669; background:#1c1c1e; }
+        .lightbox-on  { background-color:#b45309; color:#fff; }
+        .lightbox-off { background-color:#52525b; color:#d4d4d8; }
     </style>
 </head>
 <body class="bg-zinc-950 text-zinc-100 min-h-screen">
@@ -55,6 +63,20 @@
                 <button onclick="randomise()" class="px-3 py-1.5 bg-violet-700 hover:bg-violet-600 rounded-lg text-xs font-semibold tracking-wide" title="Randomise all parameters (shaders stay off)">&#x2684; Randomise</button>
             </div>
         </div>
+
+        <!-- Presets -->
+        <div class="mb-3 p-2 rounded-xl border border-zinc-700 bg-zinc-800/30">
+            <p class="slabel mb-1.5">Presets</p>
+            <div class="flex gap-1.5 mb-1.5">
+                <select id="presetSelect" class="flex-1 min-w-0 bg-zinc-800 border border-zinc-700 rounded-lg px-2 py-1.5 text-xs truncate">
+                    <option value="">— select —</option>
+                </select>
+                <button onclick="loadPreset()" class="px-2.5 py-1.5 bg-zinc-600 hover:bg-zinc-500 rounded-lg text-xs font-medium">Load</button>
+                <button onclick="deletePreset()" class="px-2.5 py-1.5 bg-red-900 hover:bg-red-800 rounded-lg text-xs font-medium">Del</button>
+            </div>
+            <button onclick="savePresetAs()" class="w-full py-1.5 bg-blue-800 hover:bg-blue-700 rounded-lg text-xs font-medium">+ Save as new preset…</button>
+        </div>
+
         <div class="space-y-3 flex-1">
 
             <!-- Pattern & Blend -->
@@ -64,13 +86,14 @@
                     <button class="lock-btn" id="lock-pattern" onclick="toggleLock('pattern')" title="Lock Pattern from randomise">🔓</button>
                 </div>
                 <select id="shape" class="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm mb-2">
-                    <option value="lines">Parallel Lines</option>
+                    <option value="lines" selected>Parallel Lines</option>
                     <option value="radial">Radial / Circles</option>
                     <option value="iso-circles">Isometric Circles</option>
+                    <option value="iso-dots">Isometric Dots</option>
                     <option value="grid">Square Grid</option>
                     <option value="hexagon">Hexagon (isolated)</option>
                     <option value="hex-tile">Hex Tile (honeycomb)</option>
-                    <option value="triangle" selected>Isometric Triangles</option>
+                    <option value="triangle">Isometric Triangles</option>
                     <option value="svg-import">SVG Import…</option>
                 </select>
                 <!-- SVG import panel -->
@@ -84,8 +107,8 @@
                 </div>
                 <div class="row"><span>Blend Mode</span></div>
                 <select id="blendMode" class="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm mb-2">
-                    <option value="source-over">Normal</option>
-                    <option value="difference" selected>Difference</option>
+                    <option value="source-over" selected>Normal</option>
+                    <option value="difference">Difference</option>
                     <option value="xor">XOR</option>
                     <option value="screen">Screen</option>
                     <option value="overlay">Overlay</option>
@@ -104,10 +127,10 @@
                     <p class="slabel mb-0">Grid</p>
                     <button class="lock-btn" id="lock-grid" onclick="toggleLock('grid')" title="Lock Grid from randomise">🔓</button>
                 </div>
-                <div class="row"><span>Cell Spacing <span class="text-zinc-500">(centre-to-centre px)</span></span><span id="val-cellCount">50</span></div>
-                <input type="range" id="cellCount" min="5" max="120" value="50" class="w-full accent-emerald-600 mb-2">
-                <div class="row"><span>Cell Size <span class="text-zinc-500">(shape draw size px)</span></span><span id="val-cellSize">50</span></div>
-                <input type="range" id="cellSize" min="2" max="120" value="50" class="w-full accent-emerald-600 mb-2">
+                <div class="row"><span>Cell Spacing <span class="text-zinc-500">(centre-to-centre px)</span></span><span id="val-cellCount">26</span></div>
+                <input type="range" id="cellCount" min="5" max="120" value="26" class="w-full accent-emerald-600 mb-2">
+                <div class="row"><span>Cell Size <span class="text-zinc-500">(shape draw size px)</span></span><span id="val-cellSize">59</span></div>
+                <input type="range" id="cellSize" min="2" max="120" value="59" class="w-full accent-emerald-600 mb-2">
                 <div class="row"><span>Stroke</span><span id="val-stroke">5.00</span></div>
                 <input type="range" id="stroke" min="1" max="20" value="5" step="0.5" class="w-full accent-emerald-600">
             </div>
@@ -143,12 +166,12 @@
                 </div>
                 <!-- Global warp controls (sine/flag/ripple) -->
                 <div id="globalWarpControls">
-                    <div class="row"><span>Strength</span><span id="val-warpStrength">10</span></div>
-                    <input type="range" id="warpStrength" min="0" max="80" value="10" class="w-full accent-emerald-600 mb-2">
-                    <div class="row"><span>Radius <span class="text-zinc-500 text-xs">(Flag %)</span></span><span id="val-warpRadius">45</span></div>
-                    <input type="range" id="warpRadius" min="5" max="100" value="45" class="w-full accent-emerald-600 mb-2">
-                    <div class="row"><span>Osc Speed <span class="text-zinc-500 text-xs">(Hz, 0=off)</span></span><span id="val-warpOscSpeed">0.20</span></div>
-                    <input type="range" id="warpOscSpeed" min="0" max="5" step="0.1" value="0.2" class="w-full accent-purple-500 mb-2">
+                    <div class="row"><span>Strength</span><span id="val-warpStrength">80</span></div>
+                    <input type="range" id="warpStrength" min="0" max="80" value="80" class="w-full accent-emerald-600 mb-2">
+                    <div class="row"><span>Radius <span class="text-zinc-500 text-xs">(Flag %)</span></span><span id="val-warpRadius">100</span></div>
+                    <input type="range" id="warpRadius" min="5" max="100" value="100" class="w-full accent-emerald-600 mb-2">
+                    <div class="row"><span>Osc Speed <span class="text-zinc-500 text-xs">(Hz, 0=off)</span></span><span id="val-warpOscSpeed">0.00</span></div>
+                    <input type="range" id="warpOscSpeed" min="0" max="5" step="0.1" value="0" class="w-full accent-purple-500 mb-2">
                     <div class="row"><span>Warp → RGB Drive <span class="text-zinc-500 text-xs">(multiplier)</span></span><span id="val-warpRgbDrive">0.00</span></div>
                     <input type="range" id="warpRgbDrive" min="0" max="5" value="0" step="0.05" class="w-full accent-rose-500 mb-2">
                 </div>
@@ -192,8 +215,8 @@
                     <input type="range" id="layer1Opacity" min="0" max="100" value="100" class="w-full accent-emerald-600 mb-2">
                     <div class="row"><span>RGB Shift</span><span id="val-layer1RgbShift">0</span></div>
                     <input type="range" id="layer1RgbShift" min="0" max="40" value="0" step="0.5" class="w-full accent-rose-500 mb-2">
-                    <div class="row"><span>Rot Speed °/s</span><span id="val-layer1Speed">10.0</span></div>
-                    <input type="range" id="layer1Speed" min="-100" max="100" value="46" class="w-full accent-emerald-600 mb-2">
+                    <div class="row"><span>Rot Speed °/s</span><span id="val-layer1Speed">7.9</span></div>
+                    <input type="range" id="layer1Speed" min="-100" max="100" value="42" class="w-full accent-emerald-600 mb-2">
                     <div class="row"><span>Offset X</span><span id="val-layer1OffsetX">0</span></div>
                     <input type="range" id="layer1OffsetX" min="-150" max="150" value="0" class="w-full accent-emerald-600 mb-2">
                     <div class="row"><span>Offset Y</span><span id="val-layer1OffsetY">0</span></div>
@@ -218,8 +241,8 @@
                     <input type="range" id="layer2Opacity" min="0" max="100" value="100" class="w-full accent-emerald-600 mb-2">
                     <div class="row"><span>RGB Shift</span><span id="val-layer2RgbShift">0</span></div>
                     <input type="range" id="layer2RgbShift" min="0" max="40" value="0" step="0.5" class="w-full accent-rose-500 mb-2">
-                    <div class="row"><span>Rot Speed °/s</span><span id="val-layer2Speed">20</span></div>
-                    <input type="range" id="layer2Speed" min="-100" max="100" value="59" class="w-full accent-emerald-600 mb-2">
+                    <div class="row"><span>Rot Speed °/s</span><span id="val-layer2Speed">4.0</span></div>
+                    <input type="range" id="layer2Speed" min="-100" max="100" value="31" class="w-full accent-emerald-600 mb-2">
                     <div class="row"><span>Offset X</span><span id="val-layer2OffsetX">0</span></div>
                     <input type="range" id="layer2OffsetX" min="-150" max="150" value="0" class="w-full accent-emerald-600 mb-2">
                     <div class="row"><span>Offset Y</span><span id="val-layer2OffsetY">0</span></div>
@@ -244,8 +267,8 @@
                     <input type="range" id="layer3Opacity" min="0" max="100" value="100" class="w-full accent-emerald-600 mb-2">
                     <div class="row"><span>RGB Shift</span><span id="val-layer3RgbShift">0</span></div>
                     <input type="range" id="layer3RgbShift" min="0" max="40" value="0" step="0.5" class="w-full accent-rose-500 mb-2">
-                    <div class="row"><span>Rot Speed °/s</span><span id="val-layer3Speed">-15.0</span></div>
-                    <input type="range" id="layer3Speed" min="-100" max="100" value="-53" class="w-full accent-emerald-600 mb-2">
+                    <div class="row"><span>Rot Speed °/s</span><span id="val-layer3Speed">-4.0</span></div>
+                    <input type="range" id="layer3Speed" min="-100" max="100" value="-31" class="w-full accent-emerald-600 mb-2">
                     <div class="row"><span>Offset X</span><span id="val-layer3OffsetX">0</span></div>
                     <input type="range" id="layer3OffsetX" min="-150" max="150" value="0" class="w-full accent-emerald-600 mb-2">
                     <div class="row"><span>Offset Y</span><span id="val-layer3OffsetY">0</span></div>
@@ -332,6 +355,35 @@
                 </select>
             </div>
 
+            <!-- Lightbox Mode -->
+            <div class="sep">
+                <div class="flex items-center justify-between mb-2">
+                    <p class="slabel mb-0">Lightbox Mode</p>
+                    <button id="lightboxToggle" onclick="toggleLightbox()" class="lightbox-off px-3 py-0.5 text-xs rounded-lg font-medium">OFF</button>
+                </div>
+                <p class="text-zinc-500 text-xs mb-2">Laser-cut / 3D print guide overlay — circular disc with gear teeth ring + 3 planetary gears at 12 / 4 / 8 o'clock.</p>
+                <div id="lightboxControls" class="hidden space-y-2">
+                    <div class="row"><span>Disc Ø <span class="text-zinc-500 text-xs">(mm)</span></span><span id="val-lbDiameter">200</span></div>
+                    <input type="range" id="lbDiameter" min="50" max="500" value="200" class="w-full accent-amber-500 mb-1">
+                    <div class="row"><span>Module <span class="text-zinc-500 text-xs">(tooth size mm)</span></span><span id="val-lbModule">8</span></div>
+                    <input type="range" id="lbModule" min="1" max="30" value="8" step="0.5" class="w-full accent-amber-500 mb-1">
+                    <div class="row"><span>Planet Teeth</span><span id="val-lbPlanetTeeth">16</span></div>
+                    <input type="range" id="lbPlanetTeeth" min="8" max="60" value="16" class="w-full accent-amber-500 mb-1">
+                    <div class="row"><span>Planet Gap <span class="text-zinc-500 text-xs">(mm)</span></span><span id="val-lbPlanetGap">0.5</span></div>
+                    <input type="range" id="lbPlanetGap" min="0" max="5" value="0.5" step="0.1" class="w-full accent-amber-500 mb-2">
+                    <div class="row"><span>Planet Axle Ø <span class="text-zinc-500 text-xs">(mm)</span></span><span id="val-lbAxleHole">5</span></div>
+                    <input type="range" id="lbAxleHole" min="1" max="20" value="5" step="0.5" class="w-full accent-amber-500 mb-2">
+                    <div id="lbGearInfo" class="text-xs text-zinc-400 p-2 bg-zinc-900 rounded-lg leading-relaxed"></div>
+                    <div class="grid grid-cols-2 gap-1 mt-1">
+                        <button onclick="exportLightboxSVG(0)" class="py-2 bg-amber-700 hover:bg-amber-600 rounded-lg text-xs font-semibold col-span-2">⬇ SVG All Layers</button>
+                        <button onclick="exportLightboxSVG(1)" class="py-2 bg-zinc-700 hover:bg-zinc-600 rounded-lg text-xs">SVG L1</button>
+                        <button onclick="exportLightboxSVG(2)" class="py-2 bg-zinc-700 hover:bg-zinc-600 rounded-lg text-xs">SVG L2</button>
+                        <button onclick="exportLightboxSVG(3)" class="py-2 bg-zinc-700 hover:bg-zinc-600 rounded-lg text-xs">SVG L3</button>
+                        <button onclick="exportLightboxSVG(4)" class="py-2 bg-zinc-700 hover:bg-zinc-600 rounded-lg text-xs">SVG Planets</button>
+                    </div>
+                </div>
+            </div>
+
         </div>
 
         <!-- Footer -->
@@ -340,6 +392,7 @@
             <button onclick="togglePause()" id="pauseBtn" class="py-3 bg-emerald-600 hover:bg-emerald-500 rounded-xl text-sm font-medium">⏸ Pause</button>
             <button onclick="saveState()" id="saveBtn" class="py-3 bg-blue-700 hover:bg-blue-600 rounded-xl text-sm font-medium">💾 Save</button>
             <button onclick="loadState()" id="loadBtn" class="py-3 bg-zinc-700 hover:bg-zinc-600 rounded-xl text-sm font-medium">📂 Load</button>
+            <button onclick="openPopout()" id="popoutBtn" class="col-span-2 py-3 bg-indigo-700 hover:bg-indigo-600 rounded-xl text-sm font-medium">⧉ Pop-out to Second Monitor</button>
         </div>
     </div>
 
@@ -396,6 +449,8 @@ const meshCanvas   = document.getElementById('meshCanvas');
 let animationFrame = null;
 let lastTime       = 0;
 let paused         = false;
+let popoutWin      = null;
+let popoutCanvas   = null;
 let warpPhase      = 0;
 let globalTime     = 0;
 
@@ -406,27 +461,27 @@ const layerAngle = [0, 0, 0];
 //  Params
 // ════════════════════════════════════════════════════════════════════
 const params = {
-    shape:         'triangle',
-    blendMode:     'difference',
+    shape:         'lines',
+    blendMode:     'source-over',
     blendStrength: 100,
-    cellCount:     50,
-    cellSize:      50,
+    cellCount:     26,
+    cellSize:      59,
     stroke:        5,
-    warpStrength:  10,
-    warpRadius:    45,
+    warpStrength:  80,
+    warpRadius:    100,
     warpType:      'flag',
     meshStrength:  100,
     meshMode:      'fixed',
-    warpOscSpeed:  0.2,
+    warpOscSpeed:  0,
     warpRgbDrive:  0,
     animateWarp:   false,
     cutout:        'circle',
     bgColor:       '#000000',
-    layer1Color: '#ffffff', layer1Speed:  10, layer1OffsetX: 0, layer1OffsetY: 0, layer1On: true,
+    layer1Color: '#ffffff', layer1Speed:  7.9, layer1OffsetX: 0, layer1OffsetY: 0, layer1On: true,
     layer1Opacity: 100, layer1RgbShift: 0,
-    layer2Color: '#ffffff', layer2Speed:  20, layer2OffsetX: 0, layer2OffsetY: 0, layer2On: true,
+    layer2Color: '#ffffff', layer2Speed:  4.0, layer2OffsetX: 0, layer2OffsetY: 0, layer2On: true,
     layer2Opacity: 100, layer2RgbShift: 0,
-    layer3Color: '#ffffff', layer3Speed: -15, layer3OffsetX: 0, layer3OffsetY: 0, layer3On: true,
+    layer3Color: '#ffffff', layer3Speed: -4.0, layer3OffsetX: 0, layer3OffsetY: 0, layer3On: true,
     layer3Opacity: 100, layer3RgbShift: 0,
     warpLayers: [true, true, true],  // which layers warp applies to
     // Shaders
@@ -434,6 +489,9 @@ const params = {
     shNoise:      false, noiseScale: 3,  noiseSpeed: 0.3, noiseOpacity: 40,
     shColorNoise: false, colorNoiseScale: 5, colorNoiseSpeed: 0.5, colorNoiseExpand: 0, colorNoiseOpacity: 50,
     shBlur:       false, blurPersist: 0.85,
+    // Lightbox
+    lightbox: false, lbDiameter: 200, lbModule: 8, lbPlanetTeeth: 16,
+    lbPlanetGap: 0.5, lbCentreHole: 8, lbAxleHole: 5,
 };
 
 // ════════════════════════════════════════════════════════════════════
@@ -482,6 +540,7 @@ const numericIds = new Set([
     'noiseScale','noiseSpeed','noiseOpacity',
     'colorNoiseScale','colorNoiseSpeed','colorNoiseExpand','colorNoiseOpacity',
     'blurPersist',
+    'lbDiameter','lbModule','lbPlanetTeeth','lbPlanetGap','lbCentreHole','lbAxleHole',
 ]);
 const selectIds = new Set(['shape','blendMode','warpType','cutout','meshMode']);
 const colorIds  = new Set(['bgColor','layer1Color','layer2Color','layer3Color',
@@ -598,6 +657,86 @@ function togglePause() {
 }
 
 // ════════════════════════════════════════════════════════════════════
+//  Pop-out window (mirrors canvas — move to 2nd monitor, go fullscreen)
+// ════════════════════════════════════════════════════════════════════
+function openPopout() {
+    if (popoutWin && !popoutWin.closed) { popoutWin.focus(); return; }
+
+    popoutWin = window.open('', 'moirePopout',
+        'width=800,height=800,menubar=no,toolbar=no,location=no,status=no,scrollbars=no,resizable=yes');
+    if (!popoutWin) {
+        alert('Pop-up blocked! Please allow pop-ups for this page.');
+        return;
+    }
+
+    popoutWin.document.write(`<!DOCTYPE html>
+<html><head><meta charset="UTF-8">
+<title>Moiré — Pop-out</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body { width:100%; height:100%; background:#000; display:flex;
+               align-items:center; justify-content:center; overflow:hidden; }
+  canvas { display:block; width:100%; height:100%; object-fit:contain; }
+  #fsBtn {
+    position:fixed; top:8px; right:8px; z-index:99;
+    background:rgba(0,0,0,0.55); color:#fff; border:1px solid rgba(255,255,255,0.25);
+    border-radius:6px; padding:4px 10px; font-size:12px; cursor:pointer;
+    transition:background 0.15s;
+  }
+  #fsBtn:hover { background:rgba(255,255,255,0.15); }
+</style>
+</head><body>
+<canvas id="pc"></canvas>
+<button id="fsBtn" onclick="toggleFS()">&#x26F6; Fullscreen</button>
+<script>
+  function toggleFS() {
+    const el = document.documentElement;
+    if (!document.fullscreenElement) {
+      el.requestFullscreen().catch(()=>{});
+    } else {
+      document.exitFullscreen();
+    }
+  }
+  document.addEventListener('fullscreenchange', () => {
+    document.getElementById('fsBtn').textContent =
+      document.fullscreenElement ? '\u2715 Exit Fullscreen' : '\u26F6 Fullscreen';
+  });
+  window.addEventListener('resize', () => {
+    if (window._fitCb) window._fitCb();
+  });
+<\/script>
+</body></html>`);
+    popoutWin.document.close();
+
+    // Wait for the pop-out DOM to be ready, then grab the canvas
+    popoutWin.addEventListener('load', () => {
+        popoutCanvas = popoutWin.document.getElementById('pc');
+        fitPopoutCanvas();
+        // Kick off mirroring if paused (live mirror happens in renderFrame)
+        if (paused) renderFrame(lastTime);
+    });
+
+    popoutWin.addEventListener('resize', fitPopoutCanvas);
+    popoutWin.addEventListener('unload', () => {
+        popoutCanvas = null;
+        popoutWin    = null;
+    });
+    // Expose the fit callback to the child window
+    const self = this;
+    popoutWin._fitCb = fitPopoutCanvas;
+}
+
+function fitPopoutCanvas() {
+    if (!popoutWin || !popoutCanvas) return;
+    const w = popoutWin.innerWidth;
+    const h = popoutWin.innerHeight;
+    popoutCanvas.width  = canvas.width;
+    popoutCanvas.height = canvas.height;
+    popoutCanvas.style.width  = w + 'px';
+    popoutCanvas.style.height = h + 'px';
+}
+
+// ════════════════════════════════════════════════════════════════════
 //  Randomise section locks
 // ════════════════════════════════════════════════════════════════════
 const locks = { pattern: false, grid: false, warp: false, layers: false, canvas: false };
@@ -650,7 +789,7 @@ function randomise() {
         return '#' + [r,g,b].map(v => Math.round(v*255).toString(16).padStart(2,'0')).join('');
     }
 
-    const shapes = ['lines','radial','iso-circles','grid','hexagon','hex-tile','triangle'];
+    const shapes = ['lines','radial','iso-circles','iso-dots','grid','hexagon','hex-tile','triangle'];
     const blends = ['source-over','difference','xor','screen','overlay','multiply','exclusion','color-dodge','hard-light'];
     const warps  = ['none','flag','sine','ripple'];
     const cutouts = ['none','circle','square','diamond'];
@@ -1219,7 +1358,19 @@ function renderFrame(time = 0) {
     // ── 2D pattern canvas ──
     ctx.fillStyle = params.bgColor;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    const clipped = applyClip(ctx);
+    let clipped;
+    if (params.lightbox) {
+        // Clip the moiré pattern to the ring gear pitch circle so the
+        // gear teeth sit exactly on the edge of the visible disc.
+        const _g = lbCalcGear();
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(_g.cx, _g.cy, _g.Rpitch_ring_px, 0, Math.PI * 2);
+        ctx.clip();
+        clipped = true;
+    } else {
+        clipped = applyClip(ctx);
+    }
 
     if (params.layer1On) {
         ctx.globalCompositeOperation = 'source-over';
@@ -1249,6 +1400,15 @@ function renderFrame(time = 0) {
     ctx.globalCompositeOperation = 'source-over';
     ctx.globalAlpha = 1;
     if (clipped) ctx.restore();
+
+    // Lightbox gear overlay (drawn outside the clip region so teeth are visible)
+    if (params.lightbox) drawLightboxOverlay();
+
+    // Mirror to pop-out window if open
+    if (popoutWin && !popoutWin.closed && popoutCanvas) {
+        const pctx = popoutCanvas.getContext('2d');
+        pctx.drawImage(canvas, 0, 0, popoutCanvas.width, popoutCanvas.height);
+    }
 
     if (!paused) animationFrame = requestAnimationFrame(renderFrame);
 }
@@ -1369,6 +1529,7 @@ function renderLayerOn(c, angle, offX, offY, color, layerIdx) {
         case 'lines':       drawLines(c, spacing, size, maxDist, angle, warpOn);       break;
         case 'radial':      drawRadial(c, spacing, size, maxDist, angle, warpOn);      break;
         case 'iso-circles': drawIsoCircles(c, spacing, size, maxDist, angle, warpOn);  break;
+        case 'iso-dots':    drawIsoDots(c,    spacing, size, maxDist, angle, warpOn);  break;
         case 'grid':        drawGrid(c, spacing, size, maxDist, angle, warpOn);        break;
         case 'hexagon':     drawHexGrid(c, spacing, size, maxDist, angle, warpOn);     break;
         case 'hex-tile':    drawHexTile(c, spacing, size, maxDist, angle, warpOn);     break;
@@ -1520,6 +1681,32 @@ function drawIsoCircles(c, spacing, size, maxDist, rot, warpOn) {
                 c.arc(cx, cy, r, 0, Math.PI*2);
             }
             c.stroke();
+        }
+    }
+}
+
+function drawIsoDots(c, spacing, size, maxDist, rot, warpOn) {
+    const hx = spacing, hy = spacing * Math.sqrt(3) / 2;
+    const r  = Math.max(1, size / 2);
+    const cols = Math.ceil(maxDist / hx) + 2, rows = Math.ceil(maxDist / hy) + 2;
+    const segs = hasWarp(warpOn) ? 32 : 0;
+    c.fillStyle = c.strokeStyle;   // filled dots inherit the layer colour
+    for (let row = -rows; row <= rows; row++) {
+        for (let col = -cols; col <= cols; col++) {
+            const cx = col * hx + (row % 2 === 0 ? 0 : hx / 2);
+            const cy = row * hy;
+            c.beginPath();
+            if (segs > 0) {
+                for (let s = 0; s <= segs; s++) {
+                    const a = (s / segs) * Math.PI * 2;
+                    const p = warpPt(cx + Math.cos(a) * r, cy + Math.sin(a) * r, rot, warpOn);
+                    s === 0 ? c.moveTo(p.x, p.y) : c.lineTo(p.x, p.y);
+                }
+                c.closePath();
+            } else {
+                c.arc(cx, cy, r, 0, Math.PI * 2);
+            }
+            c.fill();
         }
     }
 }
@@ -1965,6 +2152,18 @@ function buildSVGPaths(w, h) {
                 }
             break;
         }
+        case 'iso-dots': {
+            const hx = spacing, hy = spacing*Math.sqrt(3)/2;
+            const r  = Math.max(1, size/2);
+            const cols = Math.ceil(maxDist/hx)+2, rows = Math.ceil(maxDist/hy)+2;
+            for (let row = -rows; row <= rows; row++)
+                for (let col = -cols; col <= cols; col++) {
+                    const x = (col*hx+(row%2===0?0:hx/2)).toFixed(1);
+                    const y = (row*hy).toFixed(1);
+                    parts.push(`<circle cx="${x}" cy="${y}" r="${r.toFixed(1)}" fill="black" stroke="none"/>`);
+                }
+            break;
+        }
         case 'hexagon': {
             const R    = Math.max(1, size/2);
             const colW = spacing*0.75, rowH = spacing*Math.sqrt(3)/2;
@@ -2037,6 +2236,358 @@ function buildSVGPaths(w, h) {
         }
     }
     return parts.join('\n    ');
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  ── LIGHTBOX MODE ───────────────────────────────────────────────
+//  Circular disc with external gear ring + 3 planetary gears
+//  (12 / 4 / 8 o'clock positions) for laser-cut / 3D-print builds.
+// ════════════════════════════════════════════════════════════════════
+function toggleLightbox() {
+    params.lightbox = !params.lightbox;
+    const btn = document.getElementById('lightboxToggle');
+    btn.textContent = params.lightbox ? 'ON' : 'OFF';
+    btn.classList.toggle('lightbox-on',  params.lightbox);
+    btn.classList.toggle('lightbox-off', !params.lightbox);
+    document.getElementById('lightboxControls').classList.toggle('hidden', !params.lightbox);
+    if (params.lightbox) {
+        // Enforce circle cutout so the disc is always circular
+        params.cutout = 'circle';
+        document.getElementById('cutout').value = 'circle';
+    }
+    if (paused) renderFrame(lastTime);
+}
+
+// ── Gear geometry calculator ──────────────────────────────────────
+// Returns all derived dimensions in both px (for canvas) and mm (for SVG).
+function lbCalcGear() {
+    const m_mm       = Math.max(0.5, params.lbModule);
+    const D_mm       = Math.max(20,  params.lbDiameter);
+    const N_planet   = Math.max(8,   Math.round(params.lbPlanetTeeth));
+    const gap_mm     = Math.max(0,   params.lbPlanetGap);
+    const axle_mm    = Math.max(1,   params.lbAxleHole);
+    const cHole_mm   = Math.max(1,   params.lbCentreHole);
+
+    // Ring gear — N_ring computed from disc OD and module
+    const N_ring           = Math.max(10, Math.round(Math.PI * D_mm / m_mm));
+    const Rpitch_ring_mm   = N_ring * m_mm / (2 * Math.PI);   // actual pitch radius
+    const Ra_ring_mm       = Rpitch_ring_mm + m_mm;
+    const Rd_ring_mm       = Math.max(1, Rpitch_ring_mm - m_mm);  // symmetric triangular
+
+    // Planetary gear (same module → matching tooth size)
+    const Rpitch_planet_mm = N_planet * m_mm / 2;
+    const Ra_planet_mm     = Rpitch_planet_mm + m_mm;
+    const Rd_planet_mm     = Math.max(0.5, Rpitch_planet_mm - m_mm);  // symmetric
+    const planetDist_mm    = Rpitch_ring_mm + Rpitch_planet_mm + gap_mm;
+
+    // Scale so everything fits on canvas with margin
+    const totalR_mm  = planetDist_mm + Ra_planet_mm + m_mm + 4;
+    const S          = (canvas.width * 0.47) / totalR_mm;   // px / mm
+    const cx = canvas.width / 2, cy = canvas.height / 2;
+
+    return {
+        cx, cy, S, m_mm,
+        N_ring, Rpitch_ring_px: Rpitch_ring_mm * S, Ra_ring_px: Ra_ring_mm * S, Rd_ring_px: Rd_ring_mm * S,
+        N_planet, Rpitch_planet_px: Rpitch_planet_mm * S, Ra_planet_px: Ra_planet_mm * S, Rd_planet_px: Rd_planet_mm * S,
+        planetDist_px: planetDist_mm * S, planetDist_mm,
+        axle_px: (axle_mm / 2) * S,
+        cHole_px: (cHole_mm / 2) * S,
+        // mm originals
+        Rpitch_ring_mm, Ra_ring_mm, Rd_ring_mm,
+        Rpitch_planet_mm, Ra_planet_mm, Rd_planet_mm,
+        axle_mm, cHole_mm, D_mm, gearRatio: N_ring / N_planet,
+    };
+}
+
+// 12 o'clock = -π/2, then +120° each (equal spacing)
+const LB_PLANET_ANGLES = [
+    -Math.PI / 2,
+    -Math.PI / 2 + (2 * Math.PI / 3),
+    -Math.PI / 2 + (4 * Math.PI / 3),
+];
+
+// ── Canvas gear path ──────────────────────────────────────────────
+function drawGearPath(ctx, cx, cy, pitchR, m_px, N, startAngle) {
+    // Triangular tooth profile — tip at Ra, valley at Rd, pure straight lines.
+    // Each tooth occupies exactly one full pitch (peak-to-peak = 2π/N).
+    const Ra  = pitchR + m_px;
+    const Rd  = Math.max(1, pitchR - m_px);
+    const aPT = (2 * Math.PI) / N;
+
+    ctx.beginPath();
+    ctx.moveTo(cx + Rd * Math.cos(startAngle - aPT / 2),
+               cy + Rd * Math.sin(startAngle - aPT / 2));
+    for (let i = 0; i < N; i++) {
+        const mid = startAngle + i * aPT;
+        ctx.lineTo(cx + Ra * Math.cos(mid),             cy + Ra * Math.sin(mid));
+        ctx.lineTo(cx + Rd * Math.cos(mid + aPT / 2),   cy + Rd * Math.sin(mid + aPT / 2));
+    }
+    ctx.closePath();
+}
+
+// ── SVG gear path (mm units, straight triangular teeth) ──────────
+function gearPathSVG(cx, cy, pitchR, module, N, startAngle) {
+    const Ra  = pitchR + module;
+    const Rd  = Math.max(0.1, pitchR - module);
+    const aPT = (2 * Math.PI) / N;
+    const f   = v => v.toFixed(4);
+    const pt  = (r, a) => `${f(cx + r * Math.cos(a))},${f(cy + r * Math.sin(a))}`;
+
+    let d = `M ${pt(Rd, startAngle - aPT / 2)} `;
+    for (let i = 0; i < N; i++) {
+        const mid = startAngle + i * aPT;
+        d += `L ${pt(Ra, mid)} L ${pt(Rd, mid + aPT / 2)} `;
+    }
+    return d + 'Z';
+}
+
+// Circular hole as SVG path (two semicircle arcs)
+function circleSVG(cx, cy, r) {
+    const f = v => v.toFixed(4);
+    return `M ${f(cx - r)},${f(cy)} A ${f(r)},${f(r)} 0 1,1 ${f(cx + r)},${f(cy)} A ${f(r)},${f(r)} 0 1,1 ${f(cx - r)},${f(cy)} Z`;
+}
+
+// ── Overlay drawn on canvas each frame ───────────────────────────
+function drawLightboxOverlay() {
+    const g = lbCalcGear();
+    const { cx, cy, N_ring, N_planet, Rpitch_ring_px, Rd_ring_px,
+            Rpitch_planet_px, planetDist_px, cHole_px, axle_px } = g;
+
+    const θR = layerAngle[0] * Math.PI / 180;              // ring rotation (rad)
+    const θP = -θR * N_ring / N_planet;                    // planet self-rotation
+
+    const c2d = canvas.getContext('2d');
+    c2d.save();
+
+    // ── Ring gear (amber/gold) ────────────────────────────────────
+    c2d.strokeStyle = 'rgba(251,191,36,0.92)';
+    c2d.lineWidth   = 1.5;
+    drawGearPath(c2d, cx, cy, Rpitch_ring_px, g.Ra_ring_px - Rpitch_ring_px, N_ring, θR);
+    c2d.stroke();
+
+    // Dedendum circle (body edge)
+    c2d.strokeStyle = 'rgba(251,191,36,0.30)';
+    c2d.beginPath(); c2d.arc(cx, cy, Rd_ring_px, 0, Math.PI * 2); c2d.stroke();
+
+    // Centre shaft hole
+    c2d.strokeStyle = 'rgba(251,191,36,0.75)';
+    c2d.beginPath(); c2d.arc(cx, cy, cHole_px, 0, Math.PI * 2); c2d.stroke();
+
+    // ── Planetary gears (cyan) ────────────────────────────────────
+    c2d.strokeStyle = 'rgba(100,215,255,0.92)';
+    c2d.lineWidth   = 1.5;
+    LB_PLANET_ANGLES.forEach(φ => {
+        const pcx = cx + planetDist_px * Math.cos(φ);
+        const pcy = cy + planetDist_px * Math.sin(φ);
+        // Phase: derived from rolling-contact constraint so each planet
+        // tooth meshes perfectly with the ring gear at all times.
+        // phase = φ·(1 + N_ring/N_planet) + π + θP − π/N_planet
+        const phase = φ * (1 + N_ring / N_planet) + Math.PI + θP - Math.PI / N_planet;
+        const m_px  = g.Ra_planet_px - Rpitch_planet_px;
+        drawGearPath(c2d, pcx, pcy, Rpitch_planet_px, m_px, N_planet, phase);
+        c2d.stroke();
+        // Axle hole
+        c2d.beginPath(); c2d.arc(pcx, pcy, axle_px, 0, Math.PI * 2); c2d.stroke();
+        // Dashed centre line from disc centre to planet centre
+        c2d.save();
+        c2d.setLineDash([3, 4]);
+        c2d.strokeStyle = 'rgba(100,215,255,0.22)';
+        c2d.lineWidth   = 0.7;
+        c2d.beginPath(); c2d.moveTo(cx, cy); c2d.lineTo(pcx, pcy); c2d.stroke();
+        c2d.restore();
+    });
+
+    c2d.restore();
+    updateLbGearInfo(g);
+}
+
+function updateLbGearInfo(g) {
+    const el = document.getElementById('lbGearInfo');
+    if (!el) return;
+    const { N_ring, N_planet, gearRatio, Rpitch_ring_mm, Rpitch_planet_mm,
+            Ra_ring_mm, Ra_planet_mm, planetDist_mm, m_mm, D_mm } = g;
+    el.innerHTML =
+        `Ring: <b>${N_ring}</b> teeth &nbsp;·&nbsp; Planet: <b>${N_planet}</b> teeth<br>` +
+        `Gear ratio disc:planet = 1 : <b>${gearRatio.toFixed(2)}</b><br>` +
+        `Disc OD: <b>${(Ra_ring_mm * 2).toFixed(1)} mm</b> &nbsp;·&nbsp; Planet OD: <b>${(Ra_planet_mm * 2).toFixed(1)} mm</b><br>` +
+        `Planet centre from disc centre: <b>${planetDist_mm.toFixed(1)} mm</b>`;
+}
+
+// ── SVG export for laser cutting / 3D printing ───────────────────
+// which: 0=all-layers composite, 1-3=single layer disc, 4=planet gears only
+function exportLightboxSVG(which) {
+    const g = lbCalcGear();
+    const { N_ring, N_planet, Rpitch_ring_mm, Ra_ring_mm, Rd_ring_mm,
+            Rpitch_planet_mm, Ra_planet_mm, planetDist_mm,
+            cHole_mm, axle_mm, m_mm, D_mm } = g;
+
+    const totalR  = planetDist_mm + Ra_planet_mm + m_mm + 6;
+    const sz      = totalR * 2;
+    const cx = sz / 2, cy = sz / 2;
+    const f       = v => v.toFixed(3);
+    const W       = canvas.width;
+    const S       = D_mm / W;           // mm per canvas-px
+    const sw      = Math.max(0.05, params.stroke * S).toFixed(3);
+
+    // Gear cut paths
+    const discCut  = gearPathSVG(cx, cy, Rpitch_ring_mm, m_mm, N_ring, 0);
+    const cHolePth = circleSVG(cx, cy, cHole_mm / 2);
+
+    const planetHTML = LB_PLANET_ANGLES.map(φ => {
+        const px = cx + planetDist_mm * Math.cos(φ);
+        const py = cy + planetDist_mm * Math.sin(φ);
+        return `    <path d="${gearPathSVG(px, py, Rpitch_planet_mm, m_mm, N_planet, φ * (1 + N_ring / N_planet) + Math.PI - Math.PI / N_planet)}"/>` +
+               `\n    <path d="${circleSVG(px, py, axle_mm / 2)}"/>`;
+    }).join('\n');
+
+    const header = `<svg xmlns="http://www.w3.org/2000/svg"
+  width="${f(sz)}mm" height="${f(sz)}mm" viewBox="0 0 ${f(sz)} ${f(sz)}">
+  <style>
+    .cut    { fill:none; stroke:red;   stroke-width:0.15 }
+    .planet { fill:none; stroke:#00f;  stroke-width:0.15 }
+    .engrave{ fill:none; stroke:#222;  stroke-width:${sw} }
+  </style>`;
+
+    let svg = '', filename = '';
+
+    if (which === 4) {
+        // Planets only  (identical — print 3 copies)
+        svg = `${header}
+  <!-- One planetary gear — duplicate × 3 for full build -->
+  <g class="planet">
+${planetHTML}
+  </g>
+</svg>`;
+        filename = 'lightbox-planets.svg';
+    } else {
+        const layers = which === 0 ? [1, 2, 3] : [which];
+        let defs = '', engraving = '';
+        for (const n of layers) {
+            const deg = (layerAngle[n - 1] || 0).toFixed(2);
+            const ox  = f((params['layer' + n + 'OffsetX'] || 0) * S);
+            const oy  = f((params['layer' + n + 'OffsetY'] || 0) * S);
+            defs      += `\n    <clipPath id="c${n}"><circle cx="${f(cx)}" cy="${f(cy)}" r="${f(Rpitch_ring_mm)}"/></clipPath>`;
+            engraving += `\n  <g id="L${n}" class="engrave" clip-path="url(#c${n})"
+     transform="translate(${f(cx + parseFloat(ox))},${f(cy + parseFloat(oy))}) rotate(${deg}) scale(${f(S)})">
+    ${buildSVGPaths(W, W)}
+  </g>`;
+        }
+        svg = `${header}
+  <defs>${defs}
+  </defs>${engraving}
+  <g class="cut">
+    <path d="${discCut}"/>
+    <path d="${cHolePth}"/>
+  </g>
+  <g class="planet">
+${planetHTML}
+  </g>
+</svg>`;
+        filename = which === 0 ? 'lightbox-all.svg' : `lightbox-L${which}.svg`;
+    }
+
+    const blob = new Blob([svg], { type: 'image/svg+xml' });
+    const a    = document.createElement('a');
+    a.download = filename;
+    a.href     = URL.createObjectURL(blob);
+    a.click();
+    URL.revokeObjectURL(a.href);
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Editable value labels (click-to-type on any slider display)
+// ════════════════════════════════════════════════════════════════════
+function initEditableValues() {
+    document.querySelectorAll('input[type="range"]').forEach(slider => {
+        const valSpan = document.getElementById('val-' + slider.id);
+        if (!valSpan || valSpan.tagName !== 'SPAN') return;
+
+        const inp = document.createElement('input');
+        inp.type      = 'number';
+        inp.id        = 'val-' + slider.id;
+        inp.className = 'val-edit';
+        inp.value     = valSpan.textContent;
+        if (slider.step) inp.step = slider.step;
+
+        // Proxy textContent → value so all existing update code keeps working
+        Object.defineProperty(inp, 'textContent', {
+            get()  { return this.value; },
+            set(v) { this.value = String(v); },
+            configurable: true, enumerable: false
+        });
+
+        valSpan.replaceWith(inp);
+
+        inp.addEventListener('change', () => {
+            let raw = parseFloat(inp.value);
+            if (isNaN(raw)) {
+                inp.value = speedIds.has(slider.id) ? fmtSpeed(params[slider.id]) : slider.value;
+                return;
+            }
+            if (speedIds.has(slider.id)) {
+                raw = Math.max(-SPEED_LOG_MAX, Math.min(SPEED_LOG_MAX, raw));
+                params[slider.id] = raw;
+                slider.value      = speedToSlider(raw);
+                inp.value         = fmtSpeed(raw);
+            } else {
+                raw = Math.max(parseFloat(slider.min), Math.min(parseFloat(slider.max), raw));
+                const decimals = slider.step && parseFloat(slider.step) < 1 ? 2 : 0;
+                params[slider.id] = raw;
+                slider.value      = raw;
+                inp.value         = raw.toFixed(decimals);
+            }
+            if (paused) renderFrame(lastTime);
+        });
+    });
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Presets
+// ════════════════════════════════════════════════════════════════════
+function refreshPresetsUI() {
+    const presets = JSON.parse(localStorage.getItem('moirePresets') || '{}');
+    const sel = document.getElementById('presetSelect');
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">— select —</option>';
+    Object.keys(presets).sort().forEach(name => {
+        const opt = document.createElement('option');
+        opt.value = opt.textContent = name;
+        sel.appendChild(opt);
+    });
+    if (cur && presets[cur]) sel.value = cur;
+}
+
+function savePresetAs() {
+    const name = prompt('Preset name:');
+    if (!name || !name.trim()) return;
+    const key = name.trim();
+    const presets = JSON.parse(localStorage.getItem('moirePresets') || '{}');
+    presets[key] = {
+        params:     Object.assign({}, params),
+        meshPoints: JSON.parse(JSON.stringify(meshPoints)),
+        layerAngle: layerAngle.slice()
+    };
+    localStorage.setItem('moirePresets', JSON.stringify(presets));
+    refreshPresetsUI();
+    document.getElementById('presetSelect').value = key;
+}
+
+function loadPreset() {
+    const name = document.getElementById('presetSelect').value;
+    if (!name) return;
+    const presets = JSON.parse(localStorage.getItem('moirePresets') || '{}');
+    if (!presets[name]) return;
+    applyFullState(presets[name]);
+}
+
+function deletePreset() {
+    const name = document.getElementById('presetSelect').value;
+    if (!name) return;
+    if (!confirm('Delete preset "' + name + '"?')) return;
+    const presets = JSON.parse(localStorage.getItem('moirePresets') || '{}');
+    delete presets[name];
+    localStorage.setItem('moirePresets', JSON.stringify(presets));
+    refreshPresetsUI();
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -2157,6 +2708,8 @@ function applyFullState(state) {
 //  Boot
 // ════════════════════════════════════════════════════════════════════
 resizeCanvas();  // sets up all canvases, inits WebGL & mesh knobs
+initEditableValues();
+refreshPresetsUI();
 animationFrame = requestAnimationFrame(renderFrame);
 console.log('Moiré + Shaders ready!');
     </script>
