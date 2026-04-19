@@ -1,11 +1,10 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Moiré Lattice Generator</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="tailwind.js"></script>
     <style>
         body { font-family: system-ui, sans-serif; }
         #canvas { image-rendering: crisp-edges; max-width:100%; height:auto; }
@@ -130,7 +129,11 @@
                 <div class="row"><span>Cell Spacing <span class="text-zinc-500">(centre-to-centre px)</span></span><span id="val-cellCount">26</span></div>
                 <input type="range" id="cellCount" min="5" max="120" value="26" class="w-full accent-emerald-600 mb-2">
                 <div class="row"><span>Cell Size <span class="text-zinc-500">(shape draw size px)</span></span><span id="val-cellSize">59</span></div>
-                <input type="range" id="cellSize" min="2" max="120" value="59" class="w-full accent-emerald-600 mb-2">
+                <input type="range" id="cellSize" min="2" max="120" value="59" class="w-full accent-emerald-600 mb-1">
+                <div class="row"><span>&#x3b; Osc Speed <span class="text-zinc-500 text-xs">(Hz, 0=off)</span></span><span id="val-cellSizeOscSpeed">0.00</span></div>
+                <input type="range" id="cellSizeOscSpeed" min="0" max="5" step="0.1" value="0" class="w-full accent-purple-500 mb-1">
+                <div class="row"><span>&#x3b; Osc Depth <span class="text-zinc-500 text-xs">(±px amplitude)</span></span><span id="val-cellSizeOscDepth">0</span></div>
+                <input type="range" id="cellSizeOscDepth" min="0" max="60" step="1" value="0" class="w-full accent-purple-500 mb-2">
                 <div class="row"><span>Stroke</span><span id="val-stroke">5.00</span></div>
                 <input type="range" id="stroke" min="1" max="20" value="5" step="0.5" class="w-full accent-emerald-600">
             </div>
@@ -466,6 +469,8 @@ const params = {
     blendStrength: 100,
     cellCount:     26,
     cellSize:      59,
+    cellSizeOscSpeed: 0,
+    cellSizeOscDepth: 0,
     stroke:        5,
     warpStrength:  80,
     warpRadius:    100,
@@ -531,7 +536,7 @@ function fmtSpeed(v) {
 const speedIds = new Set(['layer1Speed','layer2Speed','layer3Speed']);
 
 const numericIds = new Set([
-    'cellCount','cellSize','stroke','blendStrength',
+    'cellCount','cellSize','cellSizeOscSpeed','cellSizeOscDepth','stroke','blendStrength',
     'warpStrength','warpRadius','warpOscSpeed','warpRgbDrive','meshStrength',
     'layer1OffsetX','layer1OffsetY','layer1Opacity','layer1RgbShift',
     'layer2OffsetX','layer2OffsetY','layer2Opacity','layer2RgbShift',
@@ -1523,7 +1528,9 @@ function renderLayerOn(c, angle, offX, offY, color, layerIdx) {
 
     const maxDist = Math.max(canvas.width, canvas.height) * 0.82;
     const spacing = params.cellCount;
-    const size    = params.cellSize;
+    const size    = params.cellSizeOscSpeed > 0
+        ? Math.max(1, params.cellSize + params.cellSizeOscDepth * Math.sin(globalTime * params.cellSizeOscSpeed * Math.PI * 2))
+        : params.cellSize;
 
     switch (params.shape) {
         case 'lines':       drawLines(c, spacing, size, maxDist, angle, warpOn);       break;
@@ -1568,7 +1575,9 @@ function _renderLayerCore(c, angle, offX, offY, color, warpOn) {
 
     const maxDist2 = Math.max(canvas.width, canvas.height) * 0.82;
     const spacing2 = params.cellCount;
-    const size2    = params.cellSize;
+    const size2    = params.cellSizeOscSpeed > 0
+        ? Math.max(1, params.cellSize + params.cellSizeOscDepth * Math.sin(globalTime * params.cellSizeOscSpeed * Math.PI * 2))
+        : params.cellSize;
 
     switch (params.shape) {
         case 'lines':       drawLines(c, spacing2, size2, maxDist2, angle, warpOn);       break;
