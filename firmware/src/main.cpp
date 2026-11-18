@@ -4,7 +4,8 @@
 //   motor B → second disc = Layer 2 (rear disc on a 2-disc build, middle disc on a 3-disc build)
 //   motor C → rear disc   = Layer 3 (3-disc builds only)
 // Speeds are disc rpm, positive = clockwise seen from the front. Each motor turns its
-// disc through a 15:45 gear pair, so the motor runs 3× faster and the opposite way.
+// disc through a gear pair: 15:45 on the centre spindle (3×), rim teeth on the edge drive
+// (~13×; the generator's Send speeds sets it). The motor turns the opposite way.
 //
 // Driver options (pick the PlatformIO env):
 //   ULN2003  the boards that ship with the motors. Half-stepping from a 4 kHz timer.
@@ -29,7 +30,6 @@
 
 // ── Mechanics ────────────────────────────────────────────────────
 constexpr float MOTOR_STEPS = 32.0f * 63.68395f;   // 28BYJ-48 full steps per output turn (~2038)
-constexpr float GEAR_RATIO  = 45.0f / 15.0f;       // motor turns per disc turn
 #ifdef DRIVER_TMC2209
 constexpr float MAX_MOTOR_RPM = 18.0f;             // bipolar at 12 V
 const char* DRIVER_NAME = "TMC2209";
@@ -43,7 +43,6 @@ constexpr int MOTORS = 3;
 constexpr int MOTORS = 2;
 #endif
 #endif
-constexpr float MAX_DISC_RPM = MAX_MOTOR_RPM / GEAR_RATIO;
 
 // ── Settings (saved in flash) ────────────────────────────────────
 enum Mode : uint8_t { STEADY = 0, BREATHE = 1, DRIFT = 2 };
@@ -58,8 +57,10 @@ struct Settings {
     uint16_t current = 150;                // mA RMS per motor (TMC2209 only)
     bool inv[3] = { false, false, false };
     bool running = true;
-    uint8_t version = 2;
+    float ratio = 3.0f;                    // motor turns per disc turn: 3 centre spindle (15:45), ~13 edge drive
+    uint8_t version = 3;
 } S;
+float maxDiscRpm() { return MAX_MOTOR_RPM / S.ratio; }
 String wifiSsid, wifiPass;
 Preferences prefs;
 WebServer server(80);
@@ -184,7 +185,7 @@ void motorsRetry() {                                           // drivers powere
 void loadSettings() {
     prefs.begin("moire", true);
     Settings tmp;
-    if (prefs.getBytesLength("s2") == sizeof(Settings)) { prefs.getBytes("s2", &tmp, sizeof(Settings)); if (tmp.version == 2) S = tmp; }
+    if (prefs.getBytesLength("s3") == sizeof(Settings)) { prefs.getBytes("s3", &tmp, sizeof(Settings)); if (tmp.version == 3) S = tmp; }
     wifiSsid = prefs.getString("ssid", "");
     wifiPass = prefs.getString("pass", "");
     prefs.end();
@@ -193,7 +194,7 @@ void loadSettings() {
 void saveSoon() { saveAt = millis() + 2000; }   // debounce flash writes while sliders move
 void saveNow() {
     prefs.begin("moire", false);
-    prefs.putBytes("s2", &S, sizeof(Settings));
+    prefs.putBytes("s3", &S, sizeof(Settings));
     prefs.end();
     saveAt = 0;
 }
@@ -207,7 +208,7 @@ float target(int i, float t) {
     float v = S.l[i];
     if (S.mode == BREATHE) v *= 1 + S.depth * sinf(2 * PI * t / max(5.0f, S.period) + i * PI / 2);   // each disc a quarter-cycle behind the last
     else if (S.mode == DRIFT) v *= 1 + S.drift * smoothNoise(t, 1.7f + i * 3.6f);
-    return constrain(v, -MAX_DISC_RPM, MAX_DISC_RPM);
+    return constrain(v, -maxDiscRpm(), maxDiscRpm());
 }
 void motionTick() {
     static uint32_t last = millis();
@@ -218,7 +219,7 @@ void motionTick() {
         float tg = target(i, now / 1000.0f);
         cur[i] += constrain(tg - cur[i], -step, step);
         if (tg == 0 && fabsf(cur[i]) < 0.0005f) cur[i] = 0;
-        motorRpm(i, (S.inv[i] ? 1 : -1) * cur[i] * GEAR_RATIO);   // gears reverse the direction
+        motorRpm(i, (S.inv[i] ? 1 : -1) * cur[i] * S.ratio);   // gears reverse the direction
     }
 }
 
@@ -230,10 +231,10 @@ String stateJson() {
     snprintf(b, sizeof b,
         "{\"l\":[%.3f,%.3f,%.3f],\"cur\":[%.3f,%.3f,%.3f],\"inv\":[%s,%s,%s],\"ok\":[%s,%s,%s],"
         "\"discs\":%d,\"motors\":%d,\"mode\":\"%s\",\"period\":%.1f,\"depth\":%.2f,\"drift\":%.2f,\"accel\":%.2f,"
-        "\"current\":%u,\"running\":%s,\"driver\":\"%s\",\"maxDiscRpm\":%.2f,\"ratio\":%.1f,\"ap\":%s,\"ip\":\"%s\"}",
+        "\"current\":%u,\"running\":%s,\"driver\":\"%s\",\"maxDiscRpm\":%.2f,\"ratio\":%.2f,\"ap\":%s,\"ip\":\"%s\"}",
         S.l[0], S.l[1], S.l[2], cur[0], cur[1], cur[2], tf(S.inv[0]), tf(S.inv[1]), tf(S.inv[2]), tf(ok[0]), tf(ok[1]), tf(ok[2]),
         activeDiscs(), MOTORS, modeName(S.mode), S.period, S.depth, S.drift, S.accel,
-        S.current, tf(S.running), DRIVER_NAME, MAX_DISC_RPM, GEAR_RATIO,
+        S.current, tf(S.running), DRIVER_NAME, maxDiscRpm(), S.ratio,
         tf(apMode), (apMode ? WiFi.softAPIP() : WiFi.localIP()).toString().c_str());
     return b;
 }
@@ -252,8 +253,9 @@ void handleSet() {
     bool ch = false;
     const char* lk[3] = { "l1", "l2", "l3" };
     const char* ik[3] = { "inv1", "inv2", "inv3" };
-    for (int i = 0; i < 3; i++) { ch |= argF(lk[i], S.l[i], -MAX_DISC_RPM, MAX_DISC_RPM); ch |= argB(ik[i], S.inv[i]); }
-    ch |= argF("front", S.l[0], -MAX_DISC_RPM, MAX_DISC_RPM);  // older name for l1
+    for (int i = 0; i < 3; i++) { ch |= argF(lk[i], S.l[i], -maxDiscRpm(), maxDiscRpm()); ch |= argB(ik[i], S.inv[i]); }
+    ch |= argF("front", S.l[0], -maxDiscRpm(), maxDiscRpm());  // older name for l1
+    if (argF("ratio", S.ratio, 1, 40)) ch = true;               // sent by the generator for the chosen drive
     float dsc = S.discs;
     if (argF("discs", dsc, 2, 3)) { S.discs = (uint8_t)lroundf(dsc); ch = true; }
     ch |= argF("period", S.period, 5, 600);

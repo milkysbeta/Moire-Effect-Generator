@@ -427,7 +427,8 @@
                     <div class="row"><span>Drive</span></div>
                     <select id="lbDrive" class="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm mb-2">
                         <option value="planet">Rim gear + 3 planets (one disc)</option>
-                        <option value="coaxial">Coaxial, two motors (front L1 + rear L2)</option>
+                        <option value="coaxial">Centre spindle (2 or 3 discs)</option>
+                        <option value="edge">Edge drive (geared rims, 2 discs)</option>
                     </select>
                     <div id="lbPlanetUI" class="space-y-2">
                     <div class="row"><span>Module <span class="text-zinc-500 text-xs">(tooth size mm)</span></span><span id="val-lbModule">2</span></div>
@@ -480,7 +481,7 @@
                         <input type="range" id="cxRim" min="2" max="15" value="4" step="0.5" class="w-full accent-amber-500 mb-1">
                         <div id="cxInfo" class="text-xs text-zinc-400 p-2 bg-zinc-900 rounded-lg leading-relaxed"></div>
                         <div id="cxBtns" class="grid grid-cols-2 gap-1">
-                            <button onclick="open3DView()" class="py-2 bg-indigo-700 hover:bg-indigo-600 rounded-lg text-xs font-semibold col-span-2">&#x1F9CA; 3D assembly view</button>
+                            <button onclick="open3DView()" class="py-2 bg-indigo-700 hover:bg-indigo-600 rounded-lg text-xs font-semibold col-span-2">&#x1F9CA; Open the 3D Model page</button>
                             <button onclick="exportCoaxParts()" class="py-2 bg-amber-700 hover:bg-amber-600 rounded-lg text-xs font-semibold col-span-2">&#x2B07; Drive parts (STL zip + build sheet)</button>
                             <button onclick="exportCoaxDisc('front')" class="py-2 bg-zinc-700 hover:bg-zinc-600 rounded-lg text-xs">Front disc (L1)</button>
                             <button onclick="exportCoaxDisc('middle')" id="cxMidBtn" class="py-2 bg-zinc-700 hover:bg-zinc-600 rounded-lg text-xs hidden">Middle disc (L2)</button>
@@ -1089,7 +1090,7 @@ function catmullRom1D(p0, p1, p2, p3, t) {
 // Returns {dx, dy} offset to add to the canvas pixel.
 function meshDisplace(px, py, layerRot) {
     if (params.warpType !== 'mesh' || meshPoints.length === 0) return {dx:0, dy:0};
-    const W = canvas.width, H = canvas.height;
+    const W = DW, H = DW;
     const strength = params.meshStrength / 100;
 
     let u = px / W, v = py / H;
@@ -1491,10 +1492,10 @@ function renderFrame(time = 0) {
     if (params.lightbox) {
         // Clip the moiré pattern to the ring gear pitch circle so the
         // gear teeth sit exactly on the edge of the visible disc.
-        const _g = params.lbDrive === 'coaxial' ? coaxCalc() : lbCalcGear();
+        const _g = frameCalc();
         ctx.save();
         ctx.beginPath();
-        ctx.arc(_g.cx, _g.cy, _g.patternR_mm * _g.S, 0, Math.PI * 2);
+        ctx.arc(_g.cx, _g.cy, _g.patternR_mm * _g.Sd, 0, Math.PI * 2);
         ctx.clip();
         clipped = true;
     } else {
@@ -1531,7 +1532,7 @@ function renderFrame(time = 0) {
     if (clipped) ctx.restore();
 
     // Lightbox gear overlay (drawn outside the clip region so teeth are visible)
-    if (params.lightbox) (params.lbDrive === 'coaxial' ? drawCoaxOverlay : drawLightboxOverlay)();
+    if (params.lightbox) (params.lbDrive === 'coaxial' || isEdge() ? drawCoaxOverlay : drawLightboxOverlay)();
 
     // Mirror to pop-out window if open
     if (popoutWin && !popoutWin.closed && popoutCanvas) {
@@ -1639,7 +1640,9 @@ function renderLayerOn(c, angle, offX, offY, color, layerIdx) {
     }
 
     c.save();
-    c.translate(canvas.width/2 + offX, canvas.height/2 + offY);
+    const _k = canvas.width / DW;
+    c.translate(canvas.width/2 + offX * _k, canvas.height/2 + offY * _k);
+    c.scale(_k, _k);
     c.rotate(angle * Math.PI/180);
     // Apply gradient as stroke colour if grad is on
     if (params.shGrad) {
@@ -1651,7 +1654,7 @@ function renderLayerOn(c, angle, offX, offY, color, layerIdx) {
     c.lineWidth   = params.stroke;
     c.lineCap     = 'square';
 
-    const maxDist = Math.max(canvas.width, canvas.height) * 0.82;
+    const maxDist = DW * 0.82;
     const spacing = params.cellCount;
     const size    = params.cellSizeOscSpeed > 0
         ? Math.max(1, params.cellSize + params.cellSizeOscDepth * Math.sin(globalTime * params.cellSizeOscSpeed * Math.PI * 2))
@@ -1693,13 +1696,15 @@ function _blitChannel(c, src, dx, dy, rMul, gMul, bMul) {
 
 function _renderLayerCore(c, angle, offX, offY, color, warpOn) {
     c.save();
-    c.translate(canvas.width/2 + offX, canvas.height/2 + offY);
+    const _k = canvas.width / DW;
+    c.translate(canvas.width/2 + offX * _k, canvas.height/2 + offY * _k);
+    c.scale(_k, _k);
     c.rotate(angle * Math.PI/180);
     c.strokeStyle = color;
     c.lineWidth   = params.stroke;
     c.lineCap     = 'square';
 
-    const maxDist2 = Math.max(canvas.width, canvas.height) * 0.82;
+    const maxDist2 = DW * 0.82;
     const spacing2 = params.cellCount;
     const size2    = params.cellSizeOscSpeed > 0
         ? Math.max(1, params.cellSize + params.cellSizeOscDepth * Math.sin(globalTime * params.cellSizeOscSpeed * Math.PI * 2))
@@ -1730,8 +1735,8 @@ function hasWarp(warpOn) { return warpOn && params.warpType !== 'none' && (isMes
 // World-to-canvas for mesh: add mesh displacement to a point
 function mwarp(px, py, layerRot) {
     if (!isMesh()) return {x: px, y: py};
-    const cpx = px + canvas.width/2;
-    const cpy = py + canvas.height/2;
+    const cpx = px + DW/2;
+    const cpy = py + DW/2;
     const d   = meshDisplace(cpx, cpy, layerRot);
     return { x: px + d.dx, y: py + d.dy };
 }
@@ -1760,6 +1765,9 @@ function effectiveWarpStrength() {
 //  the SVG recorder (SvgSink), so exports match the screen exactly.
 //  GEO.clip (exports only) trims paths to the cutout / disc edge.
 // ════════════════════════════════════════════════════════════════════
+// Patterns live in a fixed 800-unit design space; the screen scales it to fit. Exports and
+// the 3D model use the same units, so the window size never changes what gets printed.
+const DW = 800;
 const GEO = { clip: null, step: 8, layer: 0 };   // layer: which layer is being drawn (disc styles + reverse warp use it)   // step = sample spacing (px) along warped edges
 
 // Warp function for a layer, or null when nothing moves.
@@ -1962,8 +1970,8 @@ const isDiscStyle = s => DISC_STYLES.includes(s);
 
 // Rim radius in canvas px: the printable disc in lightbox mode, else the cutout
 function discFramePx() {
-    if (params.lightbox) { const g = params.lbDrive === 'coaxial' ? coaxCalc() : lbCalcGear(); return g.patternR_mm * g.S; }
-    return Math.min(canvas.width, canvas.height) / 2 * 0.85;
+    if (params.lightbox) { const g = frameCalc(); return g.patternR_mm * g.S; }
+    return DW / 2 * 0.85;
 }
 const layerSide = li => (params.armMirror && li % 2 ? -1 : 1);
 
@@ -2104,7 +2112,7 @@ function warpDX(along, perp) {
     if (params.warpStrength === 0 || params.warpType === 'none' || params.warpType === 'mesh') return 0;
     const strength = effectiveWarpStrength();
     const phase    = params.animateWarp ? warpPhase * 3 : 0;
-    const halfSize = Math.max(canvas.width, canvas.height) / 2;
+    const halfSize = DW / 2;
     const freq     = (Math.PI*2*3)/(halfSize*2);
     switch (params.warpType) {
         case 'flag': {
@@ -2158,7 +2166,7 @@ function exportLayer(layerNum) {
 function exportSVG(layerNum) {
     const color = params['layer'+layerNum+'Color'];
     const offX = params['layer'+layerNum+'OffsetX'], offY = params['layer'+layerNum+'OffsetY'];
-    const w = canvas.width, h = canvas.height;
+    const w = DW, h = DW;
     const cx = w/2+offX, cy = h/2+offY;
     const ang = layerAngle[layerNum-1];
     // trim to what the screen shows: the cutout shape, or the canvas edge
@@ -2402,14 +2410,14 @@ function drawSvgImport(c, spacing, size, maxDist, rot, warpOn) {
 //  (12 / 4 / 8 o'clock positions) for laser-cut / 3D-print builds.
 // ════════════════════════════════════════════════════════════════════
 function syncDriveUI() {
-    const coax = params.lbDrive === 'coaxial';
+    const coax = params.lbDrive === 'coaxial' || params.lbDrive === 'edge';
     document.getElementById('lbPlanetUI').classList.toggle('hidden', coax);
     document.getElementById('lbCoaxUI').classList.toggle('hidden', !coax);
     const three = discCount() === 3;
     document.getElementById('cxMidBtn').classList.toggle('hidden', !three);
     document.getElementById('cxRearBtn').textContent = three ? 'Rear disc (L3)' : 'Rear disc (L2)';
 }
-document.getElementById('lbDiscs').addEventListener('change', () => { syncDriveUI(); if (V3.open) { close3DView(); open3DView(); } });
+document.getElementById('lbDiscs').addEventListener('change', () => { syncDriveUI(); if (document.getElementById('modelPage')) mpRefreshPanel(); });
 document.getElementById('lbDrive').addEventListener('change', () => { syncDriveUI(); if (paused) renderFrame(lastTime); });
 
 function toggleLightbox() {
@@ -2448,16 +2456,17 @@ function lbCalcGear() {
     const planetDist_mm    = Rpitch_ring_mm + Rpitch_planet_mm + gap_mm;
 
     const totalR_mm  = planetDist_mm + Ra_planet_mm + m_mm + 4;
-    const S          = (canvas.width * 0.47) / totalR_mm;   // px / mm
+    const S          = (DW * 0.47) / totalR_mm;             // design px / mm
+    const Sd         = S * canvas.width / DW;               // screen px / mm
     const cx = canvas.width / 2, cy = canvas.height / 2;
 
     return {
-        cx, cy, S, m_mm,
-        N_ring, Rpitch_ring_px: Rpitch_ring_mm * S, Ra_ring_px: Ra_ring_mm * S, Rd_ring_px: Rd_ring_mm * S,
-        N_planet, Rpitch_planet_px: Rpitch_planet_mm * S, Ra_planet_px: Ra_planet_mm * S, Rd_planet_px: Rd_planet_mm * S,
-        planetDist_px: planetDist_mm * S, planetDist_mm,
-        axle_px: (axle_mm / 2) * S,
-        cHole_px: (cHole_mm / 2) * S,
+        cx, cy, S, Sd, m_mm,
+        N_ring, Rpitch_ring_px: Rpitch_ring_mm * Sd, Ra_ring_px: Ra_ring_mm * Sd, Rd_ring_px: Rd_ring_mm * Sd,
+        N_planet, Rpitch_planet_px: Rpitch_planet_mm * Sd, Ra_planet_px: Ra_planet_mm * Sd, Rd_planet_px: Rd_planet_mm * Sd,
+        planetDist_px: planetDist_mm * Sd, planetDist_mm,
+        axle_px: (axle_mm / 2) * Sd,
+        cHole_px: (cHole_mm / 2) * Sd,
         Rpitch_ring_mm, Ra_ring_mm, Rd_ring_mm,
         Rpitch_planet_mm, Ra_planet_mm, Rd_planet_mm,
         axle_mm, cHole_mm, D_mm, gearRatio: N_ring / N_planet,
@@ -2533,7 +2542,7 @@ function circleSVG(cx, cy, r) {
 // ── Overlay drawn on canvas each frame ───────────────────────────
 function drawLightboxOverlay() {
     const g = lbCalcGear();
-    const { cx, cy, S, N_ring, N_planet, Rd_ring_px, planetDist_px, cHole_px, axle_px, m_mm } = g;
+    const { cx, cy, Sd: S, N_ring, N_planet, Rd_ring_px, planetDist_px, cHole_px, axle_px, m_mm } = g;   // screen scale for drawing
     const θR = layerAngle[0] * Math.PI / 180;
 
     const c2d = canvas.getContext('2d');
@@ -2629,7 +2638,7 @@ function exportLightboxSVG(which) {
     const sz      = totalR * 2;
     const cx = sz / 2, cy = sz / 2;
     const f       = v => v.toFixed(3);
-    const W       = canvas.width;
+    const W       = DW;
     const mmpp    = 1 / S;                      // mm per canvas px, matches the overlay
 
     const discCut  = polySVG(involuteGear(N_ring, m_mm, 0), cx, cy);
@@ -2790,7 +2799,7 @@ function patternRibs(layerIdx, g) {
     c.rotate(ang * Math.PI / 180);
     c.strokeStyle = '#fff'; c.lineWidth = params.stroke; c.lineCap = 'square';
     const prevStep = GEO.step; GEO.step = Math.max(1, 0.4 / mmpp);   // sample every 0.4 mm
-    const size = params.cellSize, maxDist = Math.max(canvas.width, canvas.height) * 0.82;
+    const size = params.cellSize, maxDist = DW * 0.82;
     GEO.layer = layerIdx;
     try { drawShapeInto(c, params.cellCount, size, maxDist, ang, params.warpLayers[layerIdx]); }
     finally { GEO.step = prevStep; }
@@ -2987,8 +2996,8 @@ CX.flangeT2 = () => CX.frontDisc2() - CX.frontZ;                     // front hu
 function coaxCalc() {
     const D = Math.max(60, params.lbDiameter), R = D / 2;
     const rim = Math.max(2, +params.cxRim || 4);
-    const S = (canvas.width * 0.47) / R;           // screen px per mm
-    return { D, R, rim, S, cx: canvas.width / 2, cy: canvas.height / 2, patternR_mm: R - rim };
+    const S = (DW * 0.47) / R;                     // design px per mm
+    return { D, R, rim, S, Sd: S * canvas.width / DW, cx: canvas.width / 2, cy: canvas.height / 2, patternR_mm: R - rim };
 }
 
 // ── 2D profile → traced outline (draw with canvas, trace at res px/mm) ──
@@ -3128,7 +3137,7 @@ const CX_PARTS = {
 //   middle disc   boss under the plate sits on the middle hub's cap and clamps the
 //                 upper 6806 inner race; plate starts 2.5 mm above the rear disc
 //   sleeve        carries the rod clamp from the middle hub's top 608 up to the front hub
-const discCount = () => (+params.lbDiscs === 3 ? 3 : 2);
+const discCount = () => (params.lbDrive !== 'edge' && +params.lbDiscs === 3 ? 3 : 2);
 function cx3() {
     const t = discT();
     const L = { journalR: 14.95, shoulderR: 17, capT: 7, hub2L: 20, hub2R: 30,
@@ -3194,6 +3203,182 @@ function coaxPartList() {
     ];
 }
 
+// ════════════════════════════════════════════════════════════════════
+//  EDGE DRIVE: two discs driven at the rim
+//  Each disc is a "cartridge": the pattern plate plus a solid rim with
+//  three bands: a race that rides on flanged rollers, a groove the roller
+//  flanges sit in (holds the disc front-to-back), and gear teeth. Front
+//  (L1) and rear (L2) cartridges face each other 1 mm apart and their rims
+//  flare away from each other. Each has its own pinion and 28BYJ-48 behind
+//  the back plate, so they counter-rotate at any speeds. Three M3 bolts
+//  carry the rollers and tie the front retainer to the back plate.
+//  z = 0 is the middle of the gap between the discs, + is towards the viewer.
+// ════════════════════════════════════════════════════════════════════
+const EDGE = { m: 1.0, Np: 16, ringW: 4, tT: 3, grooveT: 1.6, tyreR: 6, flangeX: 1.5, plateT: 4, retT: 2.5, clear: 0.6,
+               rollerAng: [270, 30, 150], pinAng: { A: 110, B: 70 }, shaftLen: 9.5 };   // canvas-frame degrees, 90 = bottom
+const isEdge = () => params.lbDrive === 'edge';
+const polar = (r, deg) => [r * Math.cos(deg * Math.PI / 180), r * Math.sin(deg * Math.PI / 180)];
+function edgeCalc() {
+    const D = Math.max(60, params.lbDiameter), R = D / 2, t = discT(), g = CX.gap, m = EDGE.m;
+    const N = Math.round(2 * (R + EDGE.ringW + 1.25 * m) / m), Rp = N * m / 2, Ra = Rp + m, Rf = Rp - 1.25 * m;
+    const Hc = t + EDGE.grooveT + EDGE.tT;
+    const axleR = Ra + EDGE.tyreR, pinRp = EDGE.Np * m / 2, Cd = Rp + pinRp + 0.1;
+    const back0 = -(g / 2 + Hc + EDGE.clear);                       // back plate front face
+    const E = { D, R, t, g, m, N, Rp, Ra, Rf, Rg: Ra - 2, Hc, axleR, pinRp, Cd, plateR: axleR + 7,
+        S: (DW * 0.47) / R, Sd: (DW * 0.47) / R * canvas.width / DW, cx: canvas.width / 2, cy: canvas.height / 2, patternR_mm: R, rim: 0,
+        ratio: N / EDGE.Np, back0, backZ: back0 - EDGE.plateT, retZ: g / 2 + Hc + EDGE.clear,
+        teethA: [g / 2 + t + EDGE.grooveT, g / 2 + Hc], teethB: [-(g / 2 + Hc), -(g / 2 + t + EDGE.grooveT)] };
+    E.shaftEnd = E.backZ + EDGE.shaftLen;                             // motor shaft tip (motors sit behind the plate)
+    E.spacerL = +(EDGE.tT + EDGE.clear + 0.15).toFixed(2);            // axle spacer between plate/retainer and a roller flange
+    E.boltL = Math.ceil((E.retZ + EDGE.retT - E.backZ + 4) / 5) * 5;
+    E.depth = E.retZ + EDGE.retT - (E.backZ - 19.5);                  // retainer front to the back of the motors
+    return E;
+}
+// Which calculator frames the disc for the current drive
+function frameCalc() { return isEdge() ? edgeCalc() : params.lbDrive === 'coaxial' ? coaxCalc() : lbCalcGear(); }
+
+// One layer's pattern drawn in millimetres, clipped to an annulus
+function makePattern(layerIdx, mmpp) {
+    return (g, r0, r1, angOverride) => {
+        g.save();
+        g.beginPath(); g.arc(0, 0, r1, 0, Math.PI * 2); if (r0 > 0) { g.moveTo(r0, 0); g.arc(0, 0, r0, 0, Math.PI * 2, true); } g.clip('evenodd');
+        g.scale(mmpp, mmpp);
+        g.translate(params['layer' + (layerIdx + 1) + 'OffsetX'] || 0, params['layer' + (layerIdx + 1) + 'OffsetY'] || 0);
+        const ang = angOverride ?? (layerAngle[layerIdx] || 0);
+        g.rotate(ang * Math.PI / 180);
+        g.strokeStyle = '#fff'; g.lineWidth = params.stroke; g.lineCap = 'square';
+        const prevStep = GEO.step; GEO.step = Math.max(1, 0.4 / mmpp);
+        GEO.layer = layerIdx;
+        try { drawShapeInto(g, params.cellCount, params.cellSize, DW * 0.82, ang, params.warpLayers[layerIdx]); }
+        finally { GEO.step = prevStep; }
+        g.restore();
+    };
+}
+
+const mirrorZ = tris => tris.map(([a, b, c]) => [[a[0], a[1], -a[2]], [c[0], c[1], -c[2]], [b[0], b[1], -b[2]]]);
+
+// Disc + rim ring with race, groove and teeth. Local z 0 = the face towards the gap.
+function edgeCartridge(which, ang) {
+    const E = edgeCalc(), t = E.t, li = which === 'front' ? 0 : 1, R = E.R;
+    const pattern = makePattern(li, 1 / E.S);
+    const res = Math.min(12, 4000 / (2 * (E.Ra + 1)));
+    const band = (r0, r1) => g => { g.arc(0, 0, r1, 0, Math.PI * 2); g.moveTo(r0, 0); g.arc(0, 0, r0, 0, Math.PI * 2, true); };
+    const two = params.cxStyle === 'twocolour';
+    const plate = profile2D(E.Ra + 1, a => { a.add(band(R - 0.5, E.Ra)); if (two) a.add(P2.circle(0, 0, R)); else pattern(a.g, 0, R + 0.5, ang); }, res);
+    const groove = profile2D(E.Ra + 1, a => a.add(band(R - 0.5, E.Rg)), 8);
+    const teeth = profile2D(E.Ra + 1, a => { a.add(P2.poly(involuteGear(E.N, E.m, 0))); a.cut(P2.circle(0, 0, R - 0.5)); }, Math.max(res, 8));
+    const body = extrude(plate, 0, t).concat(extrude(groove, t, t + EDGE.grooveT), extrude(teeth, t + EDGE.grooveT, E.Hc));
+    const name = which === 'front' ? 'front cartridge (L1)' : 'rear cartridge (L2)';
+    if (!two) return { parts: [{ name, tris: body }], pieces: plate.filter(s => s.depth % 2 === 0).length };
+    const ribH = Math.max(0.2, +params.lbRibH || 0.6);
+    const ribs = profile2D(R + 1, a => pattern(a.g, 0, R - 0.5, ang), res);       // ribs on the back of the plate, seen through it
+    return { parts: [{ name: name + ' base (clear or white)', tris: body }, { name: name + ' pattern (black)', tris: extrude(ribs, t, t + ribH) }], pieces: 1 };
+}
+
+const EDGE_PARTS = {
+    backPlate: () => {
+        const E = edgeCalc();
+        return zStack(E.plateR + 1, [0, EDGE.plateT], a => {
+            a.add(P2.circle(0, 0, E.plateR));
+            a.cut(P2.circle(0, 0, Math.max(8, E.R * 0.12)));                          // centre opening for cables / a light
+            EDGE.rollerAng.forEach(d => { const [x, y] = polar(E.axleR, d); a.cut(P2.circle(x, y, 1.65)); });
+            [0, 180, 225, 315].forEach(d => { const [x, y] = polar(E.plateR - 5, d); a.cut(P2.circle(x, y, 2.3)); });   // wall screws
+            for (const k of ['A', 'B']) {
+                const d = EDGE.pinAng[k], [x, y] = polar(E.Cd, d);
+                a.cut(P2.circle(x, y, 5));                                            // shaft + boss
+                const [bx, by] = polar(E.Cd - CX.motor.shaftOff, d), tx = -Math.sin(d * Math.PI / 180), ty = Math.cos(d * Math.PI / 180);
+                for (const s of [-1, 1]) a.cut(P2.circle(bx + tx * CX.motor.ears * s, by + ty * CX.motor.ears * s, 1.4));   // motor ears, M3 self-tap
+            }
+        }, 10);
+    },
+    retainer: () => {
+        const E = edgeCalc(), nut = a => EDGE.rollerAng.forEach(d => { const [x, y] = polar(E.axleR, d); a.cut(P2.hex(5.8, 0), ); });
+        return zStack(E.plateR + 1, [0, 0.8, EDGE.retT], (a, z) => {
+            a.add(g => { g.arc(0, 0, E.plateR, 0, Math.PI * 2); g.moveTo(E.R, 0); g.arc(0, 0, E.R, 0, Math.PI * 2, true); });
+            EDGE.rollerAng.forEach(d => {
+                const [x, y] = polar(E.axleR, d);
+                a.cut(P2.circle(x, y, 1.65));
+                if (z > 0.8) { a.g.save(); a.g.translate(x, y); a.cut(P2.hex(5.8)); a.g.restore(); }   // M3 nut recess on the front
+            });
+        }, 10);
+    },
+    wheel: () => {     // flanged roller, plain bearing on the M3 bolt. Local z 0 = the side towards the gap
+        const E = edgeCalc(), t = E.t;
+        return zStack(EDGE.tyreR + EDGE.flangeX + 1, [0, t - 0.3, t, t + EDGE.grooveT - 0.3], (a, z) => {
+            a.add(P2.circle(0, 0, z < t - 0.3 ? EDGE.tyreR : z < t ? EDGE.tyreR - 0.6 : EDGE.tyreR + EDGE.flangeX));
+            a.cut(P2.circle(0, 0, 1.75));
+        }, 40);
+    },
+    spacer: () => CX_PARTS.spacer(edgeCalc().spacerL, 6, 3.4)(),
+    pinion: which => {     // A reaches through to the front disc's teeth; B is short
+        const E = edgeCalc(), z0 = E.back0 + 0.3, [t0, t1] = which === 'A' ? E.teethA : E.teethB;
+        const gear = P2.poly(involuteGear(EDGE.Np, E.m, 0)), bore = P2.dbore(5.2, 1.65);
+        const breaks = [0, E.shaftEnd - z0, t0 - z0, t1 - z0].filter(v => v >= 0 && v <= t1 - z0);
+        return zStack(E.pinRp + 2, breaks, (a, z) => {
+            const zg = z + z0;
+            if (zg > t0) a.add(gear); else a.add(P2.circle(0, 0, zg < E.shaftEnd ? 4.5 : 3));
+            if (zg < E.shaftEnd) a.cut(bore);
+        }, 40);
+    },
+};
+
+function edgePartList() {
+    const E = edgeCalc();
+    return [
+        ['back-plate.stl', EDGE_PARTS.backPlate, 1], ['front-retainer.stl', EDGE_PARTS.retainer, 1],
+        ['pinion-front-long.stl', () => EDGE_PARTS.pinion('A'), 1], ['pinion-rear.stl', () => EDGE_PARTS.pinion('B'), 1],
+        ['roller-wheel.stl', EDGE_PARTS.wheel, 6], [`axle-spacer-${E.spacerL}mm.stl`, EDGE_PARTS.spacer, 6],
+    ];
+}
+
+function edgeBOM() {
+    const E = edgeCalc(), sp = coaxSpeeds();
+    return [
+        'MOIRÉ EDGE DRIVE (two discs, driven at the rim): build sheet',
+        `Window Ø ${E.D} mm · rim gear ${E.N} teeth, module ${E.m} · pinions ${EDGE.Np} teeth · ratio ${E.ratio.toFixed(2)}:1`,
+        `Back plate Ø ${(E.plateR * 2).toFixed(0)} mm (needs a bed at least that big) · ${CX.gap} mm between the discs · depth incl. motors ${E.depth.toFixed(0)} mm`,
+        '',
+        'PRINT (PETG or PLA+, 0.2 mm layers)',
+        ...edgePartList().map(([n, , q]) => `  ${q}× ${n}`),
+        '  1× front cartridge (L1) and 1× rear cartridge (L2) from the disc buttons; print each gap-side face down',
+        '',
+        'BUY',
+        `  3× M3×${E.boltL} bolt + nut (roller axles, also hold the frame together)`,
+        '  2× 28BYJ-48 stepper + driver (ULN2003, or TMC2209 with the bipolar mod)',
+        '  4× M3×8 screws (motor ears, self-tap into the back plate)',
+        '  Wall plugs + 4 screws if it hangs on a wall; a dab of grease for the rollers',
+        '',
+        'ASSEMBLE (back to front)',
+        '  1. Screw both motors to the back of the back plate, shafts through the plate. Push the short pinion onto motor B (right) and the long one onto motor A (left).',
+        '  2. Push the 3 bolts through the back plate from behind. On each: an axle spacer, then a roller wheel flange-first (towards the back).',
+        '  3. Lay the rear cartridge in, gap face up, so its race rests on the 3 rollers, its groove takes their flanges and its teeth mesh with pinion B.',
+        '  4. On each bolt: a roller wheel flange-up (towards the front). Lay the front cartridge on, gap face down; its teeth mesh with the long pinion A.',
+        '  5. An axle spacer on each bolt, then the front retainer; nuts into its recesses. Snug: both discs must turn freely by hand.',
+        '',
+        'SPEEDS (from the layer settings)',
+        ...sp.map(s => `  ${s.name}: ${Math.abs(s.rpm).toFixed(2)} rpm ${s.dir} → motor ${Math.abs(s.motorRpm).toFixed(2)} rpm (motor turns the opposite way)`),
+        `  Set the controller's gear ratio to ${E.ratio.toFixed(2)} (Send speeds does this).`,
+    ].join('\n');
+}
+
+async function exportEdgeParts() {
+    const files = [], list = edgePartList();
+    await loadEarcut();
+    for (const [name, fn] of list) { pageStatus('Building ' + name + '…'); await tick(); files.push([name, stlBinary(fn())]); }
+    files.push(['BUILD-SHEET.txt', edgeBOM()]);
+    downloadBlob(zipStore(files), `moire-edge-drive-${edgeCalc().D}mm.zip`);
+    pageStatus(`Saved moire-edge-drive-${edgeCalc().D}mm.zip: ${list.length} parts and a build sheet.`);
+}
+async function exportEdgeDisc(which) {
+    await loadEarcut();
+    pageStatus(`Tracing the ${which} cartridge…`); await tick();
+    const d = edgeCartridge(which);
+    const name = `moire-edge-${which}-cartridge-${edgeCalc().D}mm`;
+    if (d.parts.length === 1) downloadBlob(new Blob([stlBinary(d.parts[0].tris)]), name + '.stl');
+    else downloadBlob(threeMF(d.parts), name + '.3mf');
+    pageStatus(`Saved the ${which} cartridge.` + (d.pieces > 1 ? ` Heads up: it falls apart into ${d.pieces} pieces. Make sure every line reaches the rim.` : ''));
+}
+
 // ── Discs with mounts ─────────────────────────────────────────────
 // which: 'front' (Layer 1) or 'rear' (Layer 2). style: 'openwork' (one colour, light
 // passes through) or 'twocolour' (solid base + pattern ribs, two filaments).
@@ -3230,20 +3415,7 @@ function discSpec(which) {
         holes = a => { a.cut(P2.circle(0, 0, 18)); pts.forEach(([x, y]) => a.cut(P2.circle(x, y, 3.1))); };
         boss = carrier(25, 18, pts);
     }
-    const pattern = (g, r0, r1, angOverride) => {          // the layer's pattern, clipped to an annulus
-        g.save();
-        g.beginPath(); g.arc(0, 0, r1, 0, Math.PI * 2); g.moveTo(r0, 0); g.arc(0, 0, r0, 0, Math.PI * 2, true); g.clip('evenodd');
-        g.scale(mmpp, mmpp);
-        g.translate(params['layer' + (layerIdx + 1) + 'OffsetX'] || 0, params['layer' + (layerIdx + 1) + 'OffsetY'] || 0);
-        const ang = angOverride ?? (layerAngle[layerIdx] || 0);
-        g.rotate(ang * Math.PI / 180);
-        g.strokeStyle = '#fff'; g.lineWidth = params.stroke; g.lineCap = 'square';
-        const prevStep = GEO.step; GEO.step = Math.max(1, 0.4 / mmpp);
-        GEO.layer = layerIdx;
-        try { drawShapeInto(g, params.cellCount, params.cellSize, Math.max(canvas.width, canvas.height) * 0.82, ang, params.warpLayers[layerIdx]); }
-        finally { GEO.step = prevStep; }
-        g.restore();
-    };
+    const pattern = makePattern(layerIdx, mmpp);
     return { c, mmpp, R, t, front, layerIdx, hubOut, holes, pattern, boss };
 }
 // Disc as printed. A middle disc carries a boss underneath (z 0 … boss.t), its plate above.
@@ -3271,7 +3443,7 @@ function coaxDisc(which, ang) {          // ang: draw the pattern at this rotati
 
 // ── Speeds, bill of materials, overlay ────────────────────────────
 function coaxSpeeds() {
-    const ratio = CX.Ng / CX.Np;
+    const ratio = isEdge() ? edgeCalc().ratio : CX.Ng / CX.Np;
     const names = discCount() === 3 ? ['Front disc (L1)', 'Middle disc (L2)', 'Rear disc (L3)'] : ['Front disc (L1)', 'Rear disc (L2)'];
     return names.map((name, i) => {
         const dps = params['layer' + (i + 1) + 'Speed'] || 0, rpm = dps / 6;
@@ -3331,15 +3503,16 @@ function coaxBOM() {
 }
 
 function drawCoaxOverlay() {
-    const c = coaxCalc(), c2d = canvas.getContext('2d');
+    const c = isEdge() ? edgeCalc() : coaxCalc(), c2d = canvas.getContext('2d');
     c2d.save();
     c2d.lineWidth = 1.5;
     c2d.strokeStyle = 'rgba(251,191,36,0.9)';
-    c2d.beginPath(); c2d.arc(c.cx, c.cy, c.R * c.S, 0, Math.PI * 2); c2d.stroke();
+    c2d.beginPath(); c2d.arc(c.cx, c.cy, c.R * c.Sd, 0, Math.PI * 2); c2d.stroke();
     c2d.strokeStyle = 'rgba(251,191,36,0.35)';
-    c2d.beginPath(); c2d.arc(c.cx, c.cy, (c.R - c.rim) * c.S, 0, Math.PI * 2); c2d.stroke();
+    c2d.beginPath(); c2d.arc(c.cx, c.cy, (c.R - c.rim) * c.Sd, 0, Math.PI * 2); c2d.stroke();
     c2d.strokeStyle = 'rgba(100,215,255,0.8)';
-    c2d.beginPath(); c2d.arc(c.cx, c.cy, 26 * c.S, 0, Math.PI * 2); c2d.stroke();   // rear hub area
+    if (isEdge()) { c2d.beginPath(); c2d.arc(c.cx, c.cy, c.Ra * c.Sd, 0, Math.PI * 2); c2d.stroke(); }   // rim teeth
+    else { c2d.beginPath(); c2d.arc(c.cx, c.cy, 26 * c.Sd, 0, Math.PI * 2); c2d.stroke(); }   // rear hub area
     c2d.restore();
     const el = document.getElementById('cxInfo');
     if (el) {
@@ -3358,7 +3531,7 @@ async function sendToDevice() {
     const host = el.value.trim().replace(/^https?:\/\//, '').replace(/\/.*$/, '') || 'moire.local';
     try { localStorage.setItem('moireDevice', host); } catch (e) {}
     const sp = coaxSpeeds();
-    const q = sp.map((x, i) => `l${i + 1}=${x.rpm.toFixed(3)}`).join('&') + `&discs=${sp.length}`;
+    const q = sp.map((x, i) => `l${i + 1}=${x.rpm.toFixed(3)}`).join('&') + `&discs=${sp.length}&ratio=${(isEdge() ? edgeCalc().ratio : CX.Ng / CX.Np).toFixed(3)}`;
     out.textContent = 'Sending…';
     try {
         const ctl = new AbortController(); const to = setTimeout(() => ctl.abort(), 5000);
@@ -3379,6 +3552,7 @@ function cxStatus(t) { const el = document.getElementById('cxStatus'); if (el) e
 const tick = () => new Promise(r => setTimeout(r, 20));
 
 async function exportCoaxParts() {
+    if (isEdge()) return exportEdgeParts();
     const btns = [...document.querySelectorAll('#cxBtns button')]; btns.forEach(b => b.disabled = true);
     try {
         await loadEarcut();
@@ -3393,6 +3567,7 @@ async function exportCoaxParts() {
     finally { btns.forEach(b => b.disabled = false); }
 }
 async function exportCoaxDisc(which) {
+    if (isEdge()) return exportEdgeDisc(which);
     const btns = [...document.querySelectorAll('#cxBtns button')]; btns.forEach(b => b.disabled = true);
     try {
         await loadEarcut();
@@ -3407,15 +3582,16 @@ async function exportCoaxDisc(which) {
 }
 
 // ════════════════════════════════════════════════════════════════════
-//  3D ASSEMBLY VIEW
-//  The printed drive parts and discs, built with the same code as the export,
-//  so every disc is the real solid part at full thickness. Bought hardware is
-//  shown as simple solids. Discs spin at their layer speeds, gears with them.
-//  Discs rebuild shortly after you change the pattern or the disc size.
+//  3D MODEL PAGE
+//  A full-window page (index.html#model) showing the whole build for the
+//  chosen drive: centre spindle (2 or 3 discs) or edge drive (2 discs).
+//  Every printed part is the same mesh the export makes; discs are the real
+//  solids with your current patterns, rebuilt shortly after you change them.
+//  Discs and gears spin at the layer speeds. Design ⇄ 3D Model share one
+//  set of settings, so switching pages never loses or forks the model.
 // ════════════════════════════════════════════════════════════════════
-const V3 = { open: false, parts: null, partsKey: '', explode: 0, explodeTarget: 0 };
+const V3 = { open: false, explode: 0, explodeTarget: 0, cleanup: null };
 
-// Which discs exist: Layer 1 front; Layer 2 rear (2 discs) or middle (3 discs); Layer 3 rear
 function v3Discs() {
     const three = discCount() === 3, out = [];
     if (params.layer1On) out.push({ which: 'front', layer: 0, colour: 0x15171a });
@@ -3423,84 +3599,184 @@ function v3Discs() {
     if (three ? params.layer3On : params.layer2On) out.push({ which: 'rear', layer: three ? 2 : 1, colour: 0xece9e2 });
     return out;
 }
-
-async function v3BuildParts(status) {
-    const three = discCount() === 3;
-    const key = [three, params.cxDiscT, CX.Ng, CX.Np, CX.m, CX.hubL].join('|');
-    if (V3.parts && V3.partsKey === key) return V3.parts;
-    await loadEarcut();
-    const L = three ? cx3() : null;
-    const list = three
-        ? { base: CX_PARTS.base3, rodGear: CX_PARTS.rodGear, midHub: CX_PARTS.midHub, outerHub: CX_PARTS.outerHub, frontHub: CX_PARTS.frontHub,
-            pinion: CX_PARTS.pinion, spBase: CX_PARTS.spacer(CX.baseSpacer), spMid: CX_PARTS.spacer(L.midSpacer),
-            spOuter: CX_PARTS.spacer(L.outerSpacer, 34, 30.4), sleeve: CX_PARTS.spacer(L.sleeveL) }
-        : { base: () => CX_PARTS.base(), rodGear: CX_PARTS.rodGear, rearHub: CX_PARTS.rearHub, frontHub: CX_PARTS.frontHub,
-            pinion: CX_PARTS.pinion, spBase: CX_PARTS.spacer(CX.baseSpacer), spHub: CX_PARTS.spacer(CX.hubSpacer) };
-    const parts = {};
-    for (const k in list) { status(`Building ${k}…`); await tick(); parts[k] = list[k](); }
-    V3.parts = parts; V3.partsKey = key;
-    return parts;
-}
-
 // Everything that changes a disc's shape (not its spin)
 function v3DiscSignature() {
-    const skip = /Speed$|^lightbox$|^lb(Module|Planet|Axle|BaseT)/;
+    const skip = /Speed$|^lb(Module|Planet|Axle|BaseT)/;
     const o = {}; for (const k in params) if (!skip.test(k)) o[k] = params[k];
     return JSON.stringify(o) + (params.warpType === 'mesh' ? JSON.stringify(meshPoints) : '');
 }
+// Everything that changes the mechanism
+const v3MechSignature = () => [params.lbDrive, discCount(), discT(), isEdge() ? params.lbDiameter : 0].join('|');
+function pageStatus(t) { const e = document.getElementById('mpStatus'); if (e) e.textContent = t; const c = document.getElementById('cxStatus'); if (c && !V3.open) c.textContent = t; }
 
-async function open3DView() {
-    if (V3.open) return;
-    const host = document.getElementById('canvasContainer');
-    host.style.position = 'relative';
-    const box = document.createElement('div');
-    box.id = 'view3d';
-    box.style.cssText = 'position:absolute;inset:0;z-index:40;background:#0d0f12;display:flex;flex-direction:column';
-    const D0 = Math.round(params.lbDiameter);
-    box.innerHTML = `
-      <div style="display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;padding:8px 12px;border-bottom:1px solid #27272a;font-size:12px;color:#d4d4d8">
-        <b style="font-size:13px">3D assembly</b>
-        <button id="v3toggle" style="padding:4px 10px;border-radius:6px;background:#b45309;color:#fff">Exploded view</button>
-        <input id="v3explode" type="range" min="0" max="1" step="0.01" value="0" aria-label="Explode amount" style="width:90px;accent-color:#f59e0b">
-        <label style="display:flex;gap:6px;align-items:center">Disc &Oslash; <input id="v3size" type="range" min="80" max="400" step="5" value="${D0}" style="width:110px;accent-color:#f59e0b"><output id="v3sizeO" style="font-family:ui-monospace,monospace">${D0} mm</output></label>
-        <label style="display:flex;gap:6px;align-items:center"><input id="v3mech" type="checkbox" checked> Mechanism</label>
-        <label style="display:flex;gap:6px;align-items:center"><input id="v3back" type="checkbox" checked> Backdrop</label>
-        <span id="v3status" style="color:#a1a1aa"></span>
-        <button id="v3close" style="margin-left:auto;padding:4px 10px;border-radius:6px;background:#3f3f46">Close 3D</button>
-      </div>
-      <div id="v3stage" style="flex:1;min-height:0;position:relative"></div>
-      <p id="v3note" style="margin:0;padding:6px 12px;font-size:12px;color:#a1a1aa;border-top:1px solid #27272a"></p>`;
-    host.appendChild(box);
+function buildModelPageDOM() {
+    if (document.getElementById('modelPage')) return;
+    const css = document.createElement('style');
+    css.textContent = `
+      #pageTabs{position:fixed;top:10px;left:50%;transform:translateX(-50%);z-index:80;display:flex;gap:2px;padding:3px;border-radius:999px;background:rgba(15,16,19,.9);border:1px solid #3f3f46;box-shadow:0 6px 24px rgba(0,0,0,.4)}
+      #pageTabs button{padding:6px 14px;border-radius:999px;font:600 12px system-ui;color:#a1a1aa;background:transparent}
+      #pageTabs button[aria-selected=true]{background:#b45309;color:#fff}
+      #modelPage{position:fixed;inset:0;z-index:60;display:none;grid-template-columns:minmax(0,1fr) 310px;background:#0d0f12;color:#d4d4d8;font:12px/1.45 system-ui}
+      #modelPage.open{display:grid}
+      #mpPanel{overflow-y:auto;border-left:1px solid #27272a;padding:56px 14px 14px;background:#111215}
+      #mpPanel h3{font:600 11px system-ui;letter-spacing:.1em;text-transform:uppercase;color:#a1a1aa;margin:14px 0 6px}
+      #mpPanel h3:first-child{margin-top:0}
+      #mpPanel select,#mpPanel button.btn{width:100%;padding:7px 9px;border-radius:8px;background:#27272a;border:1px solid #3f3f46;color:#e4e4e7}
+      #mpPanel button.btn:hover{background:#3f3f46}
+      #mpPanel button.btn.primary{background:#b45309;border-color:#d97706;color:#fff}
+      #mpPanel .r{display:flex;justify-content:space-between;align-items:center;margin:8px 0 3px}
+      #mpPanel output{font:500 12px ui-monospace,Consolas,monospace;color:#fbbf24}
+      #mpPanel input[type=range]{width:100%;accent-color:#f59e0b}
+      #mpPanel .grid2{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+      #mpPanel .chk{display:flex;gap:8px;align-items:center;margin:5px 0}
+      #mpInfo{background:#18181b;border-radius:8px;padding:8px 10px;color:#a1a1aa;line-height:1.6}
+      #mpInfo b{color:#e4e4e7;font-weight:600}
+      #mpInfo .warn{color:#f59e0b}
+      #mpStage{position:relative;min-width:0}
+      #mpNote{position:absolute;left:12px;bottom:10px;padding:6px 9px;border-radius:7px;background:rgba(6,7,8,.7);color:#9ca3af;pointer-events:none}`;
+    document.head.appendChild(css);
+    const tabs = document.createElement('div');
+    tabs.id = 'pageTabs'; tabs.setAttribute('role', 'tablist');
+    tabs.innerHTML = `<button role="tab" data-page="design">Design</button><button role="tab" data-page="model">3D Model</button>`;
+    tabs.querySelectorAll('button').forEach(b => b.onclick = () => { location.hash = b.dataset.page === 'model' ? '#model' : '#design'; });
+    document.body.appendChild(tabs);
+    const page = document.createElement('div');
+    page.id = 'modelPage';
+    page.innerHTML = `
+      <div id="mpStage"><p id="mpNote"></p></div>
+      <aside id="mpPanel">
+        <h3>Drive</h3>
+        <select id="mpDrive"><option value="coaxial">Centre spindle (rod + hubs)</option><option value="edge">Edge drive (geared rims + rollers)</option></select>
+        <div class="r"><span>Discs</span></div>
+        <select id="mpDiscs"><option value="2">2: front L1, rear L2</option><option value="3">3: front L1, middle L2, rear L3</option></select>
+        <div class="r"><span>Disc / window Ø</span><output id="mpSizeO"></output></div>
+        <input id="mpSize" type="range" min="80" max="320" step="5">
+        <div class="r"><span>Disc thickness</span><output id="mpTO"></output></div>
+        <input id="mpT" type="range" min="1.2" max="4" step="0.2">
+        <div class="r"><span>Disc style</span></div>
+        <select id="mpStyle"><option value="openwork">Openwork, one colour (light through)</option><option value="twocolour">Solid base + black pattern (3MF)</option></select>
+        <h3>View</h3>
+        <div class="grid2"><button class="btn" id="mpExplode">Exploded view</button><button class="btn" id="mpPlay">Pause</button></div>
+        <input id="mpExplodeR" type="range" min="0" max="1" step="0.01" value="0" aria-label="Explode amount" style="margin-top:6px">
+        <label class="chk"><input type="checkbox" id="mpMech" checked> Mechanism</label>
+        <label class="chk"><input type="checkbox" id="mpBack" checked> Backdrop light</label>
+        <div class="grid2"><button class="btn" id="mpFront">Front view</button><button class="btn" id="mpIso">3/4 view</button></div>
+        <h3>Build</h3>
+        <div id="mpInfo"></div>
+        <h3>Export</h3>
+        <button class="btn primary" id="mpParts">&#x2B07; Parts + build sheet (zip)</button>
+        <div class="grid2" id="mpDiscBtns" style="margin-top:6px"></div>
+        <p id="mpStatus" style="margin:8px 0 0;color:#a1a1aa" aria-live="polite"></p>
+      </aside>`;
+    document.body.appendChild(page);
+
+    const sync = () => {     // keep the Design sidebar's copies of these settings in step
+        const set = (id, v) => { const e = document.getElementById(id); if (e) { e.value = v; const o = document.getElementById('val-' + id); if (o) o.textContent = v; } };
+        set('lbDiameter', params.lbDiameter); set('cxDiscT', params.cxDiscT); set('cxStyle', params.cxStyle); set('lbDiscs', params.lbDiscs); set('lbDrive', params.lbDrive);
+        syncDriveUI(); mpRefreshPanel();
+    };
+    document.getElementById('mpDrive').onchange = e => { params.lbDrive = e.target.value; sync(); };
+    document.getElementById('mpDiscs').onchange = e => { params.lbDiscs = e.target.value; sync(); };
+    document.getElementById('mpSize').oninput = e => { params.lbDiameter = +e.target.value; sync(); };
+    document.getElementById('mpT').oninput = e => { params.cxDiscT = +e.target.value; sync(); };
+    document.getElementById('mpStyle').onchange = e => { params.cxStyle = e.target.value; sync(); };
+    document.getElementById('mpExplode').onclick = () => { V3.explodeTarget = V3.explodeTarget > 0.5 ? 0 : 1; mpRefreshPanel(); };
+    document.getElementById('mpExplodeR').oninput = e => { V3.explode = V3.explodeTarget = +e.target.value; mpRefreshPanel(); };
+    document.getElementById('mpPlay').onclick = () => { togglePause(); mpRefreshPanel(); };
+    document.getElementById('mpParts').onclick = () => (isEdge() ? exportEdgeParts() : exportCoaxParts()).catch(e => pageStatus('Export didn\'t work: ' + (e.message || e)));
+}
+
+function mpRefreshPanel() {
+    const edge = isEdge();
+    const set = (id, v) => { const e = document.getElementById(id); if (e && document.activeElement !== e) e.value = v; };
+    set('mpDrive', edge ? 'edge' : 'coaxial'); set('mpDiscs', String(discCount())); set('mpSize', params.lbDiameter);
+    set('mpT', discT()); set('mpStyle', params.cxStyle || 'openwork');
+    document.getElementById('mpDiscs').disabled = edge;
+    document.getElementById('mpSizeO').textContent = Math.round(params.lbDiameter) + ' mm';
+    document.getElementById('mpTO').textContent = discT().toFixed(1) + ' mm';
+    document.getElementById('mpExplode').textContent = V3.explodeTarget > 0.5 ? 'Assembled view' : 'Exploded view';
+    document.getElementById('mpPlay').textContent = paused ? 'Play' : 'Pause';
+    // disc export buttons follow the drive and disc count
+    const btns = edge ? [['front', 'Front cartridge (L1)'], ['rear', 'Rear cartridge (L2)']]
+        : discCount() === 3 ? [['front', 'Front disc (L1)'], ['middle', 'Middle disc (L2)'], ['rear', 'Rear disc (L3)']] : [['front', 'Front disc (L1)'], ['rear', 'Rear disc (L2)']];
+    const box = document.getElementById('mpDiscBtns');
+    if (box.dataset.key !== btns.map(b => b[0]).join() + edge) {
+        box.dataset.key = btns.map(b => b[0]).join() + edge;
+        box.innerHTML = btns.map(([w, l]) => `<button class="btn" data-w="${w}">${l}</button>`).join('');
+        box.querySelectorAll('button').forEach(b => b.onclick = () => (isEdge() ? exportEdgeDisc(b.dataset.w) : exportCoaxDisc(b.dataset.w)).catch(e => pageStatus('Export didn\'t work: ' + (e.message || e))));
+    }
+    // build info
+    const sp = coaxSpeeds(), info = document.getElementById('mpInfo');
+    let html;
+    if (edge) {
+        const E = edgeCalc(), maxDisc = 12 / E.ratio;
+        html = `Window Ø <b>${E.D} mm</b> · back plate Ø <b>${(E.plateR * 2).toFixed(0)} mm</b><br>Rim gear <b>${E.N}</b> teeth · pinions <b>${EDGE.Np}</b> · ratio <b>${E.ratio.toFixed(1)}:1</b><br>Depth incl. motors <b>${E.depth.toFixed(0)} mm</b> · ${CX.gap} mm between discs`;
+        if (E.plateR * 2 > 256) html += `<br><span class="warn">The back plate is wider than a 256 mm bed. Use a smaller window or a bigger printer.</span>`;
+        html += '<br>' + sp.map(s => `${s.name}: <b>${Math.abs(s.rpm).toFixed(2)} rpm</b> → motor ${Math.abs(s.motorRpm).toFixed(1)} rpm` + (Math.abs(s.rpm) > maxDisc ? ' <span class="warn">(above the ~' + maxDisc.toFixed(2) + ' rpm the 28BYJ can do here)</span>' : '')).join('<br>');
+    } else {
+        const three = discCount() === 3, L = three ? cx3() : null;
+        const depth = (three ? L.frontDisc : CX.frontDisc2()) + discT() + CX.plateT + CX.feetH;
+        html = `Disc Ø <b>${params.lbDiameter} mm</b> · base Ø <b>${CX.plateR * 2} mm</b><br>Gears ${CX.Np}:${CX.Ng} (3:1) · depth from wall <b>${depth.toFixed(0)} mm</b><br>` +
+            sp.map(s => `${s.name}: <b>${Math.abs(s.rpm).toFixed(2)} rpm</b> → motor ${Math.abs(s.motorRpm).toFixed(1)} rpm`).join('<br>');
+    }
+    if (sp.length > 1 && sp.every(x => Math.sign(x.rpm) === Math.sign(sp[0].rpm))) html += '<br><span class="warn">All discs turn the same way. Flip one layer\'s speed to counter-rotate.</span>';
+    info.innerHTML = html;
+}
+
+function showPage(name) {
+    buildModelPageDOM();
+    document.querySelectorAll('#pageTabs button').forEach(b => b.setAttribute('aria-selected', b.dataset.page === name));
+    const page = document.getElementById('modelPage');
+    if (name === 'model') {
+        if (params.lbDrive !== 'coaxial' && params.lbDrive !== 'edge') { params.lbDrive = 'coaxial'; }
+        if (!params.lightbox) toggleLightbox();                          // the Design canvas frames the disc too
+        syncDriveUI();
+        page.classList.add('open'); mpRefreshPanel();
+        if (!V3.open) openModelScene();
+    } else {
+        page.classList.remove('open');
+        closeModelScene();
+    }
+}
+window.addEventListener('hashchange', () => showPage(location.hash === '#model' ? 'model' : 'design'));
+// old buttons
+function open3DView() { location.hash = '#model'; }
+function close3DView() { location.hash = '#design'; }
+
+async function openModelScene() {
     V3.open = true; V3.explode = V3.explodeTarget = 0;
-    const status = t => { const e = document.getElementById('v3status'); if (e) e.textContent = t; };
-    document.getElementById('v3close').onclick = close3DView;
-
+    const stage = document.getElementById('mpStage');
     let THREE, OrbitControls;
     try {
-        status('Loading three.js…');
+        pageStatus('Loading three.js…');
         THREE = await import('three');
         ({ OrbitControls } = await import('three/addons/controls/OrbitControls.js'));
-    } catch (e) { status("Couldn't load three.js (needs internet the first time)."); return; }
-    let parts;
-    try { parts = await v3BuildParts(status); } catch (e) { status('Building parts failed: ' + (e.message || e)); return; }
+        await loadEarcut();
+    } catch (e) { pageStatus("Couldn't load three.js (needs internet the first time)."); V3.open = false; return; }
     if (!V3.open) return;
-    status('');
 
-    const stage = document.getElementById('v3stage');
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-    stage.appendChild(renderer.domElement);
+    stage.prepend(renderer.domElement);
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x0d0f12);
     scene.add(new THREE.HemisphereLight(0xffffff, 0x223344, 1.0));
     const sun = new THREE.DirectionalLight(0xffffff, 1.8); sun.position.set(160, -220, 320); scene.add(sun);
     const fill = new THREE.DirectionalLight(0xffffff, 0.5); fill.position.set(-200, 150, 100); scene.add(fill);
-    const cam = new THREE.PerspectiveCamera(32, 1, 1, 6000);
+    const cam = new THREE.PerspectiveCamera(32, 1, 1, 8000);
     cam.up.set(0, 0, 1);
-    const R0 = coaxCalc().R;
-    cam.position.set(R0 * 0.9, -R0 * 2.6, R0 * 2.4 + 60);
     const ctl = new OrbitControls(cam, renderer.domElement);
-    ctl.target.set(0, 0, 30); ctl.enableDamping = true; ctl.update();
+    ctl.enableDamping = true;
+    const view = kind => {
+        const R = (isEdge() ? edgeCalc().plateR : Math.max(CX.plateR, params.lbDiameter / 2)) * 1.05;
+        ctl.target.set(0, 0, isEdge() ? 0 : 30);
+        if (kind === 'front') cam.position.set(0, -0.01, R * 3.4);
+        else cam.position.set(R * 0.9, -R * 2.5, R * 2.3 + 40);
+        ctl.update();
+    };
+    document.getElementById('mpFront').onclick = () => view('front');
+    document.getElementById('mpIso').onclick = () => view('iso');
+    view('iso');
 
     const geomFrom = tris => {
         const a = new Float32Array(tris.length * 9); let i = 0;
@@ -3514,124 +3790,144 @@ async function open3DView() {
         const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, h, 48), color ? new THREE.MeshStandardMaterial({ color, roughness: 0.5 }) : steel);
         m.rotation.x = Math.PI / 2; m.geometry.translate(0, h / 2, 0); return m;
     };
-    // Everything that moves along z when exploded: [object, z, explode order]
-    const items = [];
-    const mech = new THREE.Group(); scene.add(mech);
-    const add = (obj, z, order, group = mech) => { obj.position.z = z; group.add(obj); items.push([obj, z, order]); return obj; };
-    const three3 = discCount() === 3, L = three3 ? cx3() : null, t = Math.max(1, +params.cxDiscT || 2);
-    const spin = [], pinions = [];
-    add(meshFrom(parts.base, 0x3f4652), 0, 0);
-    add(meshFrom(parts.spBase, 0xeab308), CX.b1z + 7, 0);
-    for (const z of [CX.b1z, CX.bossTop - 7]) add(cyl(11, 7), z, 0);              // base 608s
-    spin.push([add(meshFrom(parts.rodGear, 0xf97316), CX.g1z, 1), 0]);
-    const frontTop = (three3 ? L.frontDisc : CX.frontDisc2()) + t;
-    add(cyl(4, frontTop + 8.1 - CX.nutBottom), CX.nutBottom, 0);                    // M8 rod, nut to nut
-    if (!three3) {
-        spin.push([add(meshFrom(parts.rearHub, 0x10b981), CX.hubZ, 2), 1]);
-        add(meshFrom(parts.spHub, 0xeab308), CX.hubZ + 7, 2);
-        for (const z of [CX.hubZ, CX.hubZ + CX.hubL - 7]) add(cyl(11, 7), z, 2);
-        spin.push([add(meshFrom(parts.frontHub, 0xa855f7), CX.frontZ, 4), 0]);
-    } else {
-        spin.push([add(meshFrom(parts.midHub, 0x10b981), L.hub1Z, 2), 1]);
-        add(meshFrom(parts.spMid, 0xeab308), L.hub1Z + 7, 2);
-        for (const z of [L.hub1Z, L.sleeveZ - 7]) add(cyl(11, 7), z, 2);           // middle hub 608s
-        spin.push([add(meshFrom(parts.outerHub, 0x0ea5e9), L.hub2Z, 3), 2]);
-        add(meshFrom(parts.spOuter, 0xeab308), L.hub2Z + 7, 3);
-        for (const z of [L.hub2Z, L.rearZ - 7]) add(cyl(21, 7), z, 3);            // 6806s
-        add(meshFrom(parts.sleeve, 0xeab308), L.sleeveZ, 6);
-        spin.push([add(meshFrom(parts.frontHub, 0xa855f7), L.frontZ, 7), 0]);
-    }
-    const motorList = [[MOTOR_ANG.A, CX.earA, 0], [MOTOR_ANG.B, CX.earB, 1]].concat(three3 ? [[MOTOR_ANG.C, L.earC, 2]] : []);
-    for (const [ang, ear, layer] of motorList) {
-        const phi = -ang, cx = Math.cos(phi), sy = Math.sin(phi);                  // seat angle on the base (canvas) → 3D
-        const p = add(meshFrom(parts.pinion, 0xef4444), ear + 2, 0); p.position.x = CX.C * cx; p.position.y = CX.C * sy;
-        pinions.push([p, phi, layer]);
-        const body = add(cyl(14, 19, 0x60a5fa), ear - 19, 0); body.position.x = (CX.C + CX.motor.shaftOff) * cx; body.position.y = (CX.C + CX.motor.shaftOff) * sy;
-        const shaft = add(cyl(2.5, 10), ear, 0); shaft.position.x = CX.C * cx; shaft.position.y = CX.C * sy;
+    const backMat = new THREE.MeshStandardMaterial({ color: 0xfff4dc, emissive: 0xffe8b8, emissiveIntensity: 0.6, side: THREE.DoubleSide });
+
+    // scene state, rebuilt when the drive changes
+    let root = null, items = [], spin = [], pinions = [], wheels = [], discs = [], discGroup = null, back = null, backZ = 0, backOrder = 0;
+    let discZ = {}, discOrder = {}, mirrorRear = false;
+    const add = (obj, z, order, group = root) => { obj.position.z = z; group.add(obj); items.push([obj, z, order]); return obj; };
+    const disposeGroup = g => g && g.traverse(o => { if (o.geometry) o.geometry.dispose(); });
+
+    async function buildMechanism() {
+        if (root) { scene.remove(root); disposeGroup(root); }
+        root = new THREE.Group(); scene.add(root);
+        items = []; spin = []; pinions = []; wheels = []; discs = [];
+        discGroup = new THREE.Group(); root.add(discGroup);
+        const mech = new THREE.Group(); root.add(mech); mech.visible = document.getElementById('mpMech').checked;
+        const m = (obj, z, order) => add(obj, z, order, mech);
+        const build = async (label, fn) => { pageStatus(`Building ${label}…`); await tick(); return fn(); };
+        if (isEdge()) {
+            const E = edgeCalc();
+            m(meshFrom(await build('back plate', EDGE_PARTS.backPlate), 0x3f4652), E.backZ, 0);
+            const ret = m(meshFrom(await build('front retainer', EDGE_PARTS.retainer), 0x2a2f37), E.retZ, 5);
+            const wheel = await build('rollers', EDGE_PARTS.wheel), wheelB = mirrorZ(wheel), spacer = await build('spacers', EDGE_PARTS.spacer);
+            for (const d of EDGE.rollerAng) {
+                const [x, y] = polar(E.axleR, d); const yy = -y;                                  // canvas → 3D
+                const wa = m(meshFrom(wheel, 0x9ca3af), E.g / 2 + 0.15, 3); wa.position.x = x; wa.position.y = yy; wheels.push([wa, 0]);
+                const wb = m(meshFrom(wheelB, 0x9ca3af), -(E.g / 2 + 0.15), 1); wb.position.x = x; wb.position.y = yy; wheels.push([wb, 1]);
+                const s1 = m(meshFrom(spacer, 0xeab308), E.back0, 0); s1.position.x = x; s1.position.y = yy;
+                const s2 = m(meshFrom(spacer, 0xeab308), E.retZ - E.spacerL, 4); s2.position.x = x; s2.position.y = yy;
+                const bolt = m(cyl(1.5, E.boltL), E.backZ - 2, 0); bolt.position.x = x; bolt.position.y = yy;
+            }
+            for (const [k, layer] of [['A', 0], ['B', 1]]) {
+                const d = EDGE.pinAng[k], phi = -d * Math.PI / 180;
+                const p = m(meshFrom(await build('pinion ' + k, () => EDGE_PARTS.pinion(k)), 0xef4444), E.back0 + 0.3, k === 'A' ? 2 : 0);
+                p.position.x = E.Cd * Math.cos(phi); p.position.y = E.Cd * Math.sin(phi);
+                pinions.push([p, phi, layer, E.N, EDGE.Np]);
+                const body = m(cyl(14, 19, 0x60a5fa), E.backZ - 19, 0);
+                body.position.x = (E.Cd - CX.motor.shaftOff) * Math.cos(phi); body.position.y = (E.Cd - CX.motor.shaftOff) * Math.sin(phi);
+            }
+            discZ = { front: E.g / 2, rear: -E.g / 2 }; discOrder = { front: 3, rear: 1 }; mirrorRear = true;
+            backZ = E.back0 + 0.05; backOrder = 0;
+            back = new THREE.Mesh(new THREE.CircleGeometry(E.R, 128), backMat);
+        } else {
+            const three3 = discCount() === 3, L = three3 ? cx3() : null, t = discT();
+            m(meshFrom(await build('base', three3 ? CX_PARTS.base3 : () => CX_PARTS.base()), 0x3f4652), 0, 0);
+            m(meshFrom(await build('spacers', CX_PARTS.spacer(CX.baseSpacer)), 0xeab308), CX.b1z + 7, 0);
+            for (const z of [CX.b1z, CX.bossTop - 7]) m(cyl(11, 7), z, 0);
+            spin.push([m(meshFrom(await build('rod gear', CX_PARTS.rodGear), 0xf97316), CX.g1z, 1), 0]);
+            const frontTop = (three3 ? L.frontDisc : CX.frontDisc2()) + t;
+            m(cyl(4, frontTop + 8.1 - CX.nutBottom), CX.nutBottom, 0);
+            if (!three3) {
+                spin.push([m(meshFrom(await build('rear hub', CX_PARTS.rearHub), 0x10b981), CX.hubZ, 2), 1]);
+                m(meshFrom(await build('spacer', CX_PARTS.spacer(CX.hubSpacer)), 0xeab308), CX.hubZ + 7, 2);
+                for (const z of [CX.hubZ, CX.hubZ + CX.hubL - 7]) m(cyl(11, 7), z, 2);
+                spin.push([m(meshFrom(await build('front hub', () => CX_PARTS.frontHub()), 0xa855f7), CX.frontZ, 4), 0]);
+            } else {
+                spin.push([m(meshFrom(await build('middle hub', CX_PARTS.midHub), 0x10b981), L.hub1Z, 2), 1]);
+                m(meshFrom(await build('spacer', CX_PARTS.spacer(L.midSpacer)), 0xeab308), L.hub1Z + 7, 2);
+                for (const z of [L.hub1Z, L.sleeveZ - 7]) m(cyl(11, 7), z, 2);
+                spin.push([m(meshFrom(await build('outer hub', CX_PARTS.outerHub), 0x0ea5e9), L.hub2Z, 3), 2]);
+                m(meshFrom(await build('spacer', CX_PARTS.spacer(L.outerSpacer, 34, 30.4)), 0xeab308), L.hub2Z + 7, 3);
+                for (const z of [L.hub2Z, L.rearZ - 7]) m(cyl(21, 7), z, 3);
+                m(meshFrom(await build('sleeve', CX_PARTS.spacer(L.sleeveL)), 0xeab308), L.sleeveZ, 6);
+                spin.push([m(meshFrom(await build('front hub', () => CX_PARTS.frontHub()), 0xa855f7), L.frontZ, 7), 0]);
+            }
+            const pin = await build('pinions', CX_PARTS.pinion);
+            const motorList = [[MOTOR_ANG.A, CX.earA, 0], [MOTOR_ANG.B, CX.earB, 1]].concat(three3 ? [[MOTOR_ANG.C, L.earC, 2]] : []);
+            for (const [ang, ear, layer] of motorList) {
+                const phi = -ang, cx = Math.cos(phi), sy = Math.sin(phi);
+                const p = m(meshFrom(pin, 0xef4444), ear + 2, 0); p.position.x = CX.C * cx; p.position.y = CX.C * sy;
+                pinions.push([p, phi, layer, CX.Ng, CX.Np]);
+                const body = m(cyl(14, 19, 0x60a5fa), ear - 19, 0); body.position.x = (CX.C + CX.motor.shaftOff) * cx; body.position.y = (CX.C + CX.motor.shaftOff) * sy;
+                const shaft = m(cyl(2.5, 10), ear, 0); shaft.position.x = CX.C * cx; shaft.position.y = CX.C * sy;
+            }
+            discZ = three3 ? { rear: L.rearZ, middle: L.rearZ, front: L.frontDisc } : { rear: CX.hubZ + CX.hubL, front: CX.frontDisc2() };
+            discOrder = three3 ? { rear: 4, middle: 5, front: 8 } : { rear: 3, front: 5 }; mirrorRear = false;
+            backZ = (three3 ? L.rearZ : CX.hubZ + CX.hubL) - 6; backOrder = (three3 ? 4 : 3) - 0.5;
+            back = new THREE.Mesh(new THREE.RingGeometry(three3 ? 31.5 : 30, coaxCalc().R * 1.12, 128), backMat);
+        }
+        back.visible = document.getElementById('mpBack').checked; root.add(back);
+        document.getElementById('mpMech').onchange = e => { mech.visible = e.target.checked; };
+        document.getElementById('mpBack').onchange = e => { back.visible = e.target.checked; };
     }
 
-    // ── Discs: the real printed solids, rebuilt when the pattern changes ──
-    const discZ = three3 ? { rear: L.rearZ, middle: L.rearZ, front: L.frontDisc } : { rear: CX.hubZ + CX.hubL, front: CX.frontDisc2() };
-    const discOrder = three3 ? { rear: 4, middle: 5, front: 8 } : { rear: 3, front: 5 };
-    const discGroup = new THREE.Group(); scene.add(discGroup);
-    let discs = [];
-    const backZ = (three3 ? L.rearZ : CX.hubZ + CX.hubL) - 6, backOrder = (three3 ? 4 : 3) - 0.5;
-    const backMat = new THREE.MeshStandardMaterial({ color: 0xfff4dc, emissive: 0xffe8b8, emissiveIntensity: 0.6, side: THREE.DoubleSide });
-    let back = null;
-    const placeBack = () => {
-        if (back) { scene.remove(back); back.geometry.dispose(); }
-        back = new THREE.Mesh(new THREE.RingGeometry(three3 ? 31.5 : 30, coaxCalc().R * 1.12, 128), backMat);
-        back.visible = document.getElementById('v3back').checked; scene.add(back);
-    };
-    placeBack();
-    let building = false, builtSig = '', changedAt = 0, lastSig = '';
-    const buildDiscs = async () => {
-        building = true;
-        const sig = v3DiscSignature();
+    async function buildDiscs() {
         const fresh = [];
         for (const d of v3Discs()) {
-            status(`Building the ${d.which} disc…`); await tick();
-            if (!V3.open) { building = false; return; }
-            const r = coaxDisc(d.which, 0);                                         // unrotated: the mesh does the spinning
+            pageStatus(`Building the ${d.which} disc…`); await tick();
+            if (!V3.open) return;
+            const r = isEdge() ? edgeCartridge(d.which, 0) : coaxDisc(d.which, 0);   // unrotated: the mesh spins
             const grp = new THREE.Group();
-            r.parts.forEach((pt, i) => grp.add(meshFrom(pt.tris, i === 0 ? d.colour : 0x111111)));
+            r.parts.forEach((pt, i) => grp.add(meshFrom(mirrorRear && d.which === 'rear' ? mirrorZ(pt.tris) : pt.tris, i === 0 ? d.colour : 0x111111)));
+            grp.userData.disc = true;
             fresh.push({ ...d, grp });
         }
-        for (const d of discs) { discGroup.remove(d.grp); d.grp.traverse(o => { if (o.geometry) o.geometry.dispose(); }); }
-        for (let i = items.length - 1; i >= 0; i--) if (items[i][0].userData.disc) items.splice(i, 1);
+        for (const d of discs) { discGroup.remove(d.grp); disposeGroup(d.grp); }
+        items = items.filter(it => !it[0].userData.disc);
         discs = fresh;
-        for (const d of discs) { d.grp.userData.disc = true; add(d.grp, discZ[d.which], discOrder[d.which], discGroup); }
-        placeBack();
-        builtSig = sig; building = false; status('');
-    };
-    await buildDiscs();
-    lastSig = builtSig;
+        for (const d of discs) add(d.grp, discZ[d.which], discOrder[d.which], discGroup);
+    }
 
-    const note = document.getElementById('v3note');
-    const setNote = () => {
-        const names = v3Discs().map(d => `${d.which} = Layer ${d.layer + 1}`).join(', ');
-        const depth = frontTop + CX.plateT + CX.feetH;
-        note.textContent = (names ? `Discs: ${names}. ` : 'Turn on the layers to see discs. ') +
-            `Depth from the wall: ${depth.toFixed(0)} mm. ` +
-            (!three3 && params.layer3On ? 'Layer 3 is on but the drive is set to 2 discs; switch Discs to 3 to add it. ' : '') +
-            'Drag to orbit, scroll to zoom.';
+    let busy = false, builtMech = '', builtDiscs = '', lastSig = '', changedAt = 0;
+    const rebuild = async () => {
+        busy = true;
+        const mechSig = v3MechSignature(), discSig = v3DiscSignature();
+        try {
+            if (mechSig !== builtMech) { await buildMechanism(); builtMech = mechSig; builtDiscs = ''; }
+            if (V3.open && discSig !== builtDiscs) { await buildDiscs(); builtDiscs = discSig; }
+            const names = v3Discs().map(d => `${d.which} = Layer ${d.layer + 1}`).join(', ');
+            document.getElementById('mpNote').textContent = (names ? `Discs: ${names}. ` : 'Turn layers on to see discs. ') +
+                (isEdge() && params.layer3On ? 'The edge drive carries two discs, so Layer 3 isn\'t shown. ' : '') + 'Drag to orbit, scroll to zoom, right-drag to pan.';
+            pageStatus('');
+        } catch (e) { pageStatus('Building the model failed: ' + (e.message || e)); }
+        busy = false;
     };
-    setNote();
-
-    const ex = document.getElementById('v3explode'), tg = document.getElementById('v3toggle');
-    const syncToggle = () => { tg.textContent = V3.explodeTarget > 0.5 ? 'Assembled view' : 'Exploded view'; };
-    ex.oninput = () => { V3.explode = V3.explodeTarget = +ex.value; syncToggle(); };
-    tg.onclick = () => { V3.explodeTarget = V3.explodeTarget > 0.5 ? 0 : 1; syncToggle(); };
-    document.getElementById('v3mech').onchange = e => { mech.visible = e.target.checked; };
-    document.getElementById('v3back').onchange = e => { if (back) back.visible = e.target.checked; };
-    const sz = document.getElementById('v3size'), szO = document.getElementById('v3sizeO');
-    sz.oninput = () => {
-        szO.textContent = sz.value + ' mm';
-        params.lbDiameter = +sz.value;
-        const main = document.getElementById('lbDiameter'); if (main) { main.value = sz.value; const v = document.getElementById('val-lbDiameter'); if (v) v.textContent = sz.value; }
-    };
+    await rebuild();
 
     const size = () => { const w = stage.clientWidth, h = stage.clientHeight; renderer.setSize(w, h); cam.aspect = w / Math.max(1, h); cam.updateProjectionMatrix(); };
     const ro = new ResizeObserver(size); ro.observe(stage); size();
-    V3.cleanup = () => { ro.disconnect(); renderer.dispose(); };
+    V3.cleanup = () => { ro.disconnect(); disposeGroup(root); renderer.dispose(); renderer.domElement.remove(); };
 
     let lastCheck = 0;
     const loop = now => {
         if (!V3.open) return;
-        V3.explode += (V3.explodeTarget - V3.explode) * 0.12;                         // ease between assembled and exploded
+        V3.explode += (V3.explodeTarget - V3.explode) * 0.12;
         if (Math.abs(V3.explodeTarget - V3.explode) < 0.002) V3.explode = V3.explodeTarget;
-        ex.value = V3.explode;
+        document.getElementById('mpExplodeR').value = V3.explode;
         const ang = [0, 1, 2].map(i => (layerAngle[i] || 0) * Math.PI / 180);
-        for (const [obj, z, order] of items) obj.position.z = z + V3.explode * order * 22;
-        if (back) back.position.z = backZ + V3.explode * backOrder * 22;
+        const step = isEdge() ? 9 : 22;
+        for (const [obj, z, order] of items) obj.position.z = z + V3.explode * order * step * (isEdge() && z < 0 && order > 0 ? -1 : 1);
+        if (back) back.position.z = backZ + V3.explode * backOrder * step;
         for (const d of discs) d.grp.rotation.z = -ang[d.layer];
         for (const [obj, layer] of spin) obj.rotation.z = -ang[layer];
-        for (const [p, phi, layer] of pinions) p.rotation.z = lbPlanetPhase(phi, -ang[layer], CX.Ng, CX.Np);   // stays in mesh
-        if (now - lastCheck > 400) {                                                // rebuild discs once edits settle
+        for (const [p, phi, layer, Ng, Np] of pinions) p.rotation.z = lbPlanetPhase(phi, -ang[layer], Ng, Np);
+        if (isEdge()) { const E = edgeCalc(); for (const [w, layer] of wheels) w.rotation.z = ang[layer] * E.Ra / EDGE.tyreR; }
+        if (now - lastCheck > 400) {                     // rebuild once edits settle
             lastCheck = now;
-            const sig = v3DiscSignature();
-            if (sig !== lastSig) { lastSig = sig; changedAt = now; status('Waiting for edits to settle…'); }
-            if (!building && sig !== builtSig && now - changedAt > 700) { buildDiscs().then(setNote); }
+            const sig = v3MechSignature() + '#' + v3DiscSignature();
+            if (sig !== lastSig) { lastSig = sig; changedAt = now; }
+            if (!busy && (v3MechSignature() !== builtMech || v3DiscSignature() !== builtDiscs) && now - changedAt > 700) { pageStatus('Updating…'); rebuild().then(mpRefreshPanel); }
         }
         ctl.update();
         renderer.render(scene, cam);
@@ -3640,10 +3936,9 @@ async function open3DView() {
     requestAnimationFrame(loop);
 }
 
-function close3DView() {
+function closeModelScene() {
     V3.open = false;
     if (V3.cleanup) { V3.cleanup(); V3.cleanup = null; }
-    const b = document.getElementById('view3d'); if (b) b.remove();
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -3872,7 +4167,8 @@ resizeCanvas();  // sets up all canvases, inits WebGL & mesh knobs
 initEditableValues();
 refreshPresetsUI();
 animationFrame = requestAnimationFrame(renderFrame);
-console.log('Moiré + Shaders ready!');
+console.log('Moiré ready');
+showPage(location.hash === '#model' ? 'model' : 'design');
     </script>
 </body>
 </html>
