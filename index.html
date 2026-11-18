@@ -2970,7 +2970,7 @@ async function exportLightbox3D(which) {
 const CX = {
     m: 1.5, Np: 15, Ng: 45,              // 3:1 reduction, centre distance 45 mm
     fit: 0.2,                            // extra clearance on printed bearing pockets / holes
-    b608: { od: 22, w: 7 }, rod: 8.4, nutAF: 13.3, nutH: 5.2, washer: 1.6,   // nutH: pocket for an M8 thin (jam) nut
+    b608: { od: 22, w: 7 }, b688: { od: 16, w: 5 }, rod: 8.4, nutAF: 13.3, nutH: 5.2, washer: 1.6,   // nutH: pocket for an M8 thin (jam) nut
     // 28BYJ-48: Ø28 can, 19 mm deep below the ear plane, M3 ears 35 mm apart, Ø5 shaft 8 mm off centre
     // with two flats 3 mm apart; the shaft tip stands ~9.5 mm above the ears. The pinion's double-D
     // bore pushes onto the flats with its top flush with the tip (pinZ … pinZ + pinT above the ears).
@@ -2979,13 +2979,13 @@ const CX = {
     // base 608s at -2.4…4.6 and 5.6…12.6 (1 mm shim between inner races); a thin M8 nut + washer
     // under the bottom one sit inside the plate's back recess, flush with the wall
     b1z: -2.4, baseSpacer: 1, bossTop: 12.6, nutThin: 5,
-    g1T: 6.5, hubL: 14, hubR: 20, g2T: 5, pinT: 5,   // hubL: two 608s back to back; 5 mm gears are plenty for a 28BYJ
+    g1T: 6.5, hubL: 10, hubR: 18, g2T: 5, pinT: 5,   // 2-disc rear hub: two 688s back to back (10 mm); 5 mm gears are plenty for a 28BYJ
     gap: 1.0,                             // air between neighbouring discs
     carrierT: 2,                          // boss under a bolted disc, so its screw heads sit flush in the plate
     flangeT3: 2.9,                        // front hub flange on 3-disc builds
     // slim centres: inserts on a 32 mm circle (2.9 mm wall to the 608 pocket, 2 mm outside),
     // front hub Ø24 flange + 14 mm hex boss (2.8 mm wall round the rod)
-    insertPCD: 48, insertD: 4.0, rearSeat: 1.2, capIn: 27.5, capWall: 1.8, frontFlangeR: 12, frontHexAF: 14,
+    insertPCD: 28, insertD: 4.0, frontFlangeR: 9, frontHexAF: 14,
 };
 CX.C = (CX.Np + CX.Ng) * CX.m / 2;                 // motor shaft distance from the rod
 CX.g1z = CX.bossTop + CX.washer;                   // rod gear sits on a washer on the top base bearing
@@ -2994,20 +2994,18 @@ CX.pinZ = CX.motor.shaftTip - CX.pinT - 0.3;        // pinion bottom above the e
 CX.earA = CX.g1z + (CX.g1T - CX.pinT) / 2 - CX.pinZ;     // pinion A centred on the rod gear
 CX.earB = CX.hubZ + (CX.g2T - CX.pinT) / 2 - CX.pinZ;    // pinion B level with G2
 CX.frontZ = CX.hubZ + CX.hubL + CX.washer;         // front hub bottom
-CX.hubSpacer = CX.hubL - 14;                       // between the hub's two 608 inner races
+CX.hubSpacer = CX.hubL - 2 * CX.b688.w;            // between the rear hub's two 688 inner races
 CX.nutBottom = CX.b1z - CX.washer - CX.nutThin;     // underside of the bottom thin nut: flush with the plate's back
 CX.rodLen = top => Math.ceil((top - CX.nutBottom + 5) / 10) * 10;
 // 2 discs: rear disc on its carrier boss, front disc 1 mm above it; the front hub flange fills the space below
 const discT = () => Math.max(1, +params.cxDiscT || 2);
 const discLip = () => Math.max(0, +(params.cxLip ?? 3));
-// 2 discs: the rear disc drops over the bearing housing and bolts onto a 1.2 mm seat ring on top of
-// the green cog plate (4× M3 into heat-set inserts on a 48 mm circle). The front disc sits 1 mm in front
-// of it; its centre is a spoked cap that arches over the housing to the front hub's hex boss.
-CX.rearZ2 = () => CX.hubZ + CX.g2T + CX.rearSeat;                   // rear disc bottom
-CX.rearTop2 = () => CX.rearZ2() + discT();
+// 2 discs, both flat: the rear disc bolts to the green hub's top on its carrier boss (4× M3 into heat-set
+// inserts, 28 mm circle), the front disc sits 1 mm in front; the front hub flange fills the space below it
+CX.rearZ2 = () => CX.hubZ + CX.hubL;                                // rear disc bottom (its carrier boss)
+CX.rearTop2 = () => CX.rearZ2() + CX.carrierT + discT();
 CX.frontDisc2 = () => CX.rearTop2() + CX.gap;                       // front disc bottom
-CX.flangeT2 = () => 2;                                               // front hub flange on 2-disc builds
-CX.capTop2 = () => CX.frontZ + CX.flangeT2() - CX.frontDisc2();     // cap spokes, measured from the front disc bottom
+CX.flangeT2 = () => CX.frontDisc2() - CX.frontZ;                     // front hub flange thickness
 
 function coaxCalc() {
     const D = Math.max(60, params.lbDiameter), R = D / 2;
@@ -3135,7 +3133,7 @@ const ENC = { wall: 2.4, floorT: 3, ledgeR: 72, fixR: 74, fixAng: [20, 160, 240,
 const encR = () => Math.max(98, params.lbDiameter / 2 + 1.5 + ENC.shell);     // outside radius of both shells
 const encFront = () => (discCount() === 3 ? cx3().frontDisc : CX.frontDisc2()) + discT() + discLip();   // front of the front disc
 const encTop = () => {                                                         // the seam
-    const rearPlate = discCount() === 3 ? cx3().rearZ + CX.carrierT : CX.rearZ2();
+    const rearPlate = (discCount() === 3 ? cx3().rearZ : CX.rearZ2()) + CX.carrierT;
     return rearPlate - discLip() - 1.5;
 };
 // Keyhole: head goes in the big hole, then the part drops onto the screw shank in the slot
@@ -3201,13 +3199,12 @@ const CX_PARTS = {
         ]);
     },
     rearHub: () => {     // G2 teeth + bearing housing + rear-disc mount
-        const R = (CX.Ng + 2) * CX.m / 2 + 1, gear = P2.poly(involuteGear(CX.Ng, CX.m, 0)), pk = pocket() / 2, H = CX.hubL;
+        const R = (CX.Ng + 2) * CX.m / 2 + 1, gear = P2.poly(involuteGear(CX.Ng, CX.m, 0)), pk = (CX.b688.od + CX.fit) / 2, H = CX.hubL, bw = CX.b688.w;
         const inserts = a => [45, 135, 225, 315].forEach(d => { const t = d * Math.PI / 180; a.cut(P2.circle(CX.insertPCD / 2 * Math.cos(t), CX.insertPCD / 2 * Math.sin(t), CX.insertD / 2)); });
-        const seat = CX.g2T + CX.rearSeat, insB = seat - 5;
-        return zStack(R, [0, insB, CX.g2T, seat, 7, H - 7, H], (a, z) => {
-            a.add(z < CX.g2T ? gear : z < seat ? P2.circle(0, 0, CX.insertPCD / 2 + 5) : P2.circle(0, 0, CX.hubR));
-            a.cut(P2.circle(0, 0, z < 7 || z > H - 7 ? pk : 6.5));
-            if (z > insB && z < seat) inserts(a);                           // inserts in the seat ring, through into the gear web
+        return zStack(R, [0, CX.g2T, bw, H - bw, H - 5, H], (a, z) => {
+            a.add(z < CX.g2T ? gear : P2.circle(0, 0, CX.hubR));
+            a.cut(P2.circle(0, 0, z < bw || z > H - bw ? pk : 5.5));
+            if (z > H - 5) inserts(a);                                      // heat-set inserts in the top, 3.9 mm clear of the bearing pocket
         });
     },
     frontHub: (flT = discCount() === 3 ? CX.flangeT3 : CX.flangeT2()) => buildPart([
@@ -3516,11 +3513,7 @@ function discSpec(which) {
     let hubOut, holes, boss = null;
     const carrier = (r, holeR, pts) => ({ r, t: CX.carrierT, layers: [[0, CX.carrierT, a => { a.cut(P2.circle(0, 0, holeR)); pts.forEach(([x, y]) => a.cut(P2.circle(x, y, 1.7))); }]] });
     let cap = null;
-    if (front && !three) {                        // spoked cap over the rear hub's bearing housing
-        hubOut = CX.capIn + CX.capWall + 0.3;
-        holes = a => a.cut(P2.circle(0, 0, CX.capIn));
-        cap = { rIn: CX.capIn, rOut: CX.capIn + CX.capWall, top: CX.capTop2(), spokes: 3, hubR: 11 };
-    } else if (front) {
+    if (front) {
         hubOut = 11.5;                          // just covers the M8 washer
         holes = a => a.cut(P2.hex(CX.frontHexAF + 0.3));
     } else if (which === 'middle') {
@@ -3540,9 +3533,10 @@ function discSpec(which) {
         holes = a => { a.cut(P2.circle(0, 0, hole)); pts.forEach(([x, y]) => a.cut(P2.circle(x, y, 3.1))); };    // counterbores: heads flush in the plate
         boss = carrier(30.5, hole, pts);
     } else {
-        const pts = ring(4, CX.insertPCD / 2, 45);                                  // M3 clearance onto the cog plate's inserts
-        hubOut = CX.capIn + CX.capWall + 0.3;
-        holes = a => { a.cut(P2.circle(0, 0, CX.hubR + 0.6)); pts.forEach(([x, y]) => a.cut(P2.circle(x, y, 1.7))); };
+        const pts = ring(4, CX.insertPCD / 2, 45), hole = CX.frontFlangeR + 0.8;   // the front hub flange passes through
+        hubOut = CX.insertPCD / 2 + 3.1 + 2.5;
+        holes = a => { a.cut(P2.circle(0, 0, hole)); pts.forEach(([x, y]) => a.cut(P2.circle(x, y, 3.1))); };   // counterbores: heads flush
+        boss = carrier(CX.hubR, hole, pts);
     }
     const pattern = makePattern(layerIdx, mmpp);
     return { c, mmpp, R, t, front, layerIdx, hubOut, holes, pattern, boss, cap };
@@ -3610,7 +3604,7 @@ function coaxBOM() {
         '',
         'BUY',
         `  1× M8 threaded rod, ${three ? L.rodL : CX.rodLen(CX.frontDisc2() + discT() + 1.6 + 6.5)} mm`,
-        `  ${three ? 4 : 4}× 608ZZ bearing (8×22×7)`,
+        three ? '  4× 608ZZ bearing (8×22×7)' : '  2× 608ZZ bearing (8×22×7, base) + 2× 688ZZ bearing (8×16×5, rear hub)',
         three ? '  2× 6806ZZ / 6806-2RS bearing (30×42×7)' : '',
         `  2× M8 thin nut (DIN 439, 5 mm or less: one under the base, one keyed in the rod gear), ${three ? 3 : 4}× M8 washer, 1× M8 dome (acorn) nut for the front`,
         `  ${three ? 3 : 2}× 28BYJ-48 stepper + driver (ULN2003, or TMC2209 with the bipolar mod)`,
@@ -3631,9 +3625,9 @@ function coaxBOM() {
     ];
     if (!three) lines.push(
         CX.hubSpacer > 0 ? `  4. Press 608s into both ends of the rear hub with the ${CX.hubSpacer} mm spacer between them; slide the hub onto the rod, teeth down.`
-                         : '  4. Press a 608 into each end of the rear hub (they meet in the middle); slide the hub onto the rod, teeth down.',
-        '  5. Heat-set the 4 inserts into the seat ring on the cog plate; drop the rear disc over the bearing housing and bolt it down with M3×6 button heads.',
-        '  6. Washer on the hub\'s top bearing, then the front hub; the front disc\'s spoked cap goes over the housing onto its hex boss; M8 washer, dome nut.');
+                         : '  4. Press a 688 into each end of the rear hub (they meet in the middle); slide the hub onto the rod, teeth down.',
+        '  5. Heat-set the 4 inserts into the hub top; bolt the rear disc on with M3×6 button heads (they sit flush in its counterbores).',
+        '  6. Washer on the hub\'s top bearing, then the front hub, front disc over its hex boss, M8 washer, dome nut.');
     else lines.push(
         '  4. Middle hub: heat-set its 3 cap inserts. Press one 608 in from the bottom all the way up under the cap, then the second',
         L.midSpacer > 0 ? `     608 behind it with the ${L.midSpacer} mm spacer between.` : '     608 behind it (the two sit back to back).',
@@ -3954,8 +3948,7 @@ function discScrews(which) {
     if (isEdge() || which === 'front') return [];                    // edge cartridges ride on rollers; the front disc is clamped by the nut
     const three = discCount() === 3, ring = (n, r, d0) => Array.from({ length: n }, (_, i) => polar(r, d0 + i * 360 / n));
     if (which === 'middle') { const L = cx3(); return ring(3, L.capInsR, 90).map(([x, y]) => [x, y, L.frontZ - 0.3 - L.rearZ - 1.8]); }
-    if (!three) return ring(4, CX.insertPCD / 2, 45).map(([x, y]) => [x, y, discT()]);   // heads on the plate, under the front cap
-    return ring(4, cx3().insPCD / 2, 45).map(([x, y]) => [x, y, CX.carrierT]);
+    return ring(4, (three ? cx3().insPCD : CX.insertPCD) / 2, 45).map(([x, y]) => [x, y, CX.carrierT]);
 }
 async function openModelScene() {
     V3.open = true; V3.explode = V3.explodeTarget = 0;
@@ -4115,7 +4108,7 @@ async function openModelScene() {
             if (!three3) {
                 spin.push([m(meshFrom(await build('rear hub', CX_PARTS.rearHub), 0x10b981), CX.hubZ, 2), 1]);
                 if (CX.hubSpacer > 0) m(meshFrom(await build('spacer', CX_PARTS.spacer(CX.hubSpacer)), 0xeab308), CX.hubZ + 7, 2);
-                for (const z of [CX.hubZ, CX.hubZ + CX.hubL - 7]) m(cyl(11, 7), z, 2);
+                for (const z of [CX.hubZ, CX.hubZ + CX.hubL - CX.b688.w]) m(cyl(8, CX.b688.w), z, 2);
                 spin.push([m(meshFrom(await build('front hub', () => CX_PARTS.frontHub()), 0xa855f7), CX.frontZ, 4), 0]);
             } else {
                 spin.push([m(meshFrom(await build('middle hub', CX_PARTS.midHub), 0x10b981), L.hub1Z, 2), 1]);
@@ -4332,8 +4325,8 @@ async function openModelScene() {
             if (params.cxEnc) await V3.onEnclosure();
             discZ = three3 ? { rear: L.rearZ, middle: L.rearZ, front: L.frontDisc } : { rear: CX.rearZ2(), front: CX.frontDisc2() };
             discOrder = three3 ? { rear: 4, middle: 5, front: 8 } : { rear: 3, front: 5 }; mirrorRear = false;
-            backZ = three3 ? L.rearZ - 6 : CX.rearZ2() - discLip() - 0.8; backOrder = (three3 ? 4 : 3) - 0.5;
-            back = new THREE.Mesh(new THREE.RingGeometry(three3 ? 31.5 : 60, Math.min(coaxCalc().R * 1.12, encR() - ENC.wall - 0.6), 128), backMat);
+            backZ = three3 ? L.rearZ - 6 : CX.rearZ2() + CX.carrierT - discLip() - 0.8; backOrder = (three3 ? 4 : 3) - 0.5;
+            back = new THREE.Mesh(new THREE.RingGeometry(three3 ? 31.5 : CX.hubR + 1, Math.min(coaxCalc().R * 1.12, encR() - ENC.wall - 0.6), 128), backMat);
         }
         back.visible = document.getElementById('mpBack').checked; root.add(back);
         document.getElementById('mpMech').onchange = e => { mech.visible = e.target.checked; };
