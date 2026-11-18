@@ -609,7 +609,7 @@ const params = {
     // Lightbox
     armN: 12, armD: 2, armTwist: 1, armOpen: 0.45, armHub: 0.15, armMid: 0.55, armM2: 0.78, armSin: 30, armSout: 30, armS3: 32, armSharp: 0.6, armEntry: 0.5, armWHub: 0.25, armWKink: 0.45, armWRim: 0.6, armMirror: true,
     lightbox: false, lbDiameter: 200, lbModule: 2, lbPlanetTeeth: 18,
-    lbPlanetGap: 0.2, lbCentreHole: 8, lbAxleHole: 5, lbBaseT: 1.6, lbRibH: 0.6, lbDrive: 'planet', lbDiscs: '2', cxStyle: 'openwork', cxDiscT: 2, cxRim: 4,
+    lbPlanetGap: 0.2, lbCentreHole: 8, lbAxleHole: 5, lbBaseT: 1.6, lbRibH: 0.6, lbDrive: 'planet', lbDiscs: '2', cxStyle: 'openwork', cxDiscT: 2, cxRim: 4, cxLip: 3,
 };
 
 // ════════════════════════════════════════════════════════════════════
@@ -2972,7 +2972,7 @@ const CX = {
     motor: { body: 28.6, h: 19.5, ears: 17.5, shaftOff: 8, boss: 0.5 },
     plateT: 9, feetH: 4, plateR: 76,
     b1z: -4, baseSpacer: 4, bossTop: 14,  // base 608s at -4…3 and 7…14 with a 4 mm spacer between inner races
-    g1T: 6.5, hubL: 22, hubR: 25, g2T: 6, pinT: 6,
+    g1T: 6.5, hubL: 16, hubR: 25, g2T: 6, pinT: 6,   // hubL: two 608s with a 2 mm spacer
     gap: 1.0,                             // air between neighbouring discs
     carrierT: 2,                          // boss under a bolted disc, so its screw heads sit flush in the plate
     flangeT3: 2.9,                        // front hub flange on 3-disc builds
@@ -2989,6 +2989,7 @@ CX.nutBottom = CX.b1z - CX.washer - 6.5;           // underside of the bottom M8
 CX.rodLen = top => Math.ceil((top - CX.nutBottom + 5) / 10) * 10;
 // 2 discs: rear disc on its carrier boss, front disc 1 mm above it; the front hub flange fills the space below
 const discT = () => Math.max(1, +params.cxDiscT || 2);
+const discLip = () => Math.max(0, +(params.cxLip ?? 3));
 CX.rearTop2 = () => CX.hubZ + CX.hubL + CX.carrierT + discT();
 CX.frontDisc2 = () => CX.rearTop2() + CX.gap;                       // front disc bottom
 CX.flangeT2 = () => CX.frontDisc2() - CX.frontZ;                     // front hub flange thickness
@@ -3140,7 +3141,7 @@ const CX_PARTS = {
 const discCount = () => (params.lbDrive !== 'edge' && +params.lbDiscs === 3 ? 3 : 2);
 function cx3() {
     const t = discT();
-    const L = { journalR: 14.95, shoulderR: 17, capT: 7, hub2L: 20, hub2R: 30,
+    const L = { journalR: 14.95, shoulderR: 17, capT: 7, hub2L: 16, hub2R: 30,
                 p6806: 42 + CX.fit, bossR: 21, capInsR: 11, insPCD: 52, recessR: 18 };
     L.hub1L = CX.g2T + 1 + L.hub2L;             // teeth + shoulder, then the outer hub's length
     L.hub1Z = CX.hubZ;
@@ -3422,6 +3423,11 @@ function discSpec(which) {
 function coaxDisc(which, ang) {          // ang: draw the pattern at this rotation (3D view uses 0)
     const { c, R, t, hubOut, holes, pattern, boss } = discSpec(which);
     const res = Math.min(12, 4000 / (2 * R)), z0 = boss ? boss.t : 0;
+    // Stiffening lip round the rim, like a pie dish: the rear disc's points back, the front disc's forward,
+    // so neither enters the gap. The middle of three discs has neighbours both sides and gets none.
+    const lip = which === 'middle' ? 0 : discLip();
+    const lipTris = lip > 0 ? extrude(profile2D(R + 1, a => a.add(g => { g.arc(0, 0, R, 0, Math.PI * 2); g.moveTo(R - c.rim, 0); g.arc(0, 0, R - c.rim, 0, Math.PI * 2, true); }), Math.min(res, 8)),
+        which === 'front' ? z0 + t : z0 - lip, which === 'front' ? z0 + t + lip : z0) : [];
     const bossTris = boss ? [].concat(...boss.layers.filter(([z0, z1]) => z1 - z0 > 0.01).map(([z0, z1, cut]) => extrude(profile2D(boss.r + 1, a => { a.add(P2.circle(0, 0, boss.r)); cut(a); }, 20), z0, z1))) : [];
     if ((params.cxStyle || 'openwork') === 'openwork') {
         const shapes = profile2D(R + 1, a => {
@@ -3430,13 +3436,13 @@ function coaxDisc(which, ang) {          // ang: draw the pattern at this rotati
             pattern(a.g, hubOut - 0.5, R - c.rim + 0.5, ang);
             holes(a);
         }, res);
-        return { parts: [{ name: `${which} disc`, tris: extrude(shapes, z0, z0 + t).concat(bossTris) }], pieces: shapes.filter(s => s.depth % 2 === 0).length };
+        return { parts: [{ name: `${which} disc`, tris: extrude(shapes, z0, z0 + t).concat(bossTris, lipTris) }], pieces: shapes.filter(s => s.depth % 2 === 0).length };
     }
     const base = profile2D(R + 1, a => { a.add(P2.circle(0, 0, R)); holes(a); }, Math.min(res, 8));
-    const ribs = profile2D(R + 1, a => pattern(a.g, hubOut, R - 1, ang), res);
+    const ribs = profile2D(R + 1, a => pattern(a.g, hubOut, R - Math.max(1, lip > 0 ? c.rim : 0), ang), res);
     const ribH = Math.max(0.2, +params.lbRibH || 0.6);
     return { parts: [
-        { name: `${which} disc base (clear or white)`, tris: extrude(base, z0, z0 + t).concat(bossTris) },
+        { name: `${which} disc base (clear or white)`, tris: extrude(base, z0, z0 + t).concat(bossTris, lipTris) },
         { name: `${which} disc pattern (black)`, tris: extrude(ribs, z0 + t, z0 + t + ribH) },
     ], pieces: 1 };
 }
@@ -3457,7 +3463,7 @@ function coaxBOM() {
         `MOIRÉ COAXIAL DRIVE (${three ? 'three' : 'two'} discs): build sheet`,
         '',
         `Disc diameter ${c.D} mm · gears module ${CX.m}, ${CX.Np}:${CX.Ng} (3:1) · motor shafts ${CX.C} mm from the rod`,
-        `Depth from the wall to the front of the front disc: ${((three ? L.frontDisc : CX.frontDisc2()) + discT() + CX.plateT + CX.feetH).toFixed(0)} mm · ${CX.gap} mm between discs`,
+        `Depth from the wall to the front of the front disc: ${((three ? L.frontDisc : CX.frontDisc2()) + discT() + discLip() + CX.plateT + CX.feetH).toFixed(0)} mm · ${CX.gap} mm between discs · ${discLip()} mm rim lips`,
         '',
         'PRINT (PETG or PLA+, 0.2 mm layers, 4 walls for gears; gears and hubs teeth-down)',
         ...parts,
@@ -3653,6 +3659,8 @@ function buildModelPageDOM() {
         <input id="mpSize" type="range" min="80" max="320" step="5">
         <div class="r"><span>Disc thickness</span><output id="mpTO"></output></div>
         <input id="mpT" type="range" min="1.2" max="4" step="0.2">
+        <div class="r"><span>Rim stiffening lip</span><output id="mpLipO"></output></div>
+        <input id="mpLip" type="range" min="0" max="8" step="0.5">
         <div class="r"><span>Disc style</span></div>
         <select id="mpStyle"><option value="openwork">Openwork, one colour (light through)</option><option value="twocolour">Solid base + black pattern (3MF)</option></select>
         <h3>View</h3>
@@ -3679,6 +3687,7 @@ function buildModelPageDOM() {
     document.getElementById('mpDiscs').onchange = e => { params.lbDiscs = e.target.value; sync(); };
     document.getElementById('mpSize').oninput = e => { params.lbDiameter = +e.target.value; sync(); };
     document.getElementById('mpT').oninput = e => { params.cxDiscT = +e.target.value; sync(); };
+    document.getElementById('mpLip').oninput = e => { params.cxLip = +e.target.value; sync(); };
     document.getElementById('mpStyle').onchange = e => { params.cxStyle = e.target.value; sync(); };
     document.getElementById('mpExplode').onclick = () => { V3.explodeTarget = V3.explodeTarget > 0.5 ? 0 : 1; mpRefreshPanel(); };
     document.getElementById('mpExplodeR').oninput = e => { V3.explode = V3.explodeTarget = +e.target.value; mpRefreshPanel(); };
@@ -3690,7 +3699,9 @@ function mpRefreshPanel() {
     const edge = isEdge();
     const set = (id, v) => { const e = document.getElementById(id); if (e && document.activeElement !== e) e.value = v; };
     set('mpDrive', edge ? 'edge' : 'coaxial'); set('mpDiscs', String(discCount())); set('mpSize', params.lbDiameter);
-    set('mpT', discT()); set('mpStyle', params.cxStyle || 'openwork');
+    set('mpT', discT()); set('mpLip', discLip()); set('mpStyle', params.cxStyle || 'openwork');
+    document.getElementById('mpLipO').textContent = isEdge() ? 'n/a (rims are solid)' : discLip() ? discLip().toFixed(1) + ' mm' : 'off';
+    document.getElementById('mpLip').disabled = isEdge();
     document.getElementById('mpDiscs').disabled = edge;
     document.getElementById('mpSizeO').textContent = Math.round(params.lbDiameter) + ' mm';
     document.getElementById('mpTO').textContent = discT().toFixed(1) + ' mm';
@@ -3715,7 +3726,7 @@ function mpRefreshPanel() {
         html += '<br>' + sp.map(s => `${s.name}: <b>${Math.abs(s.rpm).toFixed(2)} rpm</b> → motor ${Math.abs(s.motorRpm).toFixed(1)} rpm` + (Math.abs(s.rpm) > maxDisc ? ' <span class="warn">(above the ~' + maxDisc.toFixed(2) + ' rpm the 28BYJ can do here)</span>' : '')).join('<br>');
     } else {
         const three = discCount() === 3, L = three ? cx3() : null;
-        const depth = (three ? L.frontDisc : CX.frontDisc2()) + discT() + CX.plateT + CX.feetH;
+        const depth = (three ? L.frontDisc : CX.frontDisc2()) + discT() + discLip() + CX.plateT + CX.feetH;
         html = `Disc Ø <b>${params.lbDiameter} mm</b> · base Ø <b>${CX.plateR * 2} mm</b><br>Gears ${CX.Np}:${CX.Ng} (3:1) · depth from wall <b>${depth.toFixed(0)} mm</b><br>` +
             sp.map(s => `${s.name}: <b>${Math.abs(s.rpm).toFixed(2)} rpm</b> → motor ${Math.abs(s.motorRpm).toFixed(1)} rpm`).join('<br>');
     }
@@ -3743,6 +3754,14 @@ window.addEventListener('hashchange', () => showPage(location.hash === '#model' 
 function open3DView() { location.hash = '#model'; }
 function close3DView() { location.hash = '#design'; }
 
+// Where the screw heads sit on a disc (disc-local mm, canvas-frame x/y, z = head underside)
+function discScrews(which) {
+    if (isEdge() || which === 'front') return [];                    // edge cartridges ride on rollers; the front disc is clamped by the nut
+    const three = discCount() === 3, ring = (n, r, d0) => Array.from({ length: n }, (_, i) => polar(r, d0 + i * 360 / n));
+    if (which === 'middle') { const L = cx3(); return ring(3, L.capInsR, 90).map(([x, y]) => [x, y, L.frontZ - 0.3 - L.rearZ - 1.8]); }
+    const pcd = three ? cx3().insPCD : CX.insertPCD;
+    return ring(4, pcd / 2, 45).map(([x, y]) => [x, y, CX.carrierT]);
+}
 async function openModelScene() {
     V3.open = true; V3.explode = V3.explodeTarget = 0;
     const stage = document.getElementById('mpStage');
@@ -3880,6 +3899,10 @@ async function openModelScene() {
             const r = isEdge() ? edgeCartridge(d.which, 0) : coaxDisc(d.which, 0);   // unrotated: the mesh spins
             const grp = new THREE.Group();
             r.parts.forEach((pt, i) => grp.add(meshFrom(mirrorRear && d.which === 'rear' ? mirrorZ(pt.tris) : pt.tris, i === 0 ? d.colour : 0x111111)));
+            for (const [x, y, z] of discScrews(d.which)) {                                   // M3 button heads that hold the disc on
+                const head = new THREE.Mesh(new THREE.CylinderGeometry(2.75, 2.75, 1.65, 24), steel);
+                head.rotation.x = Math.PI / 2; head.position.set(x, -y, z + 0.82); grp.add(head);
+            }
             grp.userData.disc = true;
             fresh.push({ ...d, grp });
         }
