@@ -34,6 +34,14 @@ pio device monitor
 The page has Steady, Breathe (both speeds swell and fade, the rear a quarter-cycle behind) and Drift (slow random wander, like the spring-driven originals) modes, plus a ramp so speed changes never jerk the discs.
 If a disc turns the wrong way, tick *Reverse motor* for it under *Setup*.
 
+### Edit lock
+
+Under *Setup → Set password* you can lock the drive. Anyone on your Wi-Fi can still watch the speeds, but every change (speeds, modes, Wi-Fi, the password itself) needs the password. The page remembers it in that browser; the generator has a *Controller password* box next to *Send speeds*. Five wrong tries lock edits for 30 seconds. Forgot it? Hold the board's **BOOT** button for 5 seconds while it's running, and the lock is cleared.
+
+### Power and mounting
+
+One USB-C 5 V breakout (2 A supply) feeds everything: 5 V and GND to the ESP32's 5V/GND pins and to the + / − pins of every ULN2003 board. The base plate has standoffs for the ULN2003 boards (M3 self-tap, 30 × 27 mm hole spacing; check yours) along the top, and trays for the ESP32-C3 SuperMini and the USB-C breakout at the bottom with their ports facing out. The optional enclosure (3D Model page → *Enclosure*) has windows over both ports and two keyholes for hanging it.
+
 ## Wiring: ULN2003 (default)
 
 ```

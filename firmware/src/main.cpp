@@ -16,6 +16,10 @@
 // Web UI at http://moire.local (or the IP on the serial monitor). With no Wi-Fi
 // saved, or if joining fails, it opens an access point "Moire-Setup"
 // (password moiredisc) at http://192.168.4.1.
+//
+// Edit lock: anyone on the network can watch the status, but once an admin password
+// is set (Setup on the web page) every change needs it. Forgot it? Hold the BOOT
+// button for 5 seconds while the drive is running: the password is cleared.
 
 #include <Arduino.h>
 #include <WiFi.h>
@@ -61,7 +65,12 @@ struct Settings {
     uint8_t version = 3;
 } S;
 float maxDiscRpm() { return MAX_MOTOR_RPM / S.ratio; }
-String wifiSsid, wifiPass;
+String wifiSsid, wifiPass, adminPass;   // adminPass empty = not set yet, editing open
+#if defined(CONFIG_IDF_TARGET_ESP32C3) || defined(CONFIG_IDF_TARGET_ESP32C6)
+constexpr int PIN_BOOT = 9;
+#else
+constexpr int PIN_BOOT = 0;
+#endif
 Preferences prefs;
 WebServer server(80);
 
@@ -188,6 +197,7 @@ void loadSettings() {
     if (prefs.getBytesLength("s3") == sizeof(Settings)) { prefs.getBytes("s3", &tmp, sizeof(Settings)); if (tmp.version == 3) S = tmp; }
     wifiSsid = prefs.getString("ssid", "");
     wifiPass = prefs.getString("pass", "");
+    adminPass = prefs.getString("admin", "");
     prefs.end();
     S.discs = constrain(S.discs, 2, 3);
 }
@@ -231,11 +241,11 @@ String stateJson() {
     snprintf(b, sizeof b,
         "{\"l\":[%.3f,%.3f,%.3f],\"cur\":[%.3f,%.3f,%.3f],\"inv\":[%s,%s,%s],\"ok\":[%s,%s,%s],"
         "\"discs\":%d,\"motors\":%d,\"mode\":\"%s\",\"period\":%.1f,\"depth\":%.2f,\"drift\":%.2f,\"accel\":%.2f,"
-        "\"current\":%u,\"running\":%s,\"driver\":\"%s\",\"maxDiscRpm\":%.2f,\"ratio\":%.2f,\"ap\":%s,\"ip\":\"%s\"}",
+        "\"current\":%u,\"running\":%s,\"driver\":\"%s\",\"maxDiscRpm\":%.2f,\"ratio\":%.2f,\"ap\":%s,\"locked\":%s,\"ip\":\"%s\"}",
         S.l[0], S.l[1], S.l[2], cur[0], cur[1], cur[2], tf(S.inv[0]), tf(S.inv[1]), tf(S.inv[2]), tf(ok[0]), tf(ok[1]), tf(ok[2]),
         activeDiscs(), MOTORS, modeName(S.mode), S.period, S.depth, S.drift, S.accel,
         S.current, tf(S.running), DRIVER_NAME, maxDiscRpm(), S.ratio,
-        tf(apMode), (apMode ? WiFi.softAPIP() : WiFi.localIP()).toString().c_str());
+        tf(apMode), tf(adminPass.length() > 0), (apMode ? WiFi.softAPIP() : WiFi.localIP()).toString().c_str());
     return b;
 }
 void cors() { server.sendHeader("Access-Control-Allow-Origin", "*"); server.sendHeader("Cache-Control", "no-store"); }
@@ -249,7 +259,48 @@ bool argB(const char* k, bool& v) {
     if (!server.hasArg(k)) return false;
     String a = server.arg(k); v = (a == "1" || a == "true" || a == "on"); return true;
 }
+// ── Edit lock ────────────────────────────────────────────────────
+// The key arrives as ?key= or an X-Key header. Five wrong tries lock edits for 30 s.
+uint8_t badTries = 0;
+uint32_t lockoutUntil = 0;
+bool sameText(const String& a, const String& b) {            // compare without leaking where they differ
+    uint8_t d = a.length() != b.length();
+    for (size_t i = 0; i < a.length(); i++) d |= a[i] ^ (i < b.length() ? b[i] : 0);
+    return d == 0;
+}
+bool authorised() {
+    if (!adminPass.length()) return true;
+    if (lockoutUntil && (int32_t)(millis() - lockoutUntil) < 0) {
+        cors(); server.send(429, "application/json", "{\"error\":\"too many tries, wait 30 s\"}"); return false;
+    }
+    String k = server.hasArg("key") ? server.arg("key") : server.header("X-Key");
+    if (sameText(k, adminPass)) { badTries = 0; return true; }
+    if (++badTries >= 5) { badTries = 0; lockoutUntil = millis() + 30000; }
+    cors(); server.send(401, "application/json", "{\"error\":\"locked\"}");
+    return false;
+}
+void handlePassword() {          // ?key=<current>&new=<new>; new empty removes the lock
+    if (!authorised()) return;
+    String n = server.arg("new");
+    if (n.length() && (n.length() < 4 || n.length() > 63)) { cors(); server.send(400, "application/json", "{\"error\":\"use 4 to 63 characters\"}"); return; }
+    adminPass = n;
+    prefs.begin("moire", false); prefs.putString("admin", adminPass); prefs.end();
+    cors(); server.send(200, "application/json", stateJson());
+}
+void checkBootButton() {         // hold BOOT 5 s: clear the admin password
+    static uint32_t downSince = 0;
+    if (digitalRead(PIN_BOOT) == LOW) {
+        if (!downSince) downSince = millis();
+        else if (millis() - downSince > 5000 && adminPass.length()) {
+            adminPass = "";
+            prefs.begin("moire", false); prefs.remove("admin"); prefs.end();
+            Serial.println("BOOT held: admin password cleared");
+        }
+    } else downSince = 0;
+}
+
 void handleSet() {
+    if (!authorised()) return;
     bool ch = false;
     const char* lk[3] = { "l1", "l2", "l3" };
     const char* ik[3] = { "inv1", "inv2", "inv3" };
@@ -273,6 +324,7 @@ void handleSet() {
     cors(); server.send(200, "application/json", stateJson());
 }
 void handleWifi() {
+    if (!authorised()) return;
     if (!server.hasArg("ssid") || !server.arg("ssid").length()) { server.send(400, "text/plain", "ssid missing"); return; }
     prefs.begin("moire", false);
     prefs.putString("ssid", server.arg("ssid"));
@@ -312,8 +364,15 @@ void setup() {
     startWifi();
     server.on("/", [] { server.send_P(200, "text/html", WEB_UI); });
     server.on("/api/state", [] { cors(); server.send(200, "application/json", stateJson()); });
-    server.on("/api/set", handleSet);
+    server.on("/api/set", HTTP_GET, handleSet);
     server.on("/api/wifi", handleWifi);
+    server.on("/api/password", handlePassword);
+    server.on("/api/set", HTTP_OPTIONS, [] {          // browsers ask first when the generator sends an X-Key header
+        cors(); server.sendHeader("Access-Control-Allow-Headers", "X-Key"); server.send(204);
+    });
+    const char* hdrs[] = { "X-Key" };
+    server.collectHeaders(hdrs, 1);
+    pinMode(PIN_BOOT, INPUT_PULLUP);
     server.onNotFound([] { cors(); server.send(404, "text/plain", "not found"); });
     server.begin();
 }
@@ -324,4 +383,5 @@ void loop() {
     if (millis() - lastTick >= 20) { lastTick = millis(); motionTick(); }
     if (saveAt && millis() > saveAt) saveNow();
     motorsRetry();
+    checkBootButton();
 }

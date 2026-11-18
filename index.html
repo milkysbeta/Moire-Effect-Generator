@@ -493,6 +493,7 @@
                             <input id="cxDevice" type="text" value="moire.local" aria-label="Controller address" class="flex-1 min-w-0 bg-zinc-800 border border-zinc-700 rounded-lg px-2 py-1.5 text-xs">
                             <button onclick="sendToDevice()" class="px-2.5 py-1.5 bg-emerald-700 hover:bg-emerald-600 rounded-lg text-xs font-medium">Send speeds</button>
                         </div>
+                        <input id="cxDevKey" type="password" placeholder="Controller password (if locked)" aria-label="Controller password" autocomplete="off" class="w-full mt-1.5 bg-zinc-800 border border-zinc-700 rounded-lg px-2 py-1.5 text-xs">
                         <p id="cxDevStatus" class="text-xs text-zinc-400" aria-live="polite">Sends the L1/L2 speeds to the ESP32 running the firmware in /firmware.</p>
                     </div>
 
@@ -609,7 +610,8 @@ const params = {
     // Lightbox
     armN: 12, armD: 2, armTwist: 1, armOpen: 0.45, armHub: 0.15, armMid: 0.55, armM2: 0.78, armSin: 30, armSout: 30, armS3: 32, armSharp: 0.6, armEntry: 0.5, armWHub: 0.25, armWKink: 0.45, armWRim: 0.6, armMirror: true,
     lightbox: false, lbDiameter: 200, lbModule: 2, lbPlanetTeeth: 18,
-    lbPlanetGap: 0.2, lbCentreHole: 8, lbAxleHole: 5, lbBaseT: 1.6, lbRibH: 0.6, lbDrive: 'planet', lbDiscs: '2', cxStyle: 'openwork', cxDiscT: 2, cxRim: 4, cxLip: 3,
+    lbPlanetGap: 0.2, lbCentreHole: 8, lbAxleHole: 5, lbBaseT: 1.6, lbRibH: 0.6, lbDrive: 'planet', lbDiscs: '2', cxStyle: 'openwork', cxDiscT: 2, cxRim: 4, cxLip: 3, cxEnc: false,
+    mpColFront: '#15171a', mpColMiddle: '#b98a4a', mpColRear: '#ece9e2', mpColRib: '#111111',
 };
 
 // ════════════════════════════════════════════════════════════════════
@@ -2970,7 +2972,7 @@ const CX = {
     fit: 0.2,                            // extra clearance on printed bearing pockets / holes
     b608: { od: 22, w: 7 }, rod: 8.4, nutAF: 13.3, nutH: 5.2, washer: 1.6,   // nutH: pocket for an M8 thin (jam) nut
     motor: { body: 28.6, h: 19.5, ears: 17.5, shaftOff: 8, boss: 0.5 },
-    plateT: 9, feetH: 4, plateR: 76,
+    plateT: 9, feetH: 0, plateR: 76,   // no feet: the plate (or the enclosure) sits flat on the wall
     b1z: -4, baseSpacer: 4, bossTop: 14,  // base 608s at -4…3 and 7…14 with a 4 mm spacer between inner races
     g1T: 6.5, hubL: 16, hubR: 25, g2T: 6, pinT: 6,   // hubL: two 608s with a 2 mm spacer
     gap: 1.0,                             // air between neighbouring discs
@@ -3066,25 +3068,64 @@ function motorSeat(api, ang, layer) {
     if (layer === 'top') for (const ty of [-CX.motor.ears, CX.motor.ears]) api.cut(P2.circle(bx, ty, 1.4));  // M3 self-tap
     g.restore();
 }
+// Electronics on the base plate (canvas frame mm, +y = down on the wall).
+// ULN2003 boards in a row along the top, clear of the motor seats (|y| <= 23);
+// ESP32-C3 SuperMini and a USB-C power breakout lower right / left, ports facing out.
+const ELEC = {
+    uln: { w: 35, h: 32, holeX: 15, holeY: 13.5, standoff: 3 },       // check the hole spacing against your boards
+    esp: { r: 69, ang: 45, len: 22.5, wid: 18 },                        // SuperMini, USB-C on the outer end
+    usb: { r: 72, ang: 135, len: 16, wid: 13 },                         // USB-C 5 V breakout, socket on the outer end
+    ulnCentres: n => (n === 3 ? [-37, 0, 37] : [-18.5, 18.5]).map(x => [x, -42]),
+    ulnHoles: n => ELEC.ulnCentres(n).flatMap(([x, y]) => [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([i, j]) => [x + i * ELEC.uln.holeX, y + j * ELEC.uln.holeY])),
+};
+// Back drum enclosure: a shell behind the rear disc that hides the gears, motors and boards.
+// Its 3 mm floor rings the base plate (the base has a matching rebate, so the backs are flush).
+const ENC = { wall: 2.4, floorT: 3, ledgeR: 72, fixR: 74, fixAng: [30, 150, 210, 330], keyR: 82, keyAng: [240, 300] };
+const encR = () => Math.max(97, params.lbDiameter / 2 - 3);
+const encTop = () => {
+    const three = discCount() === 3, rearZ = three ? cx3().rearZ : CX.hubZ + CX.hubL;
+    return rearZ + CX.carrierT - discLip() - 1.5;
+};
+// Keyhole: head goes in the big hole, then the part drops onto the screw shank in the slot
+const keyhole = (x, y, slotW) => g => { g.moveTo(x + 4.5, y); g.arc(x, y, 4.5, 0, Math.PI * 2); g.rect(x - slotW / 2, y - 8, slotW, 8); };
+const ringPath = (r0, r1) => g => { g.moveTo(r1, 0); g.arc(0, 0, r1, 0, Math.PI * 2); g.moveTo(r0, 0); g.arc(0, 0, r0, 0, Math.PI * 2, true); };
+// A tray/pad drawn in a frame rotated to canvas angle `deg`, u outward from radius r
+const radialRect = (r, deg, u0, u1, v0, v1) => g => {
+    const a = deg * Math.PI / 180, c = Math.cos(a), sn = Math.sin(a);
+    const P = (u, v) => [(r + u) * c - v * sn, (r + u) * sn + v * c];
+    [[u0, v0], [u1, v0], [u1, v1], [u0, v1]].map(([u, v]) => P(u, v)).forEach(([x, y], i) => i ? g.lineTo(x, y) : g.moveTo(x, y)); g.closePath();
+};
+const trayPaths = (t, wall = 1.2) => ({
+    pad:   radialRect(t.r, t.ang, -t.len / 2 - wall, t.len / 2, -t.wid / 2 - wall, t.wid / 2 + wall),
+    inner: radialRect(t.r, t.ang, -t.len / 2, t.len / 2 + 1, -t.wid / 2, t.wid / 2),
+});
 const CX_PARTS = {
     base: (motors = [[MOTOR_ANG.A, CX.earA], [MOTOR_ANG.B, CX.earB]]) => {
-        const L = [], R = CX.plateR + 1, pk = pocket() / 2, P = CX.plateT;
-        const mountPts = [60, 120, 240, 300].map(d => [66 * Math.cos(d * Math.PI / 180), 66 * Math.sin(d * Math.PI / 180)]);
-        const mounts = api => mountPts.forEach(([x, y]) => api.cut(P2.circle(x, y, 2.3)));
+        const L = [], R = CX.plateR + 8, pk = pocket() / 2, P = CX.plateT, n = motors.length;
+        const keyPts = [60, 120, 270].map(d => polar(66, d));               // wall keyholes (no feet: the plate sits flat)
         const floors = motors.map(([ang, ear]) => [ang, ear - CX.motor.h]);
-        // feet on the back: wall standoffs, and room for the bottom nut and cables
-        L.push({ R, z0: -P - CX.feetH, z1: -P, paint: a => { mountPts.forEach(([x, y]) => a.add(P2.circle(x, y, 6))); mounts(a); } });
-        // plate, split wherever a motor pocket or the bearing recess starts
-        const breaks = [...new Set([-P, CX.b1z, 0, ...floors.map(f => f[1]).filter(f => f > -P && f < 0)])].sort((x, y) => x - y);
+        const holes = ELEC.ulnHoles(n), esp = trayPaths(ELEC.esp), usb = trayPaths(ELEC.usb);
+        const rebate = -P + ENC.floorT;                                      // the enclosure floor tucks under the rim here
+        // plate, split wherever a motor pocket, the rebate, a keyhole pocket or the bearing recess starts
+        const breaks = [...new Set([-P, rebate, -2, CX.b1z, 0, ...floors.map(f => f[1]).filter(f => f > -P && f < 0)])].sort((x, y) => x - y);
         for (let i = 0; i < breaks.length - 1; i++) {
             const z0 = breaks[i], z1 = breaks[i + 1];
             L.push({ R, z0, z1, paint: a => {
                 a.add(P2.circle(0, 0, CX.plateR));
+                if (z0 >= rebate - 1e-6) {                                   // pads under the boards that overhang the rim
+                    a.add(...holes.filter(([x, y]) => Math.hypot(x, y) > CX.plateR - 5).map(([x, y]) => P2.circle(x, y, 4.5)));
+                    a.add(esp.pad, usb.pad);
+                } else a.cut(ringPath(ENC.ledgeR + 0.3, R + 2));
                 a.cut(P2.circle(0, 0, z1 <= CX.b1z ? 12 : pk));            // nut + washer recess, then the bottom 608
-                mounts(a);
+                keyPts.forEach(([x, y]) => a.cut(keyhole(x, y, z1 <= rebate + 1e-6 ? 4.4 : z1 <= -2 + 1e-6 ? 9 : 0)));
+                ENC.fixAng.forEach(d => { const [x, y] = polar(ENC.fixR, d); a.cut(P2.circle(x, y, 1.7)); });   // M3 into the enclosure floor
+                holes.forEach(([x, y]) => a.cut(P2.circle(x, y, 1.25)));
                 floors.forEach(([ang, f]) => { if (f <= z0 + 1e-6) motorSeat(a, ang, 'cavity'); });
             } });
         }
+        // board standoffs (M3 self-tap) and low trays for the ESP32 and the USB-C breakout
+        L.push({ R, z0: 0, z1: ELEC.uln.standoff, paint: a => holes.forEach(([x, y]) => { a.add(P2.circle(x, y, 3)); a.cut(P2.circle(x, y, 1.25)); }) });
+        L.push({ R, z0: 0, z1: 2.5, paint: a => { a.add(esp.pad, usb.pad); a.cut(esp.inner, usb.inner); } });
         const sp0 = CX.b1z + 7, sp1 = sp0 + CX.baseSpacer;              // spacer between the base bearings
         L.push({ R, z0: 0, z1: sp0, paint: a => { a.add(P2.circle(0, 0, 16)); a.cut(P2.circle(0, 0, pk)); } });
         L.push({ R, z0: sp0, z1: sp1, paint: a => { a.add(P2.circle(0, 0, 16)); a.cut(P2.circle(0, 0, 6.5)); } });
@@ -3121,6 +3162,20 @@ const CX_PARTS = {
     pinion: () => buildPart([
         { R: (CX.Np + 2) * CX.m / 2 + 1, z0: 0, z1: CX.pinT, res: 40, paint: a => { a.add(P2.poly(involuteGear(CX.Np, CX.m, 0))); a.cut(P2.dbore(5.2, 1.65)); } },
     ]),
+    enclosure: () => {
+        const Rd = encR(), top = encTop(), P = CX.plateT, f0 = -P + ENC.floorT;
+        const ports = [ELEC.esp, ELEC.usb].map(t => radialRect(0, t.ang, Rd - ENC.wall - 2, Rd + 2, -7, 7));
+        return zStack(Rd + 1, [-P, f0, -1, 9, top], (a, z) => {
+            if (z < f0) {                                                    // floor ring with keyholes and fixing holes
+                a.add(ringPath(ENC.ledgeR, Rd));
+                ENC.keyAng.forEach(d => { const [x, y] = polar(ENC.keyR, d); a.cut(keyhole(x, y, 4.4)); });
+                ENC.fixAng.forEach(d => { const [x, y] = polar(ENC.fixR, d); a.cut(P2.circle(x, y, 1.25)); });
+            } else {
+                a.add(ringPath(Rd - ENC.wall, Rd));
+                if (z > -1 && z < 9) a.cut(...ports);                        // USB-C windows: power and the ESP32
+            }
+        });
+    },
     spacer: (len, od = 12, id = CX.rod) => () => buildPart([
         { R: od / 2 + 1, z0: 0, z1: len, res: od > 20 ? 20 : 40, paint: a => { a.add(P2.circle(0, 0, od / 2)); a.cut(P2.circle(0, 0, id / 2)); } },
     ]),
@@ -3141,7 +3196,7 @@ const CX_PARTS = {
 const discCount = () => (params.lbDrive !== 'edge' && +params.lbDiscs === 3 ? 3 : 2);
 function cx3() {
     const t = discT();
-    const L = { journalR: 14.95, shoulderR: 17, capT: 7, hub2L: 16, hub2R: 30,
+    const L = { journalR: 14.95, shoulderR: 17, capT: 7, hub2L: 14, hub2R: 30,   // hub2L 14: two 6806s back to back, no spacer
                 p6806: 42 + CX.fit, bossR: 21, capInsR: 11, insPCD: 52, recessR: 18 };
     L.hub1L = CX.g2T + 1 + L.hub2L;             // teeth + shoulder, then the outer hub's length
     L.hub1Z = CX.hubZ;
@@ -3190,18 +3245,19 @@ Object.assign(CX_PARTS, {
 
 // Parts list for the current disc count: [file name, builder, how many]
 function coaxPartList() {
-    if (discCount() === 2) return [
+    const enc = params.cxEnc ? [['enclosure.stl', CX_PARTS.enclosure, 1]] : [];
+    if (discCount() === 2) return enc.concat([
         ['base.stl', () => CX_PARTS.base(), 1], ['rod-gear.stl', CX_PARTS.rodGear, 1], ['rear-hub.stl', CX_PARTS.rearHub, 1],
         ['front-hub.stl', CX_PARTS.frontHub, 1], ['pinion.stl', CX_PARTS.pinion, 2],
         [`spacer-${CX.baseSpacer}mm.stl`, CX_PARTS.spacer(CX.baseSpacer), 1], [`spacer-${CX.hubSpacer}mm.stl`, CX_PARTS.spacer(CX.hubSpacer), 1],
-    ];
+    ]);
     const L = cx3();
-    return [
+    return enc.concat([
         ['base-3disc.stl', CX_PARTS.base3, 1], ['rod-gear.stl', CX_PARTS.rodGear, 1], ['middle-hub.stl', CX_PARTS.midHub, 1],
         ['outer-hub.stl', CX_PARTS.outerHub, 1], ['front-hub.stl', CX_PARTS.frontHub, 1], ['pinion.stl', CX_PARTS.pinion, 3],
         [`spacer-${CX.baseSpacer}mm.stl`, CX_PARTS.spacer(CX.baseSpacer), 1], [`spacer-middle-${L.midSpacer}mm.stl`, CX_PARTS.spacer(L.midSpacer), 1],
         [`spacer-6806-${L.outerSpacer}mm.stl`, CX_PARTS.spacer(L.outerSpacer, 34, 30.4), 1], [`sleeve-${L.sleeveL}mm.stl`, CX_PARTS.spacer(L.sleeveL), 1],
-    ];
+    ]).filter(([n]) => !/-0mm\.stl$/.test(n));                // bearings that sit back to back need no spacer
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -3479,6 +3535,10 @@ function coaxBOM() {
         `  4× M3 heat-set insert + 4× M3×10 button head (rear disc to its hub)`,
         three ? '  3× M3 heat-set insert + 3× M3×10 button head (middle disc to the middle hub)' : '',
         `  ${three ? 6 : 4}× M3×8 screws (motor ears, self-tap into the base)`,
+        `  ${discCount()}× ULN2003 driver board (from the motor kits) + ${discCount() * 4}× M3×6 screws into the base standoffs`,
+        '  1× ESP32-C3 SuperMini (or an S3 / classic ESP32 for 3 ULN2003 motors) in its tray: a dab of hot glue holds it',
+        '  1× USB-C 5 V power breakout in its tray + a 5 V 2 A USB-C supply; wire 5 V/GND to the ESP32 5V pin and every ULN2003',
+        params.cxEnc ? `  Enclosure: 4× M3×8 (base into the enclosure floor), 2× wall screws for the keyholes (head under 9 mm)` : '  Wall: 3× pan-head screws for the base keyholes (head under 9 mm)',
         '',
         'ASSEMBLE (bottom to top)',
         `  1. Press a 608 into the underside of the base, drop the ${CX.baseSpacer} mm spacer in from the top, press the second 608 in.`,
@@ -3490,9 +3550,10 @@ function coaxBOM() {
         '  5. Heat-set the 4 inserts into the hub top; bolt the rear disc on with M3×10 button heads (they sit flush in its counterbores).',
         '  6. Washer on the hub\'s top bearing, then the front hub, front disc over its hex boss, penny washer, nut.');
     else lines.push(
-        '  4. Middle hub: heat-set its 3 cap inserts. Push one 608 in from the bottom all the way up under the cap (it slides through the',
-        `     loose middle and presses into the top seat), drop in the ${L.midSpacer} mm spacer, press the second 608 into the bottom.`,
-        `  5. Outer hub: press a 6806 into each end with the ${L.outerSpacer} mm spacer between; heat-set 4 inserts into its top.`,
+        '  4. Middle hub: heat-set its 3 cap inserts. Press one 608 in from the bottom all the way up under the cap, then the second',
+        L.midSpacer > 0 ? `     608 behind it with the ${L.midSpacer} mm spacer between.` : '     608 behind it (the two sit back to back).',
+        L.outerSpacer > 0 ? `  5. Outer hub: press a 6806 into each end with the ${L.outerSpacer} mm spacer between; heat-set 4 inserts into its top.`
+                          : '  5. Outer hub: press a 6806 into each end (they meet in the middle); heat-set 4 inserts into its top.',
         '  6. Slide the outer hub down over the middle hub\'s journal until it rests on the shoulder above the middle hub\'s teeth.',
         '  7. Slide this pair onto the rod, teeth down. Bolt the rear disc to the outer hub (button heads).',
         `  8. Middle disc: its boss goes down over the sleeve hole and rests on the middle hub's cap; bolt it with 3× M3×10.`,
@@ -3541,8 +3602,10 @@ async function sendToDevice() {
     out.textContent = 'Sending…';
     try {
         const ctl = new AbortController(); const to = setTimeout(() => ctl.abort(), 5000);
-        const r = await fetch(`http://${host}/api/set?${q}`, { signal: ctl.signal });
+        const key = document.getElementById('cxDevKey').value;
+        const r = await fetch(`http://${host}/api/set?${q}` + (key ? '&key=' + encodeURIComponent(key) : ''), { signal: ctl.signal });
         clearTimeout(to);
+        if (r.status === 401 || r.status === 429) { out.textContent = r.status === 429 ? 'Too many wrong passwords. Wait 30 seconds.' : 'The controller is locked. Type its password above.'; return; }
         const st = await r.json();
         const clipped = sp.some(x => Math.abs(x.rpm) > st.maxDiscRpm);
         out.textContent = `Sent: ${st.l.slice(0, st.discs).map((v, i) => `L${i + 1} ${v.toFixed(2)} rpm`).join(', ')} (${st.driver}).` +
@@ -3600,19 +3663,21 @@ const V3 = { open: false, explode: 0, explodeTarget: 0, cleanup: null };
 
 function v3Discs() {
     const three = discCount() === 3, out = [];
-    if (params.layer1On) out.push({ which: 'front', layer: 0, colour: 0x15171a });
-    if (three && params.layer2On) out.push({ which: 'middle', layer: 1, colour: 0xb98a4a });
-    if (three ? params.layer3On : params.layer2On) out.push({ which: 'rear', layer: three ? 2 : 1, colour: 0xece9e2 });
+    if (params.layer1On) out.push({ which: 'front', layer: 0, colour: discColour('front') });
+    if (three && params.layer2On) out.push({ which: 'middle', layer: 1, colour: discColour('middle') });
+    if (three ? params.layer3On : params.layer2On) out.push({ which: 'rear', layer: three ? 2 : 1, colour: discColour('rear') });
     return out;
 }
-// Everything that changes a disc's shape (not its spin)
+const DISC_COL = { front: ['mpColFront', '#15171a'], middle: ['mpColMiddle', '#b98a4a'], rear: ['mpColRear', '#ece9e2'], rib: ['mpColRib', '#111111'] };
+const discColour = w => { const [k, d] = DISC_COL[w]; return /^#[0-9a-f]{6}$/i.test(params[k] || '') ? params[k] : d; };
+// Everything that changes a disc's shape (not its spin or colour)
 function v3DiscSignature() {
-    const skip = /Speed$|^lb(Module|Planet|Axle|BaseT)/;
+    const skip = /Speed$|^lb(Module|Planet|Axle|BaseT)|^mpCol|^cxEnc$/;
     const o = {}; for (const k in params) if (!skip.test(k)) o[k] = params[k];
     return JSON.stringify(o) + (params.warpType === 'mesh' ? JSON.stringify(meshPoints) : '');
 }
 // Everything that changes the mechanism
-const v3MechSignature = () => [params.lbDrive, discCount(), discT(), isEdge() ? params.lbDiameter : 0].join('|');
+const v3MechSignature = () => [params.lbDrive, discCount(), discT(), isEdge() ? params.lbDiameter : 0, !isEdge() && params.cxEnc ? encR() + ',' + encTop() : ''].join('|');
 function pageStatus(t) { const e = document.getElementById('mpStatus'); if (e) e.textContent = t; const c = document.getElementById('cxStatus'); if (c && !V3.open) c.textContent = t; }
 
 function buildModelPageDOM() {
@@ -3639,6 +3704,11 @@ function buildModelPageDOM() {
       #mpInfo b{color:#e4e4e7;font-weight:600}
       #mpInfo .warn{color:#f59e0b}
       #mpStage{position:relative;min-width:0}
+      #mpPanel .cols{display:grid;grid-template-columns:repeat(auto-fill,minmax(80px,1fr));gap:6px}
+      #mpPanel .cols label{display:flex;flex-direction:column;gap:3px;color:#a1a1aa}
+      #mpPanel input[type=color]{width:100%;height:30px;padding:2px;border-radius:7px;background:#27272a;border:1px solid #3f3f46;cursor:pointer}
+      #mpPanel button.btn[aria-pressed=true]{background:#78350f;border-color:#d97706;color:#fde68a}
+      #mpPanel button.btn:disabled{opacity:.45;cursor:not-allowed}
       #mpNote{position:absolute;left:12px;bottom:10px;padding:6px 9px;border-radius:7px;background:rgba(6,7,8,.7);color:#9ca3af;pointer-events:none}`;
     document.head.appendChild(css);
     const tabs = document.createElement('div');
@@ -3663,10 +3733,13 @@ function buildModelPageDOM() {
         <input id="mpLip" type="range" min="0" max="8" step="0.5">
         <div class="r"><span>Disc style</span></div>
         <select id="mpStyle"><option value="openwork">Openwork, one colour (light through)</option><option value="twocolour">Solid base + black pattern (3MF)</option></select>
+        <div class="r"><span>Colours</span></div>
+        <div class="cols" id="mpCols"></div>
         <h3>View</h3>
         <div class="grid2"><button class="btn" id="mpExplode">Exploded view</button><button class="btn" id="mpPlay">Pause</button></div>
         <input id="mpExplodeR" type="range" min="0" max="1" step="0.01" value="0" aria-label="Explode amount" style="margin-top:6px">
-        <label class="chk"><input type="checkbox" id="mpMech" checked> Mechanism</label>
+        <div class="grid2" style="margin-top:6px"><button class="btn" id="mpEnc" aria-pressed="false">Enclosure</button><button class="btn" id="mpCut" aria-pressed="false">Cut in half</button></div>
+        <label class="chk"><input type="checkbox" id="mpMech" checked> Mechanism + electronics</label>
         <label class="chk"><input type="checkbox" id="mpBack" checked> Backdrop light</label>
         <div class="grid2"><button class="btn" id="mpFront">Front view</button><button class="btn" id="mpIso">3/4 view</button></div>
         <h3>Build</h3>
@@ -3689,6 +3762,8 @@ function buildModelPageDOM() {
     document.getElementById('mpT').oninput = e => { params.cxDiscT = +e.target.value; sync(); };
     document.getElementById('mpLip').oninput = e => { params.cxLip = +e.target.value; sync(); };
     document.getElementById('mpStyle').onchange = e => { params.cxStyle = e.target.value; sync(); };
+    document.getElementById('mpEnc').onclick = () => { params.cxEnc = !params.cxEnc; mpRefreshPanel(); V3.onEnclosure && V3.onEnclosure(); };
+    document.getElementById('mpCut').onclick = () => { V3.cut = !V3.cut; mpRefreshPanel(); V3.onCut && V3.onCut(); };
     document.getElementById('mpExplode').onclick = () => { V3.explodeTarget = V3.explodeTarget > 0.5 ? 0 : 1; mpRefreshPanel(); };
     document.getElementById('mpExplodeR').oninput = e => { V3.explode = V3.explodeTarget = +e.target.value; mpRefreshPanel(); };
     document.getElementById('mpPlay').onclick = () => { togglePause(); mpRefreshPanel(); };
@@ -3707,6 +3782,19 @@ function mpRefreshPanel() {
     document.getElementById('mpTO').textContent = discT().toFixed(1) + ' mm';
     document.getElementById('mpExplode').textContent = V3.explodeTarget > 0.5 ? 'Assembled view' : 'Exploded view';
     document.getElementById('mpPlay').textContent = paused ? 'Play' : 'Pause';
+    const encBtn = document.getElementById('mpEnc');
+    encBtn.disabled = edge; encBtn.setAttribute('aria-pressed', !edge && !!params.cxEnc);
+    encBtn.title = edge ? 'The edge drive\'s back plate is its enclosure' : 'Back drum that hides the gears, motors and boards';
+    document.getElementById('mpCut').setAttribute('aria-pressed', !!V3.cut);
+    // colour pickers for the discs on show (and the pattern ribs on two-colour discs)
+    const cols = v3Discs().map(d => [d.which, d.which[0].toUpperCase() + d.which.slice(1) + ' L' + (d.layer + 1)]);
+    if ((params.cxStyle || 'openwork') === 'twocolour' || edge && params.cxStyle === 'twocolour') cols.push(['rib', 'Pattern']);
+    const colBox = document.getElementById('mpCols'), colKey = cols.map(c => c[0]).join();
+    if (colBox.dataset.key !== colKey) {
+        colBox.dataset.key = colKey;
+        colBox.innerHTML = cols.map(([w, l]) => `<label>${l}<input type="color" data-w="${w}" value="${discColour(w)}"></label>`).join('');
+        colBox.querySelectorAll('input').forEach(inp => inp.oninput = () => { params[DISC_COL[inp.dataset.w][0]] = inp.value; V3.recolour && V3.recolour(); });
+    }
     // disc export buttons follow the drive and disc count
     const btns = edge ? [['front', 'Front cartridge (L1)'], ['rear', 'Rear cartridge (L2)']]
         : discCount() === 3 ? [['front', 'Front disc (L1)'], ['middle', 'Middle disc (L2)'], ['rear', 'Rear disc (L3)']] : [['front', 'Front disc (L1)'], ['rear', 'Rear disc (L2)']];
@@ -3729,6 +3817,14 @@ function mpRefreshPanel() {
         const depth = (three ? L.frontDisc : CX.frontDisc2()) + discT() + discLip() + CX.plateT + CX.feetH;
         html = `Disc Ø <b>${params.lbDiameter} mm</b> · base Ø <b>${CX.plateR * 2} mm</b><br>Gears ${CX.Np}:${CX.Ng} (3:1) · depth from wall <b>${depth.toFixed(0)} mm</b><br>` +
             sp.map(s => `${s.name}: <b>${Math.abs(s.rpm).toFixed(2)} rpm</b> → motor ${Math.abs(s.motorRpm).toFixed(1)} rpm`).join('<br>');
+        if (params.cxEnc) {
+            const Rd = encR();
+            html += `<br>Enclosure Ø <b>${(Rd * 2).toFixed(0)} mm</b>, ${(encTop() + CX.plateT).toFixed(0)} mm deep · USB-C power + ESP32 ports at the bottom · 2 keyholes`;
+            if (Rd * 2 > 256) html += `<br><span class="warn">The enclosure is wider than a 256 mm bed.</span>`;
+            if (Rd > params.lbDiameter / 2) html += `<br><span class="warn">Discs under ${Math.round(Rd * 2 + 6)} mm leave the enclosure showing round the edge (it needs room for the boards).</span>`;
+        }
+        html += `<br>Electronics: ${three ? 3 : 2}× ULN2003 on the top standoffs, ESP32-C3 + USB-C 5 V trays at the bottom` +
+            (three ? '<br><span class="warn">3 ULN2003 motors need 12 pins: use the esp32s3 / esp32dev firmware (a C3 drives 2), or TMC2209s.</span>' : '');
     }
     if (sp.length > 1 && sp.every(x => Math.sign(x.rpm) === Math.sign(sp[0].rpm))) html += '<br><span class="warn">All discs turn the same way. Flip one layer\'s speed to counter-rotate.</span>';
     info.innerHTML = html;
@@ -3803,10 +3899,15 @@ async function openModelScene() {
         const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(a, 3)); geo.computeVertexNormals();
         return geo;
     };
-    const meshFrom = (tris, color) => new THREE.Mesh(geomFrom(tris), new THREE.MeshStandardMaterial({ color, roughness: 0.55, metalness: 0.05, flatShading: true }));
-    const steel = new THREE.MeshStandardMaterial({ color: 0xb8bcc4, metalness: 0.8, roughness: 0.3 });
+    const meshFrom = (tris, color) => new THREE.Mesh(geomFrom(tris), new THREE.MeshStandardMaterial({ color, roughness: 0.55, metalness: 0.05, flatShading: true, side: THREE.DoubleSide }));
+    const steel = new THREE.MeshStandardMaterial({ color: 0xb8bcc4, metalness: 0.8, roughness: 0.3, side: THREE.DoubleSide });
+    const mat = color => new THREE.MeshStandardMaterial({ color, roughness: 0.5, side: THREE.DoubleSide });
+    const box = (w, h, d, color, x, y, z) => { const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat(color)); b.position.set(x, y, z + d / 2); return b; };
+    // Cut in half: a plane through the axis hides the half nearest the default camera
+    const cutPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+    V3.onCut = () => { renderer.clippingPlanes = V3.cut ? [cutPlane] : []; };
     const cyl = (r, h, color) => {
-        const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, h, 48), color ? new THREE.MeshStandardMaterial({ color, roughness: 0.5 }) : steel);
+        const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, h, 48), color ? mat(color) : steel);
         m.rotation.x = Math.PI / 2; m.geometry.translate(0, h / 2, 0); return m;
     };
     const backMat = new THREE.MeshStandardMaterial({ color: 0xfff4dc, emissive: 0xffe8b8, emissiveIntensity: 0.6, side: THREE.DoubleSide });
@@ -3827,6 +3928,7 @@ async function openModelScene() {
         const build = async (label, fn) => { pageStatus(`Building ${label}…`); await tick(); return fn(); };
         if (isEdge()) {
             const E = edgeCalc();
+            V3.onEnclosure = null;
             m(meshFrom(await build('back plate', EDGE_PARTS.backPlate), 0x3f4652), E.backZ, 0);
             const ret = m(meshFrom(await build('front retainer', EDGE_PARTS.retainer), 0x2a2f37), E.retZ, 5);
             const wheel = await build('rollers', EDGE_PARTS.wheel), wheelB = mirrorZ(wheel), spacer = await build('spacers', EDGE_PARTS.spacer);
@@ -3864,10 +3966,10 @@ async function openModelScene() {
                 spin.push([m(meshFrom(await build('front hub', () => CX_PARTS.frontHub()), 0xa855f7), CX.frontZ, 4), 0]);
             } else {
                 spin.push([m(meshFrom(await build('middle hub', CX_PARTS.midHub), 0x10b981), L.hub1Z, 2), 1]);
-                m(meshFrom(await build('spacer', CX_PARTS.spacer(L.midSpacer)), 0xeab308), L.hub1Z + 7, 2);
+                if (L.midSpacer > 0) m(meshFrom(await build('spacer', CX_PARTS.spacer(L.midSpacer)), 0xeab308), L.hub1Z + 7, 2);
                 for (const z of [L.hub1Z, L.sleeveZ - 7]) m(cyl(11, 7), z, 2);
                 spin.push([m(meshFrom(await build('outer hub', CX_PARTS.outerHub), 0x0ea5e9), L.hub2Z, 3), 2]);
-                m(meshFrom(await build('spacer', CX_PARTS.spacer(L.outerSpacer, 34, 30.4)), 0xeab308), L.hub2Z + 7, 3);
+                if (L.outerSpacer > 0) m(meshFrom(await build('spacer', CX_PARTS.spacer(L.outerSpacer, 34, 30.4)), 0xeab308), L.hub2Z + 7, 3);
                 for (const z of [L.hub2Z, L.rearZ - 7]) m(cyl(21, 7), z, 3);
                 m(meshFrom(await build('sleeve', CX_PARTS.spacer(L.sleeveL)), 0xeab308), L.sleeveZ, 6);
                 spin.push([m(meshFrom(await build('front hub', () => CX_PARTS.frontHub()), 0xa855f7), L.frontZ, 7), 0]);
@@ -3881,6 +3983,36 @@ async function openModelScene() {
                 const body = m(cyl(14, 19, 0x60a5fa), ear - 19, 0); body.position.x = (CX.C + CX.motor.shaftOff) * cx; body.position.y = (CX.C + CX.motor.shaftOff) * sy;
                 const shaft = m(cyl(2.5, 10), ear, 0); shaft.position.x = CX.C * cx; shaft.position.y = CX.C * sy;
             }
+            // electronics: ULN2003 boards on standoffs, ESP32-C3 SuperMini + USB-C breakout in their trays
+            const elec = new THREE.Group();
+            for (const [x, y] of ELEC.ulnCentres(motorList.length)) {
+                const b = new THREE.Group(), z = ELEC.uln.standoff;
+                b.add(box(ELEC.uln.w, ELEC.uln.h, 1.6, 0x1f7a3a, 0, 0, z));
+                b.add(box(19.5, 6.5, 3.5, 0x111111, -3, 4, z + 1.6));                      // ULN2003 chip
+                b.add(box(12.5, 6, 7, 0xf1f1ee, 4, -10, z + 1.6));                        // motor socket
+                b.add(box(2.5, 10, 8.5, 0x222222, -14, -6, z + 1.6));                     // input pins
+                for (let i = 0; i < 4; i++) b.add(box(3, 3, 2, 0xdc2626, 13, 6 - i * 4, z + 1.6));   // LEDs
+                b.position.set(x, -y, 0); elec.add(b);
+            }
+            for (const [t, pcb, chip] of [[ELEC.esp, 0x1d3f8a, 0x111111], [ELEC.usb, 0x111111, null]]) {
+                const b = new THREE.Group();
+                b.add(box(t.len, t.wid, 1.2, pcb, 0, 0, 0.2));
+                if (chip) b.add(box(7, 7, 1, chip, -3, 0, 1.4));
+                b.add(box(7.4, 9, 3.2, 0xc8ccd2, t.len / 2 - 3.4, 0, 1.4));                 // USB-C socket, facing out
+                const a = t.ang * Math.PI / 180;
+                b.position.set(t.r * Math.cos(a), -t.r * Math.sin(a), 0); b.rotation.z = -a; elec.add(b);
+            }
+            m(elec, 0, 0);
+            // enclosure, built the first time it's switched on
+            let encMesh = null;
+            V3.onEnclosure = async () => {
+                if (params.cxEnc && !encMesh && !isEdge()) {
+                    encMesh = meshFrom(await build('enclosure', CX_PARTS.enclosure), 0x2a2f37);
+                    m(encMesh, 0, 0); pageStatus('');
+                }
+                if (encMesh) encMesh.visible = !!params.cxEnc;
+            };
+            if (params.cxEnc) await V3.onEnclosure();
             discZ = three3 ? { rear: L.rearZ, middle: L.rearZ, front: L.frontDisc } : { rear: CX.hubZ + CX.hubL, front: CX.frontDisc2() };
             discOrder = three3 ? { rear: 4, middle: 5, front: 8 } : { rear: 3, front: 5 }; mirrorRear = false;
             backZ = (three3 ? L.rearZ : CX.hubZ + CX.hubL) - 6; backOrder = (three3 ? 4 : 3) - 0.5;
@@ -3898,7 +4030,7 @@ async function openModelScene() {
             if (!V3.open) return;
             const r = isEdge() ? edgeCartridge(d.which, 0) : coaxDisc(d.which, 0);   // unrotated: the mesh spins
             const grp = new THREE.Group();
-            r.parts.forEach((pt, i) => grp.add(meshFrom(mirrorRear && d.which === 'rear' ? mirrorZ(pt.tris) : pt.tris, i === 0 ? d.colour : 0x111111)));
+            r.parts.forEach((pt, i) => { const mesh = meshFrom(mirrorRear && d.which === 'rear' ? mirrorZ(pt.tris) : pt.tris, i === 0 ? d.colour : discColour('rib')); mesh.userData.col = i === 0 ? d.which : 'rib'; grp.add(mesh); });
             for (const [x, y, z] of discScrews(d.which)) {                                   // M3 button heads that hold the disc on
                 const head = new THREE.Mesh(new THREE.CylinderGeometry(2.75, 2.75, 1.65, 24), steel);
                 head.rotation.x = Math.PI / 2; head.position.set(x, -y, z + 0.82); grp.add(head);
@@ -3912,6 +4044,8 @@ async function openModelScene() {
         for (const d of discs) add(d.grp, discZ[d.which], discOrder[d.which], discGroup);
     }
 
+    V3.recolour = () => { for (const d of discs) d.grp.traverse(o => { if (o.userData.col) o.material.color.set(discColour(o.userData.col)); }); };
+    V3.onCut();
     let busy = false, builtMech = '', builtDiscs = '', lastSig = '', changedAt = 0;
     const rebuild = async () => {
         busy = true;
@@ -3960,7 +4094,7 @@ async function openModelScene() {
 }
 
 function closeModelScene() {
-    V3.open = false;
+    V3.open = false; V3.recolour = V3.onEnclosure = V3.onCut = null;
     if (V3.cleanup) { V3.cleanup(); V3.cleanup = null; }
 }
 
