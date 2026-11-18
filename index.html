@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Moiré Lattice Generator</title>
+    <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
     <script src="tailwind.js"></script>
     <style>
         body { font-family: system-ui, sans-serif; }
@@ -419,6 +420,7 @@
                         <input type="range" id="cxRim" min="2" max="15" value="4" step="0.5" class="w-full accent-amber-500 mb-1">
                         <div id="cxInfo" class="text-xs text-zinc-400 p-2 bg-zinc-900 rounded-lg leading-relaxed"></div>
                         <div id="cxBtns" class="grid grid-cols-2 gap-1">
+                            <button onclick="open3DView()" class="py-2 bg-indigo-700 hover:bg-indigo-600 rounded-lg text-xs font-semibold col-span-2">&#x1F9CA; 3D assembly view</button>
                             <button onclick="exportCoaxParts()" class="py-2 bg-amber-700 hover:bg-amber-600 rounded-lg text-xs font-semibold col-span-2">&#x2B07; Drive parts (STL zip + build sheet)</button>
                             <button onclick="exportCoaxDisc('front')" class="py-2 bg-zinc-700 hover:bg-zinc-600 rounded-lg text-xs">Front disc (L1)</button>
                             <button onclick="exportCoaxDisc('rear')" class="py-2 bg-zinc-700 hover:bg-zinc-600 rounded-lg text-xs">Rear disc (L2)</button>
@@ -2878,7 +2880,7 @@ const CX_PARTS = {
 // ── Discs with mounts ─────────────────────────────────────────────
 // which: 'front' (Layer 1) or 'rear' (Layer 2). style: 'openwork' (one colour, light
 // passes through) or 'twocolour' (solid base + pattern ribs, two filaments).
-function coaxDisc(which) {
+function discSpec(which) {
     const c = coaxCalc(), mmpp = 1 / c.S, R = c.R, t = Math.max(1, +params.cxDiscT || 2);
     const front = which === 'front', layerIdx = front ? 0 : 1;
     const holeR = front ? CX.frontHexAF / Math.sqrt(3) + 0.3 : 18;
@@ -2891,12 +2893,12 @@ function coaxDisc(which) {
         }
     };
     const res = Math.min(12, 4000 / (2 * R));
-    const pattern = (g, r0, r1) => {          // the layer's pattern, clipped to an annulus
+    const pattern = (g, r0, r1, angOverride) => {          // the layer's pattern, clipped to an annulus
         g.save();
         g.beginPath(); g.arc(0, 0, r1, 0, Math.PI * 2); g.moveTo(r0, 0); g.arc(0, 0, r0, 0, Math.PI * 2, true); g.clip('evenodd');
         g.scale(mmpp, mmpp);
         g.translate(params['layer' + (layerIdx + 1) + 'OffsetX'] || 0, params['layer' + (layerIdx + 1) + 'OffsetY'] || 0);
-        const ang = layerAngle[layerIdx] || 0;
+        const ang = angOverride ?? (layerAngle[layerIdx] || 0);
         g.rotate(ang * Math.PI / 180);
         g.strokeStyle = '#fff'; g.lineWidth = params.stroke; g.lineCap = 'square';
         const prevStep = GEO.step; GEO.step = Math.max(1, 0.4 / mmpp);
@@ -2904,6 +2906,11 @@ function coaxDisc(which) {
         finally { GEO.step = prevStep; }
         g.restore();
     };
+    return { c, mmpp, R, t, front, layerIdx, holeR, hubOut, holes, pattern };
+}
+function coaxDisc(which) {
+    const { c, R, t, hubOut, holes, pattern } = discSpec(which);
+    const res = Math.min(12, 4000 / (2 * R));
     if ((params.cxStyle || 'openwork') === 'openwork') {
         const shapes = profile2D(R + 1, a => {
             a.add(g => { g.arc(0, 0, R, 0, Math.PI * 2); g.moveTo(R - c.rim, 0); g.arc(0, 0, R - c.rim, 0, Math.PI * 2, true); });
@@ -3049,6 +3056,220 @@ async function exportCoaxDisc(which) {
         cxStatus(`Saved the ${which} disc.` + (d.pieces > 1 ? ` Heads up: it falls apart into ${d.pieces} pieces. Thicken the lines or change the pattern so every line reaches the rim or hub.` : ''));
     } catch (e) { cxStatus('Export didn\'t work: ' + (e.message || e)); }
     finally { btns.forEach(b => b.disabled = false); }
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  3D ASSEMBLY VIEW
+//  The printed drive parts (the same meshes the export builds), the bought
+//  hardware as simple solids, and one disc per enabled layer, textured with
+//  that layer's live pattern and spinning at its speed. Gears turn with them.
+// ════════════════════════════════════════════════════════════════════
+const V3 = { open: false, parts: null, partsKey: '', tex: {}, lastTex: 0, explode: 0, backdrop: true, mech: true };
+
+function paintApi(g) {
+    return {
+        g,
+        add(...paths) { g.globalCompositeOperation = 'source-over'; for (const p of paths) { g.beginPath(); p(g); g.fill(); } },
+        cut(...paths) { g.globalCompositeOperation = 'destination-out'; for (const p of paths) { g.beginPath(); p(g); g.fill(); } g.globalCompositeOperation = 'source-over'; },
+    };
+}
+
+// Draw one disc (as printed) onto a square canvas: solid areas opaque, openings clear.
+function paintDiscTexture(which, cv, colour) {
+    const spec = discSpec(which), { R, c, hubOut, holes, pattern } = spec;
+    const N = cv.width, g = cv.getContext('2d');
+    g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, N, N);
+    g.translate(N / 2, N / 2); g.scale(N / (2 * R), N / (2 * R));
+    g.fillStyle = '#fff';
+    const a = paintApi(g);
+    const two = (params.cxStyle || 'openwork') === 'twocolour';
+    if (two) a.add(P2.circle(0, 0, R));
+    else {
+        a.add(g2 => { g2.arc(0, 0, R, 0, Math.PI * 2); g2.moveTo(R - c.rim, 0); g2.arc(0, 0, R - c.rim, 0, Math.PI * 2, true); });
+        a.add(P2.circle(0, 0, hubOut));
+        pattern(g, hubOut - 0.5, R - c.rim + 0.5, 0);
+    }
+    holes(a);
+    // colour it: solid parts take the disc colour, two-colour discs get black ribs
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.globalCompositeOperation = 'source-in'; g.fillStyle = colour; g.fillRect(0, 0, N, N);
+    g.globalCompositeOperation = 'source-over';
+    if (two) {
+        g.translate(N / 2, N / 2); g.scale(N / (2 * R), N / (2 * R));
+        const tmp = document.createElement('canvas'); tmp.width = tmp.height = N;
+        const t2 = tmp.getContext('2d'); t2.translate(N / 2, N / 2); t2.scale(N / (2 * R), N / (2 * R));
+        pattern(t2, hubOut, R - 1, 0);
+        t2.setTransform(1, 0, 0, 1, 0, 0); t2.globalCompositeOperation = 'source-in'; t2.fillStyle = '#111'; t2.fillRect(0, 0, N, N);
+        g.setTransform(1, 0, 0, 1, 0, 0); g.drawImage(tmp, 0, 0);
+    }
+}
+
+// Which discs exist: Layer 1 → front, Layer 2 → rear (the drive carries two)
+function v3Discs() {
+    const out = [];
+    if (params.layer1On) out.push({ which: 'front', layer: 0, colour: '#15171a' });
+    if (params.layer2On) out.push({ which: 'rear', layer: 1, colour: '#ece9e2' });
+    return out;
+}
+
+async function v3BuildParts(status) {
+    const key = [params.cxDiscT, CX.Ng, CX.Np, CX.m].join('|');
+    if (V3.parts && V3.partsKey === key) return V3.parts;
+    await loadEarcut();
+    const list = { base: CX_PARTS.base, rodGear: CX_PARTS.rodGear, rearHub: CX_PARTS.rearHub, frontHub: CX_PARTS.frontHub,
+                   pinion: CX_PARTS.pinion, sp11: CX_PARTS.spacer(11), sp22: CX_PARTS.spacer(22) };
+    const parts = {};
+    for (const k in list) { status(`Building ${k}…`); await tick(); parts[k] = list[k](); }
+    V3.parts = parts; V3.partsKey = key;
+    return parts;
+}
+
+async function open3DView() {
+    if (V3.open) return;
+    const host = document.getElementById('canvasContainer');
+    host.style.position = 'relative';
+    const box = document.createElement('div');
+    box.id = 'view3d';
+    box.style.cssText = 'position:absolute;inset:0;z-index:40;background:#0d0f12;display:flex;flex-direction:column';
+    box.innerHTML = `
+      <div style="display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;padding:8px 12px;border-bottom:1px solid #27272a;font-size:12px;color:#d4d4d8">
+        <b style="font-size:13px">3D assembly</b>
+        <label style="display:flex;gap:6px;align-items:center">Exploded <input id="v3explode" type="range" min="0" max="1" step="0.01" value="0" style="width:110px;accent-color:#f59e0b"></label>
+        <label style="display:flex;gap:6px;align-items:center"><input id="v3mech" type="checkbox" checked> Mechanism</label>
+        <label style="display:flex;gap:6px;align-items:center"><input id="v3back" type="checkbox" checked> Backdrop</label>
+        <span id="v3status" style="color:#a1a1aa"></span>
+        <button id="v3close" style="margin-left:auto;padding:4px 10px;border-radius:6px;background:#3f3f46">Close 3D</button>
+      </div>
+      <div id="v3stage" style="flex:1;min-height:0;position:relative"></div>
+      <p id="v3note" style="margin:0;padding:6px 12px;font-size:12px;color:#a1a1aa;border-top:1px solid #27272a"></p>`;
+    host.appendChild(box);
+    V3.open = true;
+    const status = t => { const e = document.getElementById('v3status'); if (e) e.textContent = t; };
+    document.getElementById('v3close').onclick = close3DView;
+
+    let THREE, OrbitControls;
+    try {
+        status('Loading three.js…');
+        THREE = await import('three');
+        ({ OrbitControls } = await import('three/addons/controls/OrbitControls.js'));
+    } catch (e) { status("Couldn't load three.js (needs internet the first time)."); return; }
+    let parts;
+    try { parts = await v3BuildParts(status); } catch (e) { status('Building parts failed: ' + (e.message || e)); return; }
+    if (!V3.open) return;
+    status('');
+
+    const stage = document.getElementById('v3stage');
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    stage.appendChild(renderer.domElement);
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0d0f12);
+    scene.add(new THREE.HemisphereLight(0xffffff, 0x223344, 1.0));
+    const sun = new THREE.DirectionalLight(0xffffff, 1.8); sun.position.set(160, -220, 320); scene.add(sun);
+    const fill = new THREE.DirectionalLight(0xffffff, 0.5); fill.position.set(-200, 150, 100); scene.add(fill);
+    const cam = new THREE.PerspectiveCamera(32, 1, 1, 5000);
+    cam.up.set(0, 0, 1);
+    const R = coaxCalc().R;
+    cam.position.set(R * 0.9, -R * 2.6, R * 2.6 + 90);
+    const ctl = new OrbitControls(cam, renderer.domElement);
+    ctl.target.set(0, 0, 50); ctl.enableDamping = true; ctl.update();
+
+    const meshFrom = (tris, color, opts = {}) => {
+        const a = new Float32Array(tris.length * 9); let i = 0;
+        for (const t of tris) for (const v of t) { a[i++] = v[0]; a[i++] = v[1]; a[i++] = v[2]; }
+        const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(a, 3)); geo.computeVertexNormals();
+        return new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color, roughness: 0.55, metalness: 0.05, flatShading: true, side: THREE.DoubleSide, ...opts }));
+    };
+    const steel = new THREE.MeshStandardMaterial({ color: 0xb8bcc4, metalness: 0.8, roughness: 0.3 });
+    const cyl = (r, h, color) => {
+        const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, h, 48), color ? new THREE.MeshStandardMaterial({ color, roughness: 0.5 }) : steel);
+        m.rotation.x = Math.PI / 2; m.geometry.translate(0, h / 2, 0); return m;
+    };
+    // Everything that moves along z when exploded: [object, z, explode order]
+    const items = [];
+    const mech = new THREE.Group(); scene.add(mech);
+    const add = (obj, z, order, group = mech) => { obj.position.z = z; group.add(obj); items.push([obj, z, order]); return obj; };
+
+    add(meshFrom(parts.base, 0x3f4652), 0, 0);
+    add(meshFrom(parts.sp11, 0xeab308), 2, 0);
+    for (const z of [-CX.plateT, 13]) add(cyl(11, 7), z, 0);                      // base 608s
+    const rodGear = add(meshFrom(parts.rodGear, 0xf97316), CX.g1z, 1);
+    const hub = add(meshFrom(parts.rearHub, 0x10b981), CX.hubZ, 2);
+    add(meshFrom(parts.sp22, 0xeab308), CX.hubZ + 7, 2);
+    for (const z of [CX.hubZ, CX.hubZ + CX.hubL - 7]) add(cyl(11, 7), z, 2);      // hub 608s
+    const frontHub = add(meshFrom(parts.frontHub, 0xa855f7), CX.frontZ, 4);
+    add(cyl(4, 105), -13, 0);                                                       // M8 rod
+    const pinA = add(meshFrom(parts.pinion, 0xef4444), CX.earA + 2, 0);
+    const pinB = add(meshFrom(parts.pinion, 0xef4444), CX.earB + 2, 0);
+    pinA.position.x = CX.C; pinB.position.x = -CX.C;
+    for (const [sx, ear] of [[1, CX.earA], [-1, CX.earB]]) {
+        const body = add(cyl(14, 19, 0x60a5fa), ear - 19, 0); body.position.x = sx * (CX.C + CX.motor.shaftOff);
+        const shaft = add(cyl(2.5, 10), ear, 0); shaft.position.x = sx * CX.C;
+    }
+
+    // Discs with live pattern textures
+    const t = Math.max(1, +params.cxDiscT || 2);
+    const discZ = { rear: CX.hubZ + CX.hubL, front: CX.frontZ + 2.9 };
+    const discOrder = { rear: 3, front: 5 };
+    const discs = [];
+    for (const d of v3Discs()) {
+        const cv = document.createElement('canvas'); cv.width = cv.height = 1024;
+        paintDiscTexture(d.which, cv, d.colour);
+        const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
+        const mat = new THREE.MeshStandardMaterial({ map: tex, alphaTest: 0.5, side: THREE.DoubleSide, roughness: 0.6 });
+        const grp = new THREE.Group();
+        const top = new THREE.Mesh(new THREE.CircleGeometry(R, 160), mat); top.position.z = t; grp.add(top);
+        const bot = new THREE.Mesh(new THREE.CircleGeometry(R, 160), mat); grp.add(bot);
+        const edge = new THREE.Mesh(new THREE.CylinderGeometry(R, R, t, 160, 1, true), new THREE.MeshStandardMaterial({ color: d.colour, roughness: 0.6, side: THREE.DoubleSide }));
+        edge.rotation.x = Math.PI / 2; edge.position.z = t / 2; grp.add(edge);
+        add(grp, discZ[d.which], discOrder[d.which], scene);
+        discs.push({ ...d, cv, tex, grp });
+    }
+    // Backdrop: a light panel behind the discs, so openings read as light
+    const back = new THREE.Mesh(new THREE.RingGeometry(30, R * 1.15, 128), new THREE.MeshStandardMaterial({ color: 0xfff4dc, emissive: 0xffe8b8, emissiveIntensity: 0.6, side: THREE.DoubleSide }));
+    back.position.z = CX.hubZ + CX.hubL - 6; scene.add(back);
+
+    const note = document.getElementById('v3note');
+    const names = v3Discs().map(d => d.which === 'front' ? 'front = Layer 1' : 'rear = Layer 2').join(', ');
+    note.textContent = (names ? `Discs: ${names}. ` : 'Turn on Layer 1 and/or Layer 2 to see discs. ') +
+        (params.layer3On ? 'Layer 3 is on, but this drive carries two discs, so Layer 3 isn\'t shown. ' : '') +
+        'Drag to orbit, scroll to zoom. Patterns update live.';
+
+    const ex = document.getElementById('v3explode'), mc = document.getElementById('v3mech'), bk = document.getElementById('v3back');
+    ex.oninput = () => V3.explode = +ex.value;
+    mc.onchange = () => { mech.visible = mc.checked; };
+    bk.onchange = () => { back.visible = bk.checked; };
+
+    const size = () => { const w = stage.clientWidth, h = stage.clientHeight; renderer.setSize(w, h); cam.aspect = w / Math.max(1, h); cam.updateProjectionMatrix(); };
+    const ro = new ResizeObserver(size); ro.observe(stage); size();
+
+    const ratio = CX.Ng / CX.Np;
+    V3.cleanup = () => { ro.disconnect(); renderer.dispose(); };
+    const loop = now => {
+        if (!V3.open) return;
+        const a0 = (layerAngle[0] || 0) * Math.PI / 180, a1 = (layerAngle[1] || 0) * Math.PI / 180;
+        for (const [obj, z, order] of items) obj.position.z = z + V3.explode * order * 22;
+        back.position.z = CX.hubZ + CX.hubL - 6 + V3.explode * 2.5 * 22;
+        for (const d of discs) d.grp.rotation.z = -(d.layer === 0 ? a0 : a1);
+        rodGear.rotation.z = frontHub.rotation.z = -a0;          // rod, its gear and the front hub turn with the front disc
+        hub.rotation.z = -a1;
+        pinA.rotation.z = a0 * ratio;                             // pinions counter-rotate, 3× faster
+        pinB.rotation.z = a1 * ratio;
+        if (now - V3.lastTex > 300) {                             // keep patterns in step with the editor
+            V3.lastTex = now;
+            for (const d of discs) { paintDiscTexture(d.which, d.cv, d.colour); d.tex.needsUpdate = true; }
+        }
+        ctl.update();
+        renderer.render(scene, cam);
+        requestAnimationFrame(loop);
+    };
+    requestAnimationFrame(loop);
+}
+
+function close3DView() {
+    V3.open = false;
+    if (V3.cleanup) { V3.cleanup(); V3.cleanup = null; }
+    const b = document.getElementById('view3d'); if (b) b.remove();
 }
 
 // ════════════════════════════════════════════════════════════════════
