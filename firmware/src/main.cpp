@@ -71,6 +71,16 @@ constexpr int PIN_BOOT = 9;
 #else
 constexpr int PIN_BOOT = 0;
 #endif
+// Panel button (to GND): tap = pause / play, hold 1 s = next motion mode
+#ifndef PIN_BTN
+#if defined(CONFIG_IDF_TARGET_ESP32C3) || defined(CONFIG_IDF_TARGET_ESP32C6)
+#define PIN_BTN 20
+#elif defined(CONFIG_IDF_TARGET_ESP32S3)
+#define PIN_BTN 14
+#else
+#define PIN_BTN 18
+#endif
+#endif
 Preferences prefs;
 WebServer server(80);
 
@@ -287,6 +297,20 @@ void handlePassword() {          // ?key=<current>&new=<new>; new empty removes 
     prefs.begin("moire", false); prefs.putString("admin", adminPass); prefs.end();
     cors(); server.send(200, "application/json", stateJson());
 }
+void checkPanelButton() {
+    static bool down = false, held = false;
+    static uint32_t since = 0, lastEdge = 0;
+    bool now = digitalRead(PIN_BTN) == LOW;
+    if (now != down && millis() - lastEdge > 30) {            // 30 ms debounce
+        lastEdge = millis(); down = now;
+        if (down) { since = millis(); held = false; }
+        else if (!held) { S.running = !S.running; saveSoon(); }
+    }
+    if (down && !held && millis() - since > 1000) {
+        held = true; S.mode = (S.mode + 1) % 3; saveSoon();
+        Serial.printf("Button: mode %s\n", modeName(S.mode));
+    }
+}
 void checkBootButton() {         // hold BOOT 5 s: clear the admin password
     static uint32_t downSince = 0;
     if (digitalRead(PIN_BOOT) == LOW) {
@@ -367,12 +391,21 @@ void setup() {
     server.on("/api/set", HTTP_GET, handleSet);
     server.on("/api/wifi", handleWifi);
     server.on("/api/password", handlePassword);
+    // add-to-home-screen: name, colours and a moiré icon
+    server.on("/manifest.json", [] { server.send(200, "application/manifest+json",
+        "{\"name\":\"Moiré drive\",\"short_name\":\"Moiré\",\"start_url\":\"/\",\"display\":\"standalone\","
+        "\"background_color\":\"#111214\",\"theme_color\":\"#111214\",\"icons\":[{\"src\":\"/icon.svg\",\"sizes\":\"any\",\"type\":\"image/svg+xml\"}]}"); });
+    server.on("/icon.svg", [] { server.send(200, "image/svg+xml",
+        "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='14' fill='#111214'/>"
+        "<g fill='none' stroke='#f59e0b' stroke-width='2'><circle cx='29' cy='32' r='6'/><circle cx='29' cy='32' r='13'/><circle cx='29' cy='32' r='20'/></g>"
+        "<g fill='none' stroke='#ececec' stroke-width='2'><circle cx='35' cy='32' r='6'/><circle cx='35' cy='32' r='13'/><circle cx='35' cy='32' r='20'/></g></svg>"); });
     server.on("/api/set", HTTP_OPTIONS, [] {          // browsers ask first when the generator sends an X-Key header
         cors(); server.sendHeader("Access-Control-Allow-Headers", "X-Key"); server.send(204);
     });
     const char* hdrs[] = { "X-Key" };
     server.collectHeaders(hdrs, 1);
     pinMode(PIN_BOOT, INPUT_PULLUP);
+    pinMode(PIN_BTN, INPUT_PULLUP);
     server.onNotFound([] { cors(); server.send(404, "text/plain", "not found"); });
     server.begin();
 }
@@ -384,4 +417,5 @@ void loop() {
     if (saveAt && millis() > saveAt) saveNow();
     motorsRetry();
     checkBootButton();
+    checkPanelButton();
 }

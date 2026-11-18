@@ -3,6 +3,9 @@
 const char WEB_UI[] PROGMEM = R"HTML(<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Moiré drive</title>
+<meta name="theme-color" content="#111214"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Moiré"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="/manifest.json"><link rel="icon" href="/icon.svg">
 <style>
 :root{--bg:#111214;--panel:#1b1d21;--ink:#ececec;--muted:#9a9ea6;--line:#2c2f35;--accent:#f59e0b}
 @media (prefers-color-scheme: light){:root{--bg:#f4f3f0;--panel:#fff;--ink:#1c1b19;--muted:#6b6862;--line:#e2dfd9;--accent:#c2700a}}
