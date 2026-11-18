@@ -368,14 +368,16 @@
                 <div id="lightboxControls" class="hidden space-y-2">
                     <div class="row"><span>Disc Ø <span class="text-zinc-500 text-xs">(mm)</span></span><span id="val-lbDiameter">200</span></div>
                     <input type="range" id="lbDiameter" min="50" max="500" value="200" class="w-full accent-amber-500 mb-1">
-                    <div class="row"><span>Module <span class="text-zinc-500 text-xs">(tooth size mm)</span></span><span id="val-lbModule">8</span></div>
-                    <input type="range" id="lbModule" min="1" max="30" value="8" step="0.5" class="w-full accent-amber-500 mb-1">
-                    <div class="row"><span>Planet Teeth</span><span id="val-lbPlanetTeeth">16</span></div>
-                    <input type="range" id="lbPlanetTeeth" min="8" max="60" value="16" class="w-full accent-amber-500 mb-1">
-                    <div class="row"><span>Planet Gap <span class="text-zinc-500 text-xs">(mm)</span></span><span id="val-lbPlanetGap">0.5</span></div>
-                    <input type="range" id="lbPlanetGap" min="0" max="5" value="0.5" step="0.1" class="w-full accent-amber-500 mb-2">
+                    <div class="row"><span>Module <span class="text-zinc-500 text-xs">(tooth size mm)</span></span><span id="val-lbModule">2</span></div>
+                    <input type="range" id="lbModule" min="0.5" max="6" value="2" step="0.25" class="w-full accent-amber-500 mb-1">
+                    <div class="row"><span>Planet Teeth</span><span id="val-lbPlanetTeeth">18</span></div>
+                    <input type="range" id="lbPlanetTeeth" min="10" max="60" value="18" class="w-full accent-amber-500 mb-1">
+                    <div class="row"><span>Planet Gap <span class="text-zinc-500 text-xs">(mm)</span></span><span id="val-lbPlanetGap">0.2</span></div>
+                    <input type="range" id="lbPlanetGap" min="0" max="2" value="0.2" step="0.05" class="w-full accent-amber-500 mb-2">
                     <div class="row"><span>Planet Axle Ø <span class="text-zinc-500 text-xs">(mm)</span></span><span id="val-lbAxleHole">5</span></div>
                     <input type="range" id="lbAxleHole" min="1" max="20" value="5" step="0.5" class="w-full accent-amber-500 mb-2">
+                    <div class="row"><span>Centre Hole Ø <span class="text-zinc-500 text-xs">(mm)</span></span><span id="val-lbCentreHole">8</span></div>
+                    <input type="range" id="lbCentreHole" min="1" max="40" value="8" step="0.5" class="w-full accent-amber-500 mb-2">
                     <div id="lbGearInfo" class="text-xs text-zinc-400 p-2 bg-zinc-900 rounded-lg leading-relaxed"></div>
                     <div class="grid grid-cols-2 gap-1 mt-1">
                         <button onclick="exportLightboxSVG(0)" class="py-2 bg-amber-700 hover:bg-amber-600 rounded-lg text-xs font-semibold col-span-2">⬇ SVG All Layers</button>
@@ -384,6 +386,20 @@
                         <button onclick="exportLightboxSVG(3)" class="py-2 bg-zinc-700 hover:bg-zinc-600 rounded-lg text-xs">SVG L3</button>
                         <button onclick="exportLightboxSVG(4)" class="py-2 bg-zinc-700 hover:bg-zinc-600 rounded-lg text-xs">SVG Planets</button>
                     </div>
+                    <p class="slabel mt-3 mb-1">3D print</p>
+                    <p class="text-zinc-500 text-xs mb-2">Disc = gear base (print clear/white) + pattern ribs (print black), as one 3MF with two parts. Planets as STL.</p>
+                    <div class="row"><span>Base thickness <span class="text-zinc-500 text-xs">(mm)</span></span><span id="val-lbBaseT">1.6</span></div>
+                    <input type="range" id="lbBaseT" min="0.6" max="5" value="1.6" step="0.2" class="w-full accent-amber-500 mb-1">
+                    <div class="row"><span>Pattern height <span class="text-zinc-500 text-xs">(mm)</span></span><span id="val-lbRibH">0.6</span></div>
+                    <input type="range" id="lbRibH" min="0.2" max="3" value="0.6" step="0.2" class="w-full accent-amber-500 mb-2">
+                    <div id="lb3dBtns" class="grid grid-cols-2 gap-1">
+                        <button onclick="exportLightbox3D(1)" class="py-2 bg-amber-700 hover:bg-amber-600 rounded-lg text-xs">3MF L1</button>
+                        <button onclick="exportLightbox3D(2)" class="py-2 bg-amber-700 hover:bg-amber-600 rounded-lg text-xs">3MF L2</button>
+                        <button onclick="exportLightbox3D(3)" class="py-2 bg-amber-700 hover:bg-amber-600 rounded-lg text-xs">3MF L3</button>
+                        <button onclick="exportLightbox3D(4)" class="py-2 bg-zinc-700 hover:bg-zinc-600 rounded-lg text-xs">STL Planet</button>
+                    </div>
+                    <p id="lb3dStatus" class="text-xs text-zinc-400 mt-1" aria-live="polite"></p>
+
                 </div>
             </div>
 
@@ -495,8 +511,8 @@ const params = {
     shColorNoise: false, colorNoiseScale: 5, colorNoiseSpeed: 0.5, colorNoiseExpand: 0, colorNoiseOpacity: 50,
     shBlur:       false, blurPersist: 0.85,
     // Lightbox
-    lightbox: false, lbDiameter: 200, lbModule: 8, lbPlanetTeeth: 16,
-    lbPlanetGap: 0.5, lbCentreHole: 8, lbAxleHole: 5,
+    lightbox: false, lbDiameter: 200, lbModule: 2, lbPlanetTeeth: 18,
+    lbPlanetGap: 0.2, lbCentreHole: 8, lbAxleHole: 5, lbBaseT: 1.6, lbRibH: 0.6,
 };
 
 // ════════════════════════════════════════════════════════════════════
@@ -545,7 +561,7 @@ const numericIds = new Set([
     'noiseScale','noiseSpeed','noiseOpacity',
     'colorNoiseScale','colorNoiseSpeed','colorNoiseExpand','colorNoiseOpacity',
     'blurPersist',
-    'lbDiameter','lbModule','lbPlanetTeeth','lbPlanetGap','lbCentreHole','lbAxleHole',
+    'lbDiameter','lbModule','lbPlanetTeeth','lbPlanetGap','lbCentreHole','lbAxleHole','lbBaseT','lbRibH',
 ]);
 const selectIds = new Set(['shape','blendMode','warpType','cutout','meshMode']);
 const colorIds  = new Set(['bgColor','layer1Color','layer2Color','layer3Color',
@@ -1018,7 +1034,7 @@ function meshDisplace(px, py, layerRot) {
 // ── Mesh knob DOM elements ───────────────────────────────────────
 let knobEls = [];
 function initMeshKnobs() {
-    knobEls.forEach(k => k.remove());
+    knobEls.flat().forEach(k => k.remove());
     knobEls = [];
     const wrap = document.getElementById('canvasWrap');
     for (let r = 0; r < MESH_ROWS; r++) {
@@ -1370,7 +1386,7 @@ function renderFrame(time = 0) {
         const _g = lbCalcGear();
         ctx.save();
         ctx.beginPath();
-        ctx.arc(_g.cx, _g.cy, _g.Rpitch_ring_px, 0, Math.PI * 2);
+        ctx.arc(_g.cx, _g.cy, _g.patternR_mm * _g.S, 0, Math.PI * 2);
         ctx.clip();
         clipped = true;
     } else {
@@ -1583,6 +1599,7 @@ function _renderLayerCore(c, angle, offX, offY, color, warpOn) {
         case 'lines':       drawLines(c, spacing2, size2, maxDist2, angle, warpOn);       break;
         case 'radial':      drawRadial(c, spacing2, size2, maxDist2, angle, warpOn);      break;
         case 'iso-circles': drawIsoCircles(c, spacing2, size2, maxDist2, angle, warpOn);  break;
+        case 'iso-dots':    drawIsoDots(c, spacing2, size2, maxDist2, angle, warpOn);     break;
         case 'grid':        drawGrid(c, spacing2, size2, maxDist2, angle, warpOn);        break;
         case 'hexagon':     drawHexGrid(c, spacing2, size2, maxDist2, angle, warpOn);     break;
         case 'hex-tile':    drawHexTile(c, spacing2, size2, maxDist2, angle, warpOn);     break;
@@ -1623,49 +1640,162 @@ function effectiveWarpStrength() {
     return params.warpStrength * (1 + Math.sin(globalTime * params.warpOscSpeed * Math.PI * 2));
 }
 
+// ════════════════════════════════════════════════════════════════════
+//  Smooth path engine
+//  Every shape goes through emitPath(). Unwarped straight edges and circles
+//  stay exact (lineTo / arc). Warped outlines are sampled densely along
+//  each edge, warped, and drawn as Catmull-Rom → cubic Bézier curves, so
+//  they are smooth instead of faceted. The same calls feed the canvas and
+//  the SVG recorder (SvgSink), so exports match the screen exactly.
+//  GEO.clip (exports only) trims paths to the cutout / disc edge.
+// ════════════════════════════════════════════════════════════════════
+const GEO = { clip: null, step: 8 };   // step = sample spacing (px) along warped edges
+
+// Warp function for a layer, or null when nothing moves.
+// axis 'y' = legacy warps displace horizontal lines vertically.
+function warpFn(rot, warpOn, axis) {
+    if (!hasWarp(warpOn)) return null;
+    if (isMesh()) return (x, y) => { const p = mwarp(x, y, rot); return [p.x, p.y]; };
+    return axis === 'y' ? (x, y) => [x, y + warpDX(x, y)]
+                        : (x, y) => [x + warpDX(y, x), y];
+}
+
+// pts: [[x,y],...]. smooth: per-point flags (true = curve passes smoothly
+// through this point, false/undefined = corner). closed joins last→first.
+function emitPath(c, pts, closed, wf, smooth) {
+    const n = pts.length;
+    if (n < 2) return;
+    if (!wf && !GEO.clip && !smooth) {
+        c.moveTo(pts[0][0], pts[0][1]);
+        for (let i = 1; i < n; i++) c.lineTo(pts[i][0], pts[i][1]);
+        if (closed) c.closePath();
+        return;
+    }
+    // Dense sequence of {p, corner}
+    const seq = [];
+    const m = closed ? n : n - 1;
+    for (let i = 0; i < m; i++) {
+        const a = pts[i], b = pts[(i + 1) % n];
+        seq.push({ p: a, corner: !(smooth && smooth[i]) });
+        if (wf) {
+            const k = Math.max(1, Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) / GEO.step));
+            for (let s = 1; s < k; s++) {
+                const t = s / k;
+                seq.push({ p: [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t], corner: false });
+            }
+        }
+    }
+    if (!closed) seq.push({ p: pts[n - 1], corner: true });
+    if (wf) for (const s of seq) s.p = wf(s.p[0], s.p[1]);
+    const runs = GEO.clip ? clipSeq(seq, closed, GEO.clip) : [{ pts: seq, closed }];
+    for (const r of runs) drawChain(c, r.pts, r.closed);
+}
+
+function emitCircle(c, cx, cy, r, wf) {
+    if (!wf && !GEO.clip) { c.moveTo(cx + r, cy); c.arc(cx, cy, r, 0, Math.PI * 2); return; }
+    const k = Math.max(24, Math.ceil(Math.PI * 2 * r / GEO.step));
+    const pts = [], sm = [];
+    for (let i = 0; i < k; i++) { const a = i / k * Math.PI * 2; pts.push([cx + Math.cos(a) * r, cy + Math.sin(a) * r]); sm.push(true); }
+    // samples are already dense, so don't subdivide again: pass wf only to warp them
+    const seq = pts.map(p => ({ p: wf ? wf(p[0], p[1]) : p, corner: false }));
+    const runs = GEO.clip ? clipSeq(seq, true, GEO.clip) : [{ pts: seq, closed: true }];
+    for (const run of runs) drawChain(c, run.pts, run.closed);
+}
+
+// Catmull-Rom through the points, as cubic Béziers. Corners break tangent continuity.
+function drawChain(c, seq, closed) {
+    const n = seq.length;
+    if (n < 2) return;
+    const P = i => seq[closed ? (i + n) % n : i].p;
+    c.moveTo(P(0)[0], P(0)[1]);
+    const segs = closed ? n : n - 1;
+    for (let i = 0; i < segs; i++) {
+        const p1 = P(i), p2 = P(i + 1);
+        const c1corner = seq[i].corner || (!closed && i === 0);
+        const c2corner = seq[(i + 1) % n].corner || (!closed && i + 1 === n - 1);
+        const p0 = c1corner ? [2 * p1[0] - p2[0], 2 * p1[1] - p2[1]] : P(i - 1);
+        const p3 = c2corner ? [2 * p2[0] - p1[0], 2 * p2[1] - p1[1]] : P(i + 2);
+        if (c1corner && c2corner) { c.lineTo(p2[0], p2[1]); continue; }
+        c.bezierCurveTo(
+            p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6,
+            p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6,
+            p2[0], p2[1]);
+    }
+    if (closed) c.closePath();
+}
+
+// Split a sampled outline into the runs that lie inside the clip region.
+function clipSeq(seq, closed, inside) {
+    const ins = seq.map(s => inside(s.p[0], s.p[1]));
+    if (ins.every(Boolean)) return [{ pts: seq, closed }];
+    if (!ins.some(Boolean)) return [];
+    let S = seq, I = ins;
+    if (closed) { const k = ins.indexOf(false); S = seq.slice(k).concat(seq.slice(0, k + 1)); I = ins.slice(k).concat(ins.slice(0, k + 1)); }
+    const cross = (out, inn) => {   // bisect the segment for the boundary point
+        let a = out, b = inn;
+        for (let it = 0; it < 24; it++) { const m = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]; if (inside(m[0], m[1])) b = m; else a = m; }
+        return b;
+    };
+    const runs = []; let cur = null;
+    for (let i = 0; i < S.length; i++) {
+        if (I[i]) {
+            if (!cur) cur = i > 0 ? [{ p: cross(S[i - 1].p, S[i].p), corner: true }] : [];
+            cur.push(S[i]);
+        } else if (cur) {
+            cur.push({ p: cross(S[i].p, S[i - 1].p), corner: true });
+            if (cur.length >= 2) runs.push({ pts: cur, closed: false });
+            cur = null;
+        }
+    }
+    if (cur && cur.length >= 2) runs.push({ pts: cur, closed: false });
+    return runs;
+}
+
+// Records canvas drawing calls as SVG path data (same API subset the shape drawers use).
+class SvgSink {
+    constructor(prec = 2) { this.out = []; this.d = ''; this.fillStyle = ''; this.strokeStyle = ''; this.lineWidth = 1; this.lineCap = 'butt'; this.p = prec; }
+    f(v) { return (+v.toFixed(this.p)).toString(); }
+    beginPath() { this.d = ''; }
+    moveTo(x, y) { this.d += `M${this.f(x)} ${this.f(y)}`; }
+    lineTo(x, y) { this.d += `L${this.f(x)} ${this.f(y)}`; }
+    bezierCurveTo(a, b, c, d, x, y) { this.d += `C${this.f(a)} ${this.f(b)} ${this.f(c)} ${this.f(d)} ${this.f(x)} ${this.f(y)}`; }
+    closePath() { this.d += 'Z'; }
+    arc(cx, cy, r) {   // only full circles are drawn
+        const f = v => this.f(v);
+        this.d += `M${f(cx + r)} ${f(cy)}A${f(r)} ${f(r)} 0 1 1 ${f(cx - r)} ${f(cy)}A${f(r)} ${f(r)} 0 1 1 ${f(cx + r)} ${f(cy)}Z`;
+    }
+    stroke() { if (this.d) this.out.push(`<path d="${this.d}"/>`); this.d = ''; }
+    fill()   { if (this.d) this.out.push(`<path d="${this.d}" fill="currentColor" stroke="none"/>`); this.d = ''; }
+    save() {} restore() {} translate() {} rotate() {}
+}
+
 function drawLines(c, spacing, _size, maxDist, rot, warpOn) {
     const n  = Math.ceil(maxDist * 2 / spacing) + 4;
-    const sg = segs(warpOn);
-    for (let i = -n/2; i <= n/2; i++) strokeVLine(c, i * spacing, maxDist, sg, rot, warpOn);
+    const wf = warpFn(rot, warpOn, 'x');
+    for (let i = -n/2; i <= n/2; i++) {
+        c.beginPath(); emitPath(c, [[i*spacing, -maxDist], [i*spacing, maxDist]], false, wf); c.stroke();
+    }
 }
 
 function drawGrid(c, spacing, _size, maxDist, rot, warpOn) {
-    const n  = Math.ceil(maxDist * 2 / spacing) + 4;
-    const sg = segs(warpOn);
+    const n   = Math.ceil(maxDist * 2 / spacing) + 4;
+    const wfV = warpFn(rot, warpOn, 'x'), wfH = warpFn(rot, warpOn, 'y');
     for (let i = -n/2; i <= n/2; i++) {
-        strokeVLine(c, i * spacing, maxDist, sg, rot, warpOn);
-        strokeHLine(c, i * spacing, maxDist, sg, rot, warpOn);
+        const p = i * spacing;
+        c.beginPath(); emitPath(c, [[p, -maxDist], [p, maxDist]], false, wfV); c.stroke();
+        c.beginPath(); emitPath(c, [[-maxDist, p], [maxDist, p]], false, wfH); c.stroke();
     }
 }
 
 function drawRadial(c, spacing, _size, maxDist, rot, warpOn) {
-    const warp    = hasWarp(warpOn);
-    const arcSeg  = warp ? 64 : 0;   // 0 = native arc()
-    const spokeSg = warp ? 16 : 1;
+    const wf = warpFn(rot, warpOn, 'x');
     for (let r = spacing; r < maxDist; r += spacing) {
-        c.beginPath();
-        if (arcSeg > 0) {
-            for (let s = 0; s <= arcSeg; s++) {
-                const a = (s / arcSeg) * Math.PI * 2;
-                const p = warpPt(Math.cos(a)*r, Math.sin(a)*r, rot, warpOn);
-                s === 0 ? c.moveTo(p.x, p.y) : c.lineTo(p.x, p.y);
-            }
-            c.closePath();
-        } else {
-            c.arc(0, 0, r, 0, Math.PI*2);
-        }
-        c.stroke();
+        c.beginPath(); emitCircle(c, 0, 0, r, wf); c.stroke();
     }
     const spokes = Math.max(2, Math.round(Math.PI*2*(maxDist/2)/spacing));
     for (let i = 0; i < spokes; i++) {
         const a = (i/spokes)*Math.PI*2;
-        c.beginPath();
-        for (let s = 0; s <= spokeSg; s++) {
-            const t = s / spokeSg;
-            const p = warpPt(Math.cos(a)*maxDist*t, Math.sin(a)*maxDist*t, rot, warpOn);
-            s === 0 ? c.moveTo(p.x, p.y) : c.lineTo(p.x, p.y);
-        }
-        c.stroke();
+        c.beginPath(); emitPath(c, [[0, 0], [Math.cos(a)*maxDist, Math.sin(a)*maxDist]], false, wf); c.stroke();
     }
 }
 
@@ -1673,97 +1803,53 @@ function drawIsoCircles(c, spacing, size, maxDist, rot, warpOn) {
     const hx = spacing, hy = spacing * Math.sqrt(3)/2;
     const r  = Math.max(1, size/2);
     const cols = Math.ceil(maxDist/hx)+2, rows = Math.ceil(maxDist/hy)+2;
-    const arcSeg = hasWarp(warpOn) ? 32 : 0;
-    for (let row = -rows; row <= rows; row++) {
+    const wf = warpFn(rot, warpOn, 'x');
+    for (let row = -rows; row <= rows; row++)
         for (let col = -cols; col <= cols; col++) {
-            const cx = col*hx + (row%2===0 ? 0 : hx/2);
-            const cy = row*hy;
-            c.beginPath();
-            if (arcSeg > 0) {
-                for (let s = 0; s <= arcSeg; s++) {
-                    const a = (s / arcSeg) * Math.PI * 2;
-                    const p = warpPt(cx + Math.cos(a)*r, cy + Math.sin(a)*r, rot, warpOn);
-                    s === 0 ? c.moveTo(p.x, p.y) : c.lineTo(p.x, p.y);
-                }
-                c.closePath();
-            } else {
-                c.arc(cx, cy, r, 0, Math.PI*2);
-            }
-            c.stroke();
+            c.beginPath(); emitCircle(c, col*hx + (row%2===0 ? 0 : hx/2), row*hy, r, wf); c.stroke();
         }
-    }
 }
 
 function drawIsoDots(c, spacing, size, maxDist, rot, warpOn) {
     const hx = spacing, hy = spacing * Math.sqrt(3) / 2;
     const r  = Math.max(1, size / 2);
     const cols = Math.ceil(maxDist / hx) + 2, rows = Math.ceil(maxDist / hy) + 2;
-    const segs = hasWarp(warpOn) ? 32 : 0;
+    const wf = warpFn(rot, warpOn, 'x');
     c.fillStyle = c.strokeStyle;   // filled dots inherit the layer colour
-    for (let row = -rows; row <= rows; row++) {
+    for (let row = -rows; row <= rows; row++)
         for (let col = -cols; col <= cols; col++) {
-            const cx = col * hx + (row % 2 === 0 ? 0 : hx / 2);
-            const cy = row * hy;
-            c.beginPath();
-            if (segs > 0) {
-                for (let s = 0; s <= segs; s++) {
-                    const a = (s / segs) * Math.PI * 2;
-                    const p = warpPt(cx + Math.cos(a) * r, cy + Math.sin(a) * r, rot, warpOn);
-                    s === 0 ? c.moveTo(p.x, p.y) : c.lineTo(p.x, p.y);
-                }
-                c.closePath();
-            } else {
-                c.arc(cx, cy, r, 0, Math.PI * 2);
-            }
-            c.fill();
+            c.beginPath(); emitCircle(c, col * hx + (row % 2 === 0 ? 0 : hx / 2), row * hy, r, wf); c.fill();
         }
-    }
 }
+
+const hexPts = (cx, cy, R) => Array.from({length: 6}, (_, i) => {
+    const a = (Math.PI/3)*i - Math.PI/6; return [cx + R*Math.cos(a), cy + R*Math.sin(a)];
+});
 
 function drawHexGrid(c, spacing, size, maxDist, rot, warpOn) {
     const R    = Math.max(1, size/2);
     const colW = spacing*0.75, rowH = spacing*Math.sqrt(3)/2;
     const cols = Math.ceil(maxDist/colW)+2, rows = Math.ceil(maxDist/rowH)+2;
-    for (let row = -rows; row <= rows; row++) {
+    const wf = warpFn(rot, warpOn, 'x');
+    for (let row = -rows; row <= rows; row++)
         for (let col = -cols; col <= cols; col++) {
-            const hcx = col*spacing*0.75;
             const hcy = row*rowH + (Math.abs(col)%2===1 ? rowH/2 : 0);
-            c.beginPath();
-            for (let i = 0; i < 6; i++) {
-                const a = (Math.PI/3)*i - Math.PI/6;
-                const vx = hcx + R*Math.cos(a), vy = hcy + R*Math.sin(a);
-                const p = warpPt(vx, vy, rot, warpOn);
-                i === 0 ? c.moveTo(p.x, p.y) : c.lineTo(p.x, p.y);
-            }
-            c.closePath(); c.stroke();
+            c.beginPath(); emitPath(c, hexPts(col*spacing*0.75, hcy, R), true, wf); c.stroke();
         }
-    }
 }
 
 // Isometric honeycomb tiling — hexagons always perfectly tile.
 // spacing = horizontal centre-to-centre; size >= spacing tiles flush, size < spacing adds gaps.
 function drawHexTile(c, spacing, size, maxDist, rot, warpOn) {
-    const R0  = spacing / Math.sqrt(3);              // circumradius for perfect tile
+    const R0  = spacing / Math.sqrt(3);
     const R   = Math.min(R0, Math.max(1, size / Math.sqrt(3)));
-    const colPitch = spacing;
     const rowPitch = spacing * Math.sqrt(3) / 2;
-    const cols = Math.ceil(maxDist / colPitch) + 2;
-    const rows = Math.ceil(maxDist / rowPitch) + 2;
-    for (let row = -rows; row <= rows; row++) {
+    const cols = Math.ceil(maxDist / spacing) + 2, rows = Math.ceil(maxDist / rowPitch) + 2;
+    const wf = warpFn(rot, warpOn, 'x');
+    for (let row = -rows; row <= rows; row++)
         for (let col = -cols; col <= cols; col++) {
-            const cx = col * colPitch + (row % 2 !== 0 ? colPitch / 2 : 0);
-            const cy = row * rowPitch;
-            c.beginPath();
-            for (let i = 0; i < 6; i++) {
-                const a = (Math.PI / 3) * i - Math.PI / 6;
-                const vx = cx + R * Math.cos(a);
-                const vy = cy + R * Math.sin(a);
-                const p = warpPt(vx, vy, rot, warpOn);
-                i === 0 ? c.moveTo(p.x, p.y) : c.lineTo(p.x, p.y);
-            }
-            c.closePath(); c.stroke();
+            c.beginPath(); emitPath(c, hexPts(col * spacing + (row % 2 !== 0 ? spacing / 2 : 0), row * rowPitch, R), true, wf); c.stroke();
         }
-    }
 }
 
 function drawTriGrid(c, spacing, size, maxDist, rot, warpOn) {
@@ -1771,53 +1857,15 @@ function drawTriGrid(c, spacing, size, maxDist, rot, warpOn) {
     const cols = Math.ceil(maxDist*2/spacing)+4;
     const rows = Math.ceil(maxDist*2/h)+4;
     const s    = Math.max(2, size), th = s*Math.sqrt(3)/2;
-    for (let row = -rows; row <= rows; row++) {
+    const wf = warpFn(rot, warpOn, 'x');
+    for (let row = -rows; row <= rows; row++)
         for (let col = -cols; col <= cols; col++) {
             const cx = col*spacing*0.5, cy = row*h;
-            const up = (col+row)%2 === 0;
-            const verts = up
+            const verts = (col+row)%2 === 0
                 ? [[cx, cy-th*2/3],[cx+s/2, cy+th/3],[cx-s/2, cy+th/3]]
                 : [[cx, cy+th*2/3],[cx+s/2, cy-th/3],[cx-s/2, cy-th/3]];
-            c.beginPath();
-            verts.forEach(([vx,vy], i) => {
-                const p = warpPt(vx, vy, rot, warpOn);
-                i === 0 ? c.moveTo(p.x, p.y) : c.lineTo(p.x, p.y);
-            });
-            c.closePath(); c.stroke();
+            c.beginPath(); emitPath(c, verts, true, wf); c.stroke();
         }
-    }
-}
-
-// ════════════════════════════════════════════════════════════════════
-//  Segmented line helpers (global warp types: flag, sine, ripple)
-// ════════════════════════════════════════════════════════════════════
-function strokeVLine(c, lineX, maxDist, sg, rot, warpOn) {
-    c.beginPath();
-    const dy = (maxDist*2)/sg;
-    for (let s = 0; s <= sg; s++) {
-        const y = -maxDist + s*dy;
-        const p = warpPt(lineX, y, rot, warpOn);
-        s === 0 ? c.moveTo(p.x, p.y) : c.lineTo(p.x, p.y);
-    }
-    c.stroke();
-}
-
-function strokeHLine(c, lineY, maxDist, sg, rot, warpOn) {
-    c.beginPath();
-    const dx = (maxDist*2)/sg;
-    for (let s = 0; s <= sg; s++) {
-        const x = -maxDist + s*dx;
-        if (warpOn && isMesh()) {
-            const p = mwarp(x, lineY, rot);
-            s === 0 ? c.moveTo(p.x, p.y) : c.lineTo(p.x, p.y);
-        } else if (warpOn) {
-            const y = lineY + warpDX(x, lineY);  // H-lines displace in Y
-            s === 0 ? c.moveTo(x, y) : c.lineTo(x, y);
-        } else {
-            s === 0 ? c.moveTo(x, lineY) : c.lineTo(x, lineY);
-        }
-    }
-    c.stroke();
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -1879,30 +1927,27 @@ function exportLayer(layerNum) {
 //  Export: SVG per layer
 // ════════════════════════════════════════════════════════════════════
 function exportSVG(layerNum) {
-    const cKey = 'layer'+layerNum+'Color';
-    const xKey = 'layer'+layerNum+'OffsetX';
-    const yKey = 'layer'+layerNum+'OffsetY';
-    const ang  = layerAngle[layerNum-1];
-    const offX = params[xKey], offY = params[yKey];
-    const color = params[cKey];
+    const color = params['layer'+layerNum+'Color'];
+    const offX = params['layer'+layerNum+'OffsetX'], offY = params['layer'+layerNum+'OffsetY'];
     const w = canvas.width, h = canvas.height;
     const cx = w/2+offX, cy = h/2+offY;
-
-    const paths = buildSVGPaths(w, h);
+    const ang = layerAngle[layerNum-1];
+    // trim to what the screen shows: the cutout shape, or the canvas edge
+    const ccx = w/2, ccy = h/2, r = Math.min(w, h) / 2 * 0.85;
+    const inCut = {
+        circle:  (x, y) => (x-ccx)**2 + (y-ccy)**2 <= r*r,
+        square:  (x, y) => Math.abs(x-ccx) <= r*0.7 && Math.abs(y-ccy) <= r*0.7,
+        diamond: (x, y) => Math.abs(x-ccx) + Math.abs(y-ccy) <= r,
+    }[params.cutout] || ((x, y) => x >= 0 && y >= 0 && x <= w && y <= h);
+    const paths = buildSVGPaths(w, h, layerNum-1, localClip(layerNum-1, cx, cy, inCut));
     const svg =
 `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
-  <g transform="translate(${cx.toFixed(1)},${cy.toFixed(1)}) rotate(${(ang%360).toFixed(2)})"
-     stroke="${color}" stroke-width="${params.stroke}" fill="none" stroke-linecap="square">
+  <g transform="translate(${cx.toFixed(2)},${cy.toFixed(2)}) rotate(${(ang%360).toFixed(3)})"
+     stroke="${color}" color="${color}" stroke-width="${params.stroke}" fill="none" stroke-linecap="square" stroke-linejoin="round">
     ${paths}
   </g>
 </svg>`;
-
-    const blob = new Blob([svg], { type:'image/svg+xml' });
-    const link = document.createElement('a');
-    link.download = `moire-layer${layerNum}.svg`;
-    link.href = URL.createObjectURL(blob);
-    link.click();
-    URL.revokeObjectURL(link.href);
+    downloadBlob(new Blob([svg], { type:'image/svg+xml' }), `moire-layer${layerNum}.svg`);
     closeDownload();
 }
 
@@ -1962,10 +2007,10 @@ function parseSVGContent(svgText) {
             push('poly', [[x,y],[x+w,y],[x+w,y+h],[x,y+h]]);
         } else if (tag === 'circle') {
             const cx=f(el,'cx'),cy=f(el,'cy'),r=f(el,'r');
-            push('poly', Array.from({length:32},(_,i)=>{const a=i/32*Math.PI*2;return[cx+Math.cos(a)*r,cy+Math.sin(a)*r];}));
+            push('poly', Array.from({length:48},(_,i)=>{const a=i/48*Math.PI*2;return[cx+Math.cos(a)*r,cy+Math.sin(a)*r,1];}));
         } else if (tag === 'ellipse') {
             const cx=f(el,'cx'),cy=f(el,'cy'),rx=f(el,'rx'),ry=f(el,'ry');
-            push('poly', Array.from({length:32},(_,i)=>{const a=i/32*Math.PI*2;return[cx+Math.cos(a)*rx,cy+Math.sin(a)*ry];}));
+            push('poly', Array.from({length:48},(_,i)=>{const a=i/48*Math.PI*2;return[cx+Math.cos(a)*rx,cy+Math.sin(a)*ry,1];}));
         } else if (tag === 'path') {
             const d = el.getAttribute('d');
             if (d) parseSVGPath(d).forEach(s => push(s.type, s.pts));
@@ -2065,14 +2110,16 @@ function parseSVGPath(d) {
     return subpaths;
 }
 
-function _svgCubic(pts,x0,y0,x1,y1,x2,y2,x3,y3,n=16){
+// Curve samples carry a third value 1 = "smooth point": the renderer threads a
+// Bézier spline through them instead of joining them with straight segments.
+function _svgCubic(pts,x0,y0,x1,y1,x2,y2,x3,y3,n=24){
     for(let i=1;i<=n;i++){const t=i/n,mt=1-t;
         pts.push([mt*mt*mt*x0+3*mt*mt*t*x1+3*mt*t*t*x2+t*t*t*x3,
-                  mt*mt*mt*y0+3*mt*mt*t*y1+3*mt*t*t*y2+t*t*t*y3]);}
+                  mt*mt*mt*y0+3*mt*mt*t*y1+3*mt*t*t*y2+t*t*t*y3, i<n?1:0]);}
 }
-function _svgQuad(pts,x0,y0,x1,y1,x2,y2,n=12){
+function _svgQuad(pts,x0,y0,x1,y1,x2,y2,n=16){
     for(let i=1;i<=n;i++){const t=i/n,mt=1-t;
-        pts.push([mt*mt*x0+2*mt*t*x1+t*t*x2, mt*mt*y0+2*mt*t*y1+t*t*y2]);}
+        pts.push([mt*mt*x0+2*mt*t*x1+t*t*x2, mt*mt*y0+2*mt*t*y1+t*t*y2, i<n?1:0]);}
 }
 function _svgArc(pts,x1,y1,rx,ry,xRot,laf,sf,x2,y2,n=16){
     if(rx===0||ry===0){pts.push([x2,y2]);return;}
@@ -2089,8 +2136,9 @@ function _svgArc(pts,x1,y1,rx,ry,xRot,laf,sf,x2,y2,n=16){
     let a1=ang([(x1p-cxp)/rx,(y1p-cyp)/ry]);
     let dA=ang([(-x1p-cxp)/rx,(-y1p-cyp)/ry])-a1;
     if(!sf&&dA>0)dA-=Math.PI*2; if(sf&&dA<0)dA+=Math.PI*2;
+    n=Math.max(n,Math.ceil(Math.abs(dA)/(Math.PI/16)));
     for(let i=1;i<=n;i++){const a=a1+dA*i/n;
-        pts.push([cs*rx*Math.cos(a)-sn*ry*Math.sin(a)+cx,sn*rx*Math.cos(a)+cs*ry*Math.sin(a)+cy]);}
+        pts.push([cs*rx*Math.cos(a)-sn*ry*Math.sin(a)+cx,sn*rx*Math.cos(a)+cs*ry*Math.sin(a)+cy, i<n?1:0]);}
 }
 
 function drawSvgImport(c, spacing, size, maxDist, rot, warpOn) {
@@ -2098,153 +2146,25 @@ function drawSvgImport(c, spacing, size, maxDist, rot, warpOn) {
     const { shapes, bbox } = importedSVG;
     const scale = Math.max(1, size) / Math.max(bbox.w, bbox.h);
     const n = Math.ceil(maxDist / spacing) + 2;
+    const wf = warpFn(rot, warpOn, 'x');
+    // drop a closing point that repeats the first, so closed shapes join cleanly
+    const prepped = shapes.map(sh => {
+        let pts = sh.pts;
+        const closed = sh.type === 'poly';
+        if (closed && pts.length > 2) { const a = pts[0], b = pts[pts.length-1]; if (Math.abs(a[0]-b[0]) < 1e-9 && Math.abs(a[1]-b[1]) < 1e-9) pts = pts.slice(0, -1); }
+        const smooth = pts.some(p => p[2]) ? pts.map(p => !!p[2]) : null;
+        return { pts, closed, smooth };
+    });
     for (let row = -n; row <= n; row++) {
         for (let col = -n; col <= n; col++) {
-            const ox = col * spacing;
-            const oy = row * spacing;
-            for (const sh of shapes) {
+            const ox = col * spacing, oy = row * spacing;
+            for (const sh of prepped) {
                 c.beginPath();
-                sh.pts.forEach(([px, py], i) => {
-                    const sx = (px - bbox.cx) * scale + ox;
-                    const sy = (py - bbox.cy) * scale + oy;
-                    const p = warpPt(sx, sy, rot, warpOn);
-                    i === 0 ? c.moveTo(p.x, p.y) : c.lineTo(p.x, p.y);
-                });
-                if (sh.type === 'poly') c.closePath();
+                emitPath(c, sh.pts.map(([px, py]) => [(px - bbox.cx) * scale + ox, (py - bbox.cy) * scale + oy]), sh.closed, wf, sh.smooth);
                 c.stroke();
             }
         }
     }
-}
-
-function buildSVGPaths(w, h) {
-    const maxDist = Math.max(w, h) * 0.82;
-    const spacing = params.cellCount;
-    const size    = params.cellSize;
-    const parts   = [];
-
-    switch (params.shape) {
-        case 'lines': {
-            const n = Math.ceil(maxDist*2/spacing)+4;
-            for (let i = -n/2; i <= n/2; i++)
-                parts.push(`<line x1="${i*spacing}" y1="${-maxDist}" x2="${i*spacing}" y2="${maxDist}"/>`);
-            break;
-        }
-        case 'grid': {
-            const n = Math.ceil(maxDist*2/spacing)+4;
-            for (let i = -n/2; i <= n/2; i++) {
-                const p = i*spacing;
-                parts.push(`<line x1="${p}" y1="${-maxDist}" x2="${p}" y2="${maxDist}"/>`);
-                parts.push(`<line x1="${-maxDist}" y1="${p}" x2="${maxDist}" y2="${p}"/>`);
-            }
-            break;
-        }
-        case 'radial': {
-            for (let r = spacing; r < maxDist; r += spacing)
-                parts.push(`<circle cx="0" cy="0" r="${r}"/>`);
-            const spokes = Math.max(2, Math.round(Math.PI*2*(maxDist/2)/spacing));
-            for (let i = 0; i < spokes; i++) {
-                const a = (i/spokes)*Math.PI*2;
-                parts.push(`<line x1="0" y1="0" x2="${(Math.cos(a)*maxDist).toFixed(1)}" y2="${(Math.sin(a)*maxDist).toFixed(1)}"/>`);
-            }
-            break;
-        }
-        case 'iso-circles': {
-            const hx = spacing, hy = spacing*Math.sqrt(3)/2;
-            const r  = Math.max(1, size/2);
-            const cols = Math.ceil(maxDist/hx)+2, rows = Math.ceil(maxDist/hy)+2;
-            for (let row = -rows; row <= rows; row++)
-                for (let col = -cols; col <= cols; col++) {
-                    const x = (col*hx+(row%2===0?0:hx/2)).toFixed(1);
-                    const y = (row*hy).toFixed(1);
-                    parts.push(`<circle cx="${x}" cy="${y}" r="${r.toFixed(1)}"/>`);
-                }
-            break;
-        }
-        case 'iso-dots': {
-            const hx = spacing, hy = spacing*Math.sqrt(3)/2;
-            const r  = Math.max(1, size/2);
-            const cols = Math.ceil(maxDist/hx)+2, rows = Math.ceil(maxDist/hy)+2;
-            for (let row = -rows; row <= rows; row++)
-                for (let col = -cols; col <= cols; col++) {
-                    const x = (col*hx+(row%2===0?0:hx/2)).toFixed(1);
-                    const y = (row*hy).toFixed(1);
-                    parts.push(`<circle cx="${x}" cy="${y}" r="${r.toFixed(1)}" fill="black" stroke="none"/>`);
-                }
-            break;
-        }
-        case 'hexagon': {
-            const R    = Math.max(1, size/2);
-            const colW = spacing*0.75, rowH = spacing*Math.sqrt(3)/2;
-            const cols = Math.ceil(maxDist/colW)+2, rows = Math.ceil(maxDist/rowH)+2;
-            for (let row = -rows; row <= rows; row++)
-                for (let col = -cols; col <= cols; col++) {
-                    const hcx = col*spacing*0.75;
-                    const hcy = row*rowH+(Math.abs(col)%2===1?rowH/2:0);
-                    const pts = Array.from({length:6},(_,i)=>{
-                        const a = (Math.PI/3)*i-Math.PI/6;
-                        return `${(hcx+R*Math.cos(a)).toFixed(1)},${(hcy+R*Math.sin(a)).toFixed(1)}`;
-                    }).join(' ');
-                    parts.push(`<polygon points="${pts}"/>`);
-                }
-            break;
-        }
-        case 'hex-tile': {
-            const R0  = spacing / Math.sqrt(3);
-            const R   = Math.min(R0, Math.max(1, size / Math.sqrt(3)));
-            const colPitch = spacing, rowPitch = spacing * Math.sqrt(3) / 2;
-            const cols = Math.ceil(maxDist/colPitch)+2, rows = Math.ceil(maxDist/rowPitch)+2;
-            for (let row = -rows; row <= rows; row++)
-                for (let col = -cols; col <= cols; col++) {
-                    const cx = col*colPitch + (row%2!==0 ? colPitch/2 : 0);
-                    const cy = row*rowPitch;
-                    const pts = Array.from({length:6},(_,i)=>{
-                        const a = (Math.PI/3)*i-Math.PI/6;
-                        return `${(cx+R*Math.cos(a)).toFixed(1)},${(cy+R*Math.sin(a)).toFixed(1)}`;
-                    }).join(' ');
-                    parts.push(`<polygon points="${pts}"/>`);
-                }
-            break;
-        }
-        case 'triangle': {
-            const h2   = spacing*Math.sqrt(3)/2;
-            const s    = Math.max(2, size), th = s*Math.sqrt(3)/2;
-            const cols = Math.ceil(maxDist*2/spacing)+4;
-            const rows = Math.ceil(maxDist*2/h2)+4;
-            for (let row = -rows; row <= rows; row++)
-                for (let col = -cols; col <= cols; col++) {
-                    const cx = col*spacing*0.5, cy = row*h2;
-                    const up = (col+row)%2===0;
-                    const pts = up
-                        ? `${cx.toFixed(1)},${(cy-th*2/3).toFixed(1)} ${(cx+s/2).toFixed(1)},${(cy+th/3).toFixed(1)} ${(cx-s/2).toFixed(1)},${(cy+th/3).toFixed(1)}`
-                        : `${cx.toFixed(1)},${(cy+th*2/3).toFixed(1)} ${(cx+s/2).toFixed(1)},${(cy-th/3).toFixed(1)} ${(cx-s/2).toFixed(1)},${(cy-th/3).toFixed(1)}`;
-                    parts.push(`<polygon points="${pts}"/>`);
-                }
-            break;
-        }
-        case 'svg-import': {
-            if (importedSVG) {
-                const { shapes: svgShapes, bbox } = importedSVG;
-                const scale = Math.max(1, size) / Math.max(bbox.w, bbox.h);
-                const n = Math.ceil(maxDist / spacing) + 2;
-                for (let row = -n; row <= n; row++) {
-                    for (let col = -n; col <= n; col++) {
-                        const ox = col * spacing, oy = row * spacing;
-                        for (const sh of svgShapes) {
-                            const pStr = sh.pts.map(([px,py]) =>
-                                `${((px-bbox.cx)*scale+ox).toFixed(1)},${((py-bbox.cy)*scale+oy).toFixed(1)}`
-                            ).join(' ');
-                            parts.push(sh.type === 'poly'
-                                ? `<polygon points="${pStr}"/>`
-                                : `<polyline points="${pStr}"/>`);
-                        }
-                    }
-                }
-            }
-            break;
-        }
-    }
-    return parts.join('\n    ');
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -2268,28 +2188,25 @@ function toggleLightbox() {
 }
 
 // ── Gear geometry calculator ──────────────────────────────────────
-// Returns all derived dimensions in both px (for canvas) and mm (for SVG).
+// lbModule is a true gear module (mm): pitch diameter = teeth × module.
+// Disc and planets share it, so their teeth mesh.
 function lbCalcGear() {
     const m_mm       = Math.max(0.5, params.lbModule);
     const D_mm       = Math.max(20,  params.lbDiameter);
-    const N_planet   = Math.max(8,   Math.round(params.lbPlanetTeeth));
+    const N_planet   = Math.max(10,  Math.round(params.lbPlanetTeeth));
     const gap_mm     = Math.max(0,   params.lbPlanetGap);
     const axle_mm    = Math.max(1,   params.lbAxleHole);
     const cHole_mm   = Math.max(1,   params.lbCentreHole);
 
-    // Ring gear — N_ring computed from disc OD and module
-    const N_ring           = Math.max(10, Math.round(Math.PI * D_mm / m_mm));
-    const Rpitch_ring_mm   = N_ring * m_mm / (2 * Math.PI);   // actual pitch radius
+    const N_ring           = Math.max(12, Math.round(D_mm / m_mm));
+    const Rpitch_ring_mm   = N_ring * m_mm / 2;
     const Ra_ring_mm       = Rpitch_ring_mm + m_mm;
-    const Rd_ring_mm       = Math.max(1, Rpitch_ring_mm - m_mm);  // symmetric triangular
-
-    // Planetary gear (same module → matching tooth size)
+    const Rd_ring_mm       = Rpitch_ring_mm - 1.25 * m_mm;      // root circle
     const Rpitch_planet_mm = N_planet * m_mm / 2;
     const Ra_planet_mm     = Rpitch_planet_mm + m_mm;
-    const Rd_planet_mm     = Math.max(0.5, Rpitch_planet_mm - m_mm);  // symmetric
+    const Rd_planet_mm     = Math.max(0.5, Rpitch_planet_mm - 1.25 * m_mm);
     const planetDist_mm    = Rpitch_ring_mm + Rpitch_planet_mm + gap_mm;
 
-    // Scale so everything fits on canvas with margin
     const totalR_mm  = planetDist_mm + Ra_planet_mm + m_mm + 4;
     const S          = (canvas.width * 0.47) / totalR_mm;   // px / mm
     const cx = canvas.width / 2, cy = canvas.height / 2;
@@ -2301,10 +2218,11 @@ function lbCalcGear() {
         planetDist_px: planetDist_mm * S, planetDist_mm,
         axle_px: (axle_mm / 2) * S,
         cHole_px: (cHole_mm / 2) * S,
-        // mm originals
         Rpitch_ring_mm, Ra_ring_mm, Rd_ring_mm,
         Rpitch_planet_mm, Ra_planet_mm, Rd_planet_mm,
         axle_mm, cHole_mm, D_mm, gearRatio: N_ring / N_planet,
+        // pattern stops 1 mm inside the tooth roots so the teeth stay clean
+        patternR_mm: Rd_ring_mm - 1,
     };
 }
 
@@ -2315,40 +2233,56 @@ const LB_PLANET_ANGLES = [
     -Math.PI / 2 + (4 * Math.PI / 3),
 ];
 
-// ── Canvas gear path ──────────────────────────────────────────────
-function drawGearPath(ctx, cx, cy, pitchR, m_px, N, startAngle) {
-    // Triangular tooth profile — tip at Ra, valley at Rd, pure straight lines.
-    // Each tooth occupies exactly one full pitch (peak-to-peak = 2π/N).
-    const Ra  = pitchR + m_px;
-    const Rd  = Math.max(1, pitchR - m_px);
-    const aPT = (2 * Math.PI) / N;
+// Planet rotation that keeps it meshed with the disc (disc rotated by θdisc rad)
+function lbPlanetPhase(φ, θdisc, Nd, Np) {
+    return φ * (1 + Nd / Np) + Math.PI - θdisc * Nd / Np - Math.PI / Np;
+}
 
-    ctx.beginPath();
-    ctx.moveTo(cx + Rd * Math.cos(startAngle - aPT / 2),
-               cy + Rd * Math.sin(startAngle - aPT / 2));
-    for (let i = 0; i < N; i++) {
-        const mid = startAngle + i * aPT;
-        ctx.lineTo(cx + Ra * Math.cos(mid),             cy + Ra * Math.sin(mid));
-        ctx.lineTo(cx + Rd * Math.cos(mid + aPT / 2),   cy + Rd * Math.sin(mid + aPT / 2));
+// ── Involute spur gear outline ────────────────────────────────────
+// 20° pressure angle, addendum 1·m, dedendum 1.25·m, 0.1 mm backlash per gear.
+// Returns a closed polygon in mm around (0,0), tooth 0 centred on angle `rot`.
+const _gearCache = new Map();
+function involuteGear(N, m, rot = 0) {
+    const key = N + '|' + m;
+    let base = _gearCache.get(key);
+    if (!base) {
+        const α = 20 * Math.PI / 180, backlash = 0.1;
+        const rp = N * m / 2, rb = rp * Math.cos(α), ra = rp + m, rf = Math.max(0.3, rp - 1.25 * m);
+        const inv = a => Math.tan(a) - a;
+        const ψp = Math.PI / (2 * N) - backlash / (4 * rp);
+        const ψ  = r => ψp + inv(α) - inv(Math.acos(Math.min(1, rb / r)));
+        let rTop = ra;                                    // stop before teeth turn to points
+        while (rTop > rp && ψ(rTop) < 0.15 * ψp) rTop -= 0.02 * m;
+        const r0 = Math.max(rb, rf), K = 10, pts = [];
+        const pitchA = 2 * Math.PI / N;
+        const flank = []; for (let i = 0; i <= K; i++) { const r = r0 + (rTop - r0) * i / K; flank.push([r, ψ(r)]); }
+        const ψ0 = ψ(r0);
+        for (let k = 0; k < N; k++) {
+            const c = k * pitchA;
+            if (rf < rb) pts.push([rf, c - ψ0]);
+            for (const [r, h] of flank) pts.push([r, c - h]);
+            const ht = ψ(rTop);
+            for (let i = 1; i < 4; i++) pts.push([rTop, c - ht + 2 * ht * i / 4]);
+            for (let i = K; i >= 0; i--) pts.push([flank[i][0], c + flank[i][1]]);
+            if (rf < rb) pts.push([rf, c + ψ0]);
+            const a0 = c + ψ0, a1 = c + pitchA - ψ0;          // root arc to the next tooth
+            for (let i = 1; i < 4; i++) pts.push([rf, a0 + (a1 - a0) * i / 4]);
+        }
+        base = pts;
+        _gearCache.set(key, base);
     }
+    return base.map(([r, a]) => [r * Math.cos(a + rot), r * Math.sin(a + rot)]);
+}
+
+// ── Canvas gear path ──────────────────────────────────────────────
+function drawGearPath(ctx, cx, cy, S, N, m_mm, startAngle) {
+    const pts = involuteGear(N, m_mm, startAngle);
+    ctx.beginPath();
+    pts.forEach(([x, y], i) => i ? ctx.lineTo(cx + x * S, cy + y * S) : ctx.moveTo(cx + x * S, cy + y * S));
     ctx.closePath();
 }
 
-// ── SVG gear path (mm units, straight triangular teeth) ──────────
-function gearPathSVG(cx, cy, pitchR, module, N, startAngle) {
-    const Ra  = pitchR + module;
-    const Rd  = Math.max(0.1, pitchR - module);
-    const aPT = (2 * Math.PI) / N;
-    const f   = v => v.toFixed(4);
-    const pt  = (r, a) => `${f(cx + r * Math.cos(a))},${f(cy + r * Math.sin(a))}`;
-
-    let d = `M ${pt(Rd, startAngle - aPT / 2)} `;
-    for (let i = 0; i < N; i++) {
-        const mid = startAngle + i * aPT;
-        d += `L ${pt(Ra, mid)} L ${pt(Rd, mid + aPT / 2)} `;
-    }
-    return d + 'Z';
-}
+const polySVG = (pts, ox, oy) => 'M' + pts.map(([x, y]) => `${(x + ox).toFixed(3)},${(y + oy).toFixed(3)}`).join('L') + 'Z';
 
 // Circular hole as SVG path (two semicircle arcs)
 function circleSVG(cx, cy, r) {
@@ -2359,45 +2293,28 @@ function circleSVG(cx, cy, r) {
 // ── Overlay drawn on canvas each frame ───────────────────────────
 function drawLightboxOverlay() {
     const g = lbCalcGear();
-    const { cx, cy, N_ring, N_planet, Rpitch_ring_px, Rd_ring_px,
-            Rpitch_planet_px, planetDist_px, cHole_px, axle_px } = g;
-
-    const θR = layerAngle[0] * Math.PI / 180;              // ring rotation (rad)
-    const θP = -θR * N_ring / N_planet;                    // planet self-rotation
+    const { cx, cy, S, N_ring, N_planet, Rd_ring_px, planetDist_px, cHole_px, axle_px, m_mm } = g;
+    const θR = layerAngle[0] * Math.PI / 180;
 
     const c2d = canvas.getContext('2d');
     c2d.save();
-
-    // ── Ring gear (amber/gold) ────────────────────────────────────
-    c2d.strokeStyle = 'rgba(251,191,36,0.92)';
     c2d.lineWidth   = 1.5;
-    drawGearPath(c2d, cx, cy, Rpitch_ring_px, g.Ra_ring_px - Rpitch_ring_px, N_ring, θR);
+    c2d.strokeStyle = 'rgba(251,191,36,0.92)';
+    drawGearPath(c2d, cx, cy, S, N_ring, m_mm, θR);
     c2d.stroke();
-
-    // Dedendum circle (body edge)
     c2d.strokeStyle = 'rgba(251,191,36,0.30)';
     c2d.beginPath(); c2d.arc(cx, cy, Rd_ring_px, 0, Math.PI * 2); c2d.stroke();
-
-    // Centre shaft hole
     c2d.strokeStyle = 'rgba(251,191,36,0.75)';
     c2d.beginPath(); c2d.arc(cx, cy, cHole_px, 0, Math.PI * 2); c2d.stroke();
 
-    // ── Planetary gears (cyan) ────────────────────────────────────
     c2d.strokeStyle = 'rgba(100,215,255,0.92)';
-    c2d.lineWidth   = 1.5;
     LB_PLANET_ANGLES.forEach(φ => {
         const pcx = cx + planetDist_px * Math.cos(φ);
         const pcy = cy + planetDist_px * Math.sin(φ);
-        // Phase: derived from rolling-contact constraint so each planet
-        // tooth meshes perfectly with the ring gear at all times.
-        // phase = φ·(1 + N_ring/N_planet) + π + θP − π/N_planet
-        const phase = φ * (1 + N_ring / N_planet) + Math.PI + θP - Math.PI / N_planet;
-        const m_px  = g.Ra_planet_px - Rpitch_planet_px;
-        drawGearPath(c2d, pcx, pcy, Rpitch_planet_px, m_px, N_planet, phase);
+        c2d.lineWidth = 1.5;
+        drawGearPath(c2d, pcx, pcy, S, N_planet, m_mm, lbPlanetPhase(φ, θR, N_ring, N_planet));
         c2d.stroke();
-        // Axle hole
         c2d.beginPath(); c2d.arc(pcx, pcy, axle_px, 0, Math.PI * 2); c2d.stroke();
-        // Dashed centre line from disc centre to planet centre
         c2d.save();
         c2d.setLineDash([3, 4]);
         c2d.strokeStyle = 'rgba(100,215,255,0.22)';
@@ -2405,7 +2322,6 @@ function drawLightboxOverlay() {
         c2d.beginPath(); c2d.moveTo(cx, cy); c2d.lineTo(pcx, pcy); c2d.stroke();
         c2d.restore();
     });
-
     c2d.restore();
     updateLbGearInfo(g);
 }
@@ -2413,39 +2329,72 @@ function drawLightboxOverlay() {
 function updateLbGearInfo(g) {
     const el = document.getElementById('lbGearInfo');
     if (!el) return;
-    const { N_ring, N_planet, gearRatio, Rpitch_ring_mm, Rpitch_planet_mm,
-            Ra_ring_mm, Ra_planet_mm, planetDist_mm, m_mm, D_mm } = g;
+    const { N_ring, N_planet, gearRatio, Ra_ring_mm, Ra_planet_mm, planetDist_mm, m_mm, S } = g;
+    const lineMM = params.stroke / S;
     el.innerHTML =
-        `Ring: <b>${N_ring}</b> teeth &nbsp;·&nbsp; Planet: <b>${N_planet}</b> teeth<br>` +
+        `Disc: <b>${N_ring}</b> teeth &nbsp;·&nbsp; Planet: <b>${N_planet}</b> teeth &nbsp;·&nbsp; module <b>${m_mm}</b><br>` +
         `Gear ratio disc:planet = 1 : <b>${gearRatio.toFixed(2)}</b><br>` +
         `Disc OD: <b>${(Ra_ring_mm * 2).toFixed(1)} mm</b> &nbsp;·&nbsp; Planet OD: <b>${(Ra_planet_mm * 2).toFixed(1)} mm</b><br>` +
-        `Planet centre from disc centre: <b>${planetDist_mm.toFixed(1)} mm</b>`;
+        `Planet centre from disc centre: <b>${planetDist_mm.toFixed(1)} mm</b><br>` +
+        `Pattern line width: <b>${lineMM.toFixed(2)} mm</b>` +
+        (lineMM < 0.4 ? ' <span style="color:#f59e0b">(thinner than a 0.4 mm nozzle, so raise Stroke to print it)</span>' : '');
 }
 
-// ── SVG export for laser cutting / 3D printing ───────────────────
+// Pattern of one layer as SVG paths, drawn with the same smooth engine as the screen.
+// Coordinates are canvas px in the layer's own frame (before its rotate/offset).
+function buildSVGPaths(w, h, layerIdx, clipLocal) {
+    const ang = layerAngle[layerIdx] || 0;
+    const warpOn = params.warpLayers[layerIdx];
+    const maxDist = Math.max(w, h) * 0.82;
+    const size = params.cellSizeOscSpeed > 0
+        ? Math.max(1, params.cellSize + params.cellSizeOscDepth * Math.sin(globalTime * params.cellSizeOscSpeed * Math.PI * 2))
+        : params.cellSize;
+    const sink = new SvgSink(2);
+    const prev = { clip: GEO.clip, step: GEO.step };
+    GEO.clip = clipLocal || null; GEO.step = 3;
+    try { drawShapeInto(sink, params.cellCount, size, maxDist, ang, warpOn); }
+    finally { GEO.clip = prev.clip; GEO.step = prev.step; }
+    return sink.out.join('\n    ');
+}
+
+function drawShapeInto(c, spacing, size, maxDist, angle, warpOn) {
+    switch (params.shape) {
+        case 'lines':       drawLines(c, spacing, size, maxDist, angle, warpOn);       break;
+        case 'radial':      drawRadial(c, spacing, size, maxDist, angle, warpOn);      break;
+        case 'iso-circles': drawIsoCircles(c, spacing, size, maxDist, angle, warpOn);  break;
+        case 'iso-dots':    drawIsoDots(c, spacing, size, maxDist, angle, warpOn);     break;
+        case 'grid':        drawGrid(c, spacing, size, maxDist, angle, warpOn);        break;
+        case 'hexagon':     drawHexGrid(c, spacing, size, maxDist, angle, warpOn);     break;
+        case 'hex-tile':    drawHexTile(c, spacing, size, maxDist, angle, warpOn);     break;
+        case 'triangle':    drawTriGrid(c, spacing, size, maxDist, angle, warpOn);     break;
+        case 'svg-import':  drawSvgImport(c, spacing, size, maxDist, angle, warpOn);   break;
+    }
+}
+
+// Clip test in a layer's local frame: undo nothing, just map local → canvas and test there.
+function localClip(layerIdx, ox, oy, insideCanvas) {
+    const a = (layerAngle[layerIdx] || 0) * Math.PI / 180, ca = Math.cos(a), sa = Math.sin(a);
+    return (x, y) => insideCanvas(ox + x * ca - y * sa, oy + x * sa + y * ca);
+}
+
+// ── SVG export for laser cutting ─────────────────────────────────
 // which: 0=all-layers composite, 1-3=single layer disc, 4=planet gears only
+// The pattern is drawn at the same scale as on screen, warped, and trimmed to the disc.
 function exportLightboxSVG(which) {
     const g = lbCalcGear();
-    const { N_ring, N_planet, Rpitch_ring_mm, Ra_ring_mm, Rd_ring_mm,
-            Rpitch_planet_mm, Ra_planet_mm, planetDist_mm,
-            cHole_mm, axle_mm, m_mm, D_mm } = g;
-
+    const { N_ring, N_planet, Ra_planet_mm, planetDist_mm, cHole_mm, axle_mm, m_mm, S, patternR_mm } = g;
     const totalR  = planetDist_mm + Ra_planet_mm + m_mm + 6;
     const sz      = totalR * 2;
     const cx = sz / 2, cy = sz / 2;
     const f       = v => v.toFixed(3);
     const W       = canvas.width;
-    const S       = D_mm / W;           // mm per canvas-px
-    const sw      = Math.max(0.05, params.stroke * S).toFixed(3);
+    const mmpp    = 1 / S;                      // mm per canvas px, matches the overlay
 
-    // Gear cut paths
-    const discCut  = gearPathSVG(cx, cy, Rpitch_ring_mm, m_mm, N_ring, 0);
+    const discCut  = polySVG(involuteGear(N_ring, m_mm, 0), cx, cy);
     const cHolePth = circleSVG(cx, cy, cHole_mm / 2);
-
     const planetHTML = LB_PLANET_ANGLES.map(φ => {
-        const px = cx + planetDist_mm * Math.cos(φ);
-        const py = cy + planetDist_mm * Math.sin(φ);
-        return `    <path d="${gearPathSVG(px, py, Rpitch_planet_mm, m_mm, N_planet, φ * (1 + N_ring / N_planet) + Math.PI - Math.PI / N_planet)}"/>` +
+        const px = cx + planetDist_mm * Math.cos(φ), py = cy + planetDist_mm * Math.sin(φ);
+        return `    <path d="${polySVG(involuteGear(N_planet, m_mm, lbPlanetPhase(φ, 0, N_ring, N_planet)), px, py)}"/>` +
                `\n    <path d="${circleSVG(px, py, axle_mm / 2)}"/>`;
     }).join('\n');
 
@@ -2454,13 +2403,11 @@ function exportLightboxSVG(which) {
   <style>
     .cut    { fill:none; stroke:red;   stroke-width:0.15 }
     .planet { fill:none; stroke:#00f;  stroke-width:0.15 }
-    .engrave{ fill:none; stroke:#222;  stroke-width:${sw} }
+    .engrave{ fill:none; stroke:#222; color:#222 }
   </style>`;
 
     let svg = '', filename = '';
-
     if (which === 4) {
-        // Planets only  (identical — print 3 copies)
         svg = `${header}
   <!-- One planetary gear — duplicate × 3 for full build -->
   <g class="planet">
@@ -2470,20 +2417,18 @@ ${planetHTML}
         filename = 'lightbox-planets.svg';
     } else {
         const layers = which === 0 ? [1, 2, 3] : [which];
-        let defs = '', engraving = '';
+        const rPx = patternR_mm / mmpp;
+        let engraving = '';
         for (const n of layers) {
-            const deg = (layerAngle[n - 1] || 0).toFixed(2);
-            const ox  = f((params['layer' + n + 'OffsetX'] || 0) * S);
-            const oy  = f((params['layer' + n + 'OffsetY'] || 0) * S);
-            defs      += `\n    <clipPath id="c${n}"><circle cx="${f(cx)}" cy="${f(cy)}" r="${f(Rpitch_ring_mm)}"/></clipPath>`;
-            engraving += `\n  <g id="L${n}" class="engrave" clip-path="url(#c${n})"
-     transform="translate(${f(cx + parseFloat(ox))},${f(cy + parseFloat(oy))}) rotate(${deg}) scale(${f(S)})">
-    ${buildSVGPaths(W, W)}
+            const deg = (layerAngle[n - 1] || 0).toFixed(3);
+            const oxPx = params['layer' + n + 'OffsetX'] || 0, oyPx = params['layer' + n + 'OffsetY'] || 0;
+            const clip = localClip(n - 1, oxPx, oyPx, (x, y) => x * x + y * y <= rPx * rPx);
+            engraving += `\n  <g id="L${n}" class="engrave"
+     transform="translate(${f(cx + oxPx * mmpp)},${f(cy + oyPx * mmpp)}) rotate(${deg}) scale(${f(mmpp)})" stroke-width="${params.stroke}">
+    ${buildSVGPaths(W, W, n - 1, clip)}
   </g>`;
         }
-        svg = `${header}
-  <defs>${defs}
-  </defs>${engraving}
+        svg = `${header}${engraving}
   <g class="cut">
     <path d="${discCut}"/>
     <path d="${cHolePth}"/>
@@ -2494,13 +2439,256 @@ ${planetHTML}
 </svg>`;
         filename = which === 0 ? 'lightbox-all.svg' : `lightbox-L${which}.svg`;
     }
+    downloadBlob(new Blob([svg], { type: 'image/svg+xml' }), filename);
+}
 
-    const blob = new Blob([svg], { type: 'image/svg+xml' });
-    const a    = document.createElement('a');
+function downloadBlob(blob, filename) {
+    const a = document.createElement('a');
     a.download = filename;
-    a.href     = URL.createObjectURL(blob);
-    a.click();
-    URL.revokeObjectURL(a.href);
+    a.href = URL.createObjectURL(blob);
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  3D print export
+//  Disc = gear-toothed base (print in clear/white) + pattern ribs on top
+//  (print in black). Saved as one 3MF with two parts so the slicer can
+//  give each part its own filament. Planets export as STL.
+//  The ribs are made by rendering the layer at ~0.1 mm/px and tracing
+//  the outline of every line (marching squares), so what prints is what
+//  you see: same warp, stroke width and caps.
+// ════════════════════════════════════════════════════════════════════
+function traceContours(data, S, iso) {
+    const W = S + 2, pos = new Map(), adj = new Map();
+    const val = (i, j) => (i < 0 || j < 0 || i >= S || j >= S) ? 0 : data[(j * S + i) * 4 + 3];
+    const pt = (i, j, v, a, b) => { const k = ((j + 1) * W + (i + 1)) * 2 + v; if (!pos.has(k)) { const t = (iso - a) / (b - a); pos.set(k, v ? [i + 0.5, j + 0.5 + t] : [i + 0.5 + t, j + 0.5]); } return k; };
+    const link = (a, b) => { let x = adj.get(a); if (x) x.push(b); else adj.set(a, [b]); x = adj.get(b); if (x) x.push(a); else adj.set(b, [a]); };
+    for (let j = -1; j < S; j++) for (let i = -1; i < S; i++) {
+        const tl = val(i, j), tr = val(i + 1, j), br = val(i + 1, j + 1), bl = val(i, j + 1);
+        const c = (tl >= iso ? 8 : 0) | (tr >= iso ? 4 : 0) | (br >= iso ? 2 : 0) | (bl >= iso ? 1 : 0);
+        if (c === 0 || c === 15) continue;
+        const T = () => pt(i, j, 0, tl, tr), Rt = () => pt(i + 1, j, 1, tr, br), B = () => pt(i, j + 1, 0, bl, br), Lf = () => pt(i, j, 1, tl, bl);
+        switch (c) {
+            case 1: case 14: link(Lf(), B()); break;  case 2: case 13: link(B(), Rt()); break;
+            case 3: case 12: link(Lf(), Rt()); break; case 4: case 11: link(T(), Rt()); break;
+            case 6: case 9:  link(T(), B()); break;   case 7: case 8:  link(Lf(), T()); break;
+            case 5:  if ((tl + tr + br + bl) / 4 >= iso) { link(Lf(), T()); link(B(), Rt()); } else { link(T(), Rt()); link(Lf(), B()); } break;
+            case 10: if ((tl + tr + br + bl) / 4 >= iso) { link(T(), Rt()); link(Lf(), B()); } else { link(Lf(), T()); link(B(), Rt()); } break;
+        }
+    }
+    const seen = new Set(), loops = [];
+    for (const k of adj.keys()) {
+        if (seen.has(k)) continue;
+        const loop = []; let prev = -1, cur = k;
+        while (cur !== undefined && !seen.has(cur)) { seen.add(cur); loop.push(pos.get(cur)); const n = adj.get(cur); const nx = n[0] !== prev ? n[0] : n[1]; prev = cur; cur = nx; }
+        if (loop.length >= 3) loops.push(loop);
+    }
+    return loops;
+}
+function rdp(p, tol) {
+    const n = p.length; if (n < 3) return p.slice();
+    const keep = new Uint8Array(n); keep[0] = keep[n - 1] = 1; const st = [[0, n - 1]];
+    while (st.length) {
+        const [a, b] = st.pop(); const ax = p[a][0], ay = p[a][1], dx = p[b][0] - ax, dy = p[b][1] - ay, L = Math.hypot(dx, dy) || 1e-9;
+        let md = -1, mi = -1;
+        for (let i = a + 1; i < b; i++) { const d = Math.abs((p[i][0] - ax) * dy - (p[i][1] - ay) * dx) / L; if (d > md) { md = d; mi = i; } }
+        if (md > tol) { keep[mi] = 1; st.push([a, mi], [mi, b]); }
+    }
+    return p.filter((_, i) => keep[i]);
+}
+function simplifyLoop(p, tol) {
+    let far = 0, fd = -1;
+    for (let i = 1; i < p.length; i++) { const d = Math.hypot(p[i][0] - p[0][0], p[i][1] - p[0][1]); if (d > fd) { fd = d; far = i; } }
+    const A = rdp(p.slice(0, far + 1), tol), B = rdp(p.slice(far).concat([p[0]]), tol);
+    return A.concat(B.slice(1, -1));
+}
+const polyArea = p => { let a = 0; for (let i = 0, n = p.length; i < n; i++) { const q = p[i], r = p[(i + 1) % n]; a += q[0] * r[1] - r[0] * q[1]; } return a / 2; };
+function mkShape(pts) {
+    let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+    for (const q of pts) { if (q[0] < x0) x0 = q[0]; if (q[0] > x1) x1 = q[0]; if (q[1] < y0) y0 = q[1]; if (q[1] > y1) y1 = q[1]; }
+    return { pts, area: polyArea(pts), bb: [x0, y0, x1, y1] };
+}
+function pip(p, poly) {
+    let ins = false;
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+        const a = poly[i], b = poly[j];
+        if ((a[1] > p[1]) !== (b[1] > p[1]) && p[0] < (b[0] - a[0]) * (p[1] - a[1]) / (b[1] - a[1]) + a[0]) ins = !ins;
+    }
+    return ins;
+}
+// depth 0,2,4… = solid outlines; 1,3… = holes inside them
+function nest(shapes) {
+    const order = shapes.slice().sort((a, b) => Math.abs(b.area) - Math.abs(a.area)), done = [];
+    for (const s of order) {
+        const p = s.pts[0]; s.parent = null;
+        for (let k = done.length - 1; k >= 0; k--) {
+            const o = done[k], b = o.bb;
+            if (p[0] < b[0] || p[0] > b[2] || p[1] < b[1] || p[1] > b[3]) continue;
+            if (pip(p, o.pts)) { s.parent = o; break; }
+        }
+        s.depth = s.parent ? s.parent.depth + 1 : 0; done.push(s);
+    }
+    return shapes;
+}
+
+// Trace one layer's pattern as rib outlines in mm, centred on the disc.
+function patternRibs(layerIdx, g) {
+    const mmpp = 1 / g.S, R = g.patternR_mm;
+    const res = Math.min(10, 4000 / (2 * R));           // px per mm (≤ 0.1 mm/px)
+    const Spx = Math.ceil(2 * R * res) + 4;
+    const oc = document.createElement('canvas'); oc.width = oc.height = Spx;
+    const c = oc.getContext('2d');
+    const k = res * mmpp;                                // offscreen px per screen px
+    c.translate(Spx / 2, Spx / 2); c.scale(k, k);
+    c.beginPath(); c.arc(0, 0, R / mmpp, 0, Math.PI * 2); c.clip();
+    const n = layerIdx + 1;
+    c.translate(params['layer' + n + 'OffsetX'] || 0, params['layer' + n + 'OffsetY'] || 0);
+    const ang = layerAngle[layerIdx] || 0;
+    c.rotate(ang * Math.PI / 180);
+    c.strokeStyle = '#fff'; c.lineWidth = params.stroke; c.lineCap = 'square';
+    const prevStep = GEO.step; GEO.step = Math.max(1, 0.4 / mmpp);   // sample every 0.4 mm
+    const size = params.cellSize, maxDist = Math.max(canvas.width, canvas.height) * 0.82;
+    try { drawShapeInto(c, params.cellCount, size, maxDist, ang, params.warpLayers[layerIdx]); }
+    finally { GEO.step = prevStep; }
+    const data = c.getImageData(0, 0, Spx, Spx).data;
+    const toMM = ([x, y]) => [(x - Spx / 2) / res, (y - Spx / 2) / res];
+    return nest(traceContours(data, Spx, 128).map(l => {
+        const p = l.map(toMM), m = p.length;
+        const sm = p.map((q, i) => { const a = p[(i - 1 + m) % m], b = p[(i + 1) % m]; return [(a[0] + 2 * q[0] + b[0]) / 4, (a[1] + 2 * q[1] + b[1]) / 4]; });
+        return mkShape(simplifyLoop(sm, 0.03));
+    }).filter(s => Math.abs(s.area) > 0.05));            // drop specks under 0.05 mm²
+}
+
+const circlePts = (r, n) => Array.from({ length: n }, (_, i) => { const a = i / n * Math.PI * 2; return [r * Math.cos(a), r * Math.sin(a)]; });
+
+// Extrude nested outlines between z0 and z1 → triangles [[x,y,z]×3]
+function extrude(shapes, z0, z1) {
+    const tris = [];
+    const ring = (s, hole) => { const p = s.pts.map(q => [q[0], -q[1]]); if ((polyArea(p) < 0) !== hole) p.reverse(); return p; };
+    for (const s of shapes) {
+        if (s.depth % 2) continue;
+        const rings = [ring(s, false)].concat(shapes.filter(h => h.parent === s).map(h => ring(h, true)));
+        const flat = [], holes = [];
+        for (const r of rings) { if (flat.length) holes.push(flat.length / 2); for (const q of r) flat.push(q[0], q[1]); }
+        const ix = earcut(flat, holes, 2);
+        for (let i = 0; i < ix.length; i += 3) {
+            let a = ix[i], b = ix[i + 1], c = ix[i + 2];
+            const cr = (flat[2 * b] - flat[2 * a]) * (flat[2 * c + 1] - flat[2 * a + 1]) - (flat[2 * b + 1] - flat[2 * a + 1]) * (flat[2 * c] - flat[2 * a]);
+            if (cr < 0) [b, c] = [c, b];
+            const V = (k, z) => [flat[2 * k], flat[2 * k + 1], z];
+            tris.push([V(a, z1), V(b, z1), V(c, z1)], [V(a, z0), V(c, z0), V(b, z0)]);
+        }
+        for (const r of rings) for (let i = 0, n = r.length; i < n; i++) {
+            const a = r[i], b = r[(i + 1) % n];
+            tris.push([[a[0], a[1], z0], [b[0], b[1], z0], [b[0], b[1], z1]], [[a[0], a[1], z0], [b[0], b[1], z1], [a[0], a[1], z1]]);
+        }
+    }
+    return tris;
+}
+
+function stlBinary(tris) {
+    const buf = new ArrayBuffer(84 + 50 * tris.length), dv = new DataView(buf);
+    const hdr = 'Moire lightbox STL'; for (let i = 0; i < hdr.length; i++) dv.setUint8(i, hdr.charCodeAt(i));
+    dv.setUint32(80, tris.length, true); let o = 84;
+    for (const [a, b, c] of tris) {
+        const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2], vx = c[0] - a[0], vy = c[1] - a[1], vz = c[2] - a[2];
+        let nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx; const m = Math.hypot(nx, ny, nz) || 1;
+        for (const v of [nx / m, ny / m, nz / m, ...a, ...b, ...c]) { dv.setFloat32(o, v, true); o += 4; }
+        dv.setUint16(o, 0, true); o += 2;
+    }
+    return buf;
+}
+
+// 3MF with one object made of named parts (slicers offer a filament per part)
+function threeMF(parts) {
+    let id = 1; const objs = [];
+    for (const p of parts) {
+        const vmap = new Map(), verts = [], tri = [];
+        const vi = v => { const k = v[0].toFixed(4) + ',' + v[1].toFixed(4) + ',' + v[2].toFixed(4); let i = vmap.get(k); if (i === undefined) { i = verts.length; vmap.set(k, i); verts.push(k.split(',')); } return i; };
+        for (const t of p.tris) { const a = vi(t[0]), b = vi(t[1]), c = vi(t[2]); if (a !== b && b !== c && a !== c) tri.push(`<triangle v1="${a}" v2="${b}" v3="${c}"/>`); }
+        objs.push({ id: id++, name: p.name, xml: `<mesh><vertices>${verts.map(v => `<vertex x="${v[0]}" y="${v[1]}" z="${v[2]}"/>`).join('')}</vertices><triangles>${tri.join('')}</triangles></mesh>` });
+    }
+    const groupId = id;
+    const model = `<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xml:lang="en-US" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+<resources>
+${objs.map(o => `<object id="${o.id}" name="${o.name}" type="model">${o.xml}</object>`).join('\n')}
+<object id="${groupId}" name="Moire disc" type="model"><components>${objs.map(o => `<component objectid="${o.id}"/>`).join('')}</components></object>
+</resources>
+<build><item objectid="${groupId}"/></build>
+</model>`;
+    return zipStore([
+        ['[Content_Types].xml', '<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/></Types>'],
+        ['_rels/.rels', '<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Target="/3D/3dmodel.model" Id="rel0" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/></Relationships>'],
+        ['3D/3dmodel.model', model],
+    ], 'model/3mf');
+}
+
+const CRCT = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+function crc32(u) { let c = 0xFFFFFFFF; for (let i = 0; i < u.length; i++) c = CRCT[(c ^ u[i]) & 255] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
+function zipStore(files, type = 'application/zip') {
+    const enc = new TextEncoder(), parts = [], cen = []; let off = 0;
+    for (const [name, data] of files) {
+        const nb = enc.encode(name), db = typeof data === 'string' ? enc.encode(data) : new Uint8Array(data), crc = crc32(db);
+        const h = new DataView(new ArrayBuffer(30)); h.setUint32(0, 0x04034b50, true); h.setUint16(4, 20, true); h.setUint16(6, 0x0800, true); h.setUint16(12, 0x21, true); h.setUint32(14, crc, true); h.setUint32(18, db.length, true); h.setUint32(22, db.length, true); h.setUint16(26, nb.length, true);
+        const c = new DataView(new ArrayBuffer(46)); c.setUint32(0, 0x02014b50, true); c.setUint16(4, 20, true); c.setUint16(6, 20, true); c.setUint16(8, 0x0800, true); c.setUint16(14, 0x21, true); c.setUint32(16, crc, true); c.setUint32(20, db.length, true); c.setUint32(24, db.length, true); c.setUint16(28, nb.length, true); c.setUint32(42, off, true);
+        parts.push(new Uint8Array(h.buffer), nb, db); cen.push(new Uint8Array(c.buffer), nb); off += 30 + nb.length + db.length;
+    }
+    const cs = cen.reduce((a, b) => a + b.length, 0), e = new DataView(new ArrayBuffer(22));
+    e.setUint32(0, 0x06054b50, true); e.setUint16(8, files.length, true); e.setUint16(10, files.length, true); e.setUint32(12, cs, true); e.setUint32(16, off, true);
+    return new Blob([...parts, ...cen, new Uint8Array(e.buffer)], { type });
+}
+
+function loadEarcut() {
+    if (window.earcut) return Promise.resolve();
+    return new Promise((ok, no) => {
+        const s = document.createElement('script');
+        s.src = 'https://cdn.jsdelivr.net/npm/earcut@2.2.4/dist/earcut.min.js';
+        s.onload = ok;
+        s.onerror = () => no(new Error("couldn't load the triangulation helper (needs internet the first time)"));
+        document.head.appendChild(s);
+    });
+}
+
+function lbStatus(t) { const el = document.getElementById('lb3dStatus'); if (el) el.textContent = t; }
+
+// which: 1-3 = disc for that layer (3MF), 4 = planet gear (STL)
+async function exportLightbox3D(which) {
+    const btns = [...document.querySelectorAll('#lb3dBtns button')];
+    btns.forEach(b => b.disabled = true);
+    try {
+        lbStatus('Loading the triangulation helper…');
+        await loadEarcut();
+        const g = lbCalcGear();
+        const baseT = Math.max(0.4, +params.lbBaseT || 1.6), ribH = Math.max(0.2, +params.lbRibH || 0.6);
+        const hole = (r, n) => mkShape(circlePts(r, n));
+        if (which === 4) {
+            const shapes = nest([mkShape(involuteGear(g.N_planet, g.m_mm, 0)), hole(g.axle_mm / 2, 64)]);
+            downloadBlob(new Blob([stlBinary(extrude(shapes, 0, baseT))]), `lightbox-planet-${g.N_planet}T-m${g.m_mm}.stl`);
+            lbStatus(`Saved the planet gear (${g.N_planet} teeth, ${baseT} mm thick). Print three.`);
+            return;
+        }
+        lbStatus(`Tracing layer ${which}…`);
+        await new Promise(r => setTimeout(r, 30));
+        const base = nest([mkShape(involuteGear(g.N_ring, g.m_mm, 0)), hole(g.cHole_mm / 2, 96)]);
+        const ribs = patternRibs(which - 1, g);
+        if (!ribs.length) throw new Error('this layer has no pattern inside the disc');
+        lbStatus('Building the 3MF…');
+        await new Promise(r => setTimeout(r, 30));
+        const blob = threeMF([
+            { name: 'Base (clear or white)', tris: extrude(base, 0, baseT) },
+            { name: 'Pattern (black)', tris: extrude(ribs, baseT, baseT + ribH) },
+        ]);
+        downloadBlob(blob, `lightbox-L${which}-disc.3mf`);
+        const lineMM = params.stroke / g.S;
+        lbStatus(`Saved layer ${which}: ${(g.Ra_ring_mm * 2).toFixed(1)} mm disc, ${ribs.filter(s => s.depth % 2 === 0).length} pattern pieces.` +
+            (lineMM < 0.4 ? ` Lines are ${lineMM.toFixed(2)} mm, below a 0.4 mm nozzle. Raise Stroke before printing.` : ''));
+    } catch (e) {
+        lbStatus('3D export didn\'t work: ' + (e.message || e));
+    } finally {
+        btns.forEach(b => b.disabled = false);
+    }
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -2636,6 +2824,8 @@ function loadState() {
 
 function applyFullState(state) {
     Object.assign(params, state.params);
+    // Older saves stored tooth pitch (mm) in lbModule; a true module is pitch / π
+    if (state.params && state.params.lbModule > 6) params.lbModule = Math.round(state.params.lbModule / Math.PI * 4) / 4;
     if (state.meshPoints && state.meshPoints.length)
         meshPoints = JSON.parse(JSON.stringify(state.meshPoints));
     if (state.layerAngle)
@@ -2650,6 +2840,8 @@ function applyFullState(state) {
     function setSelect(id, val) { const el = document.getElementById(id); if (el) el.value = val; }
     function setColor(id, val)  { const el = document.getElementById(id); if (el) el.value = val; }
 
+    ['lbDiameter','lbModule','lbPlanetTeeth','lbPlanetGap','lbAxleHole','lbCentreHole','lbBaseT','lbRibH']
+        .forEach(id => { if (params[id] !== undefined) setSlider(id, params[id]); });
     setSelect('shape', params.shape);
     document.getElementById('svgImportUI').classList.toggle('hidden', params.shape !== 'svg-import');
     setSelect('blendMode', params.blendMode);
