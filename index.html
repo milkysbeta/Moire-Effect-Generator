@@ -610,7 +610,7 @@ const params = {
     // Lightbox
     armN: 12, armD: 2, armTwist: 1, armOpen: 0.45, armHub: 0.15, armMid: 0.55, armM2: 0.78, armSin: 30, armSout: 30, armS3: 32, armSharp: 0.6, armEntry: 0.5, armWHub: 0.25, armWKink: 0.45, armWRim: 0.6, armMirror: true,
     lightbox: false, lbDiameter: 200, lbModule: 2, lbPlanetTeeth: 18,
-    lbPlanetGap: 0.2, lbCentreHole: 8, lbAxleHole: 5, lbBaseT: 1.6, lbRibH: 0.6, lbDrive: 'planet', lbDiscs: '2', cxStyle: 'openwork', cxDiscT: 2, cxRim: 4, cxLip: 3, cxEnc: false,
+    lbPlanetGap: 0.2, lbCentreHole: 8, lbAxleHole: 5, lbBaseT: 1.6, lbRibH: 0.6, lbDrive: 'planet', lbDiscs: '2', cxStyle: 'openwork', cxDiscT: 2, cxRim: 4, cxLip: 3, cxEnc: false, cxBatt: false,
     mpColFront: '#15171a', mpColMiddle: '#b98a4a', mpColRear: '#ece9e2', mpColRib: '#111111',
 };
 
@@ -2985,7 +2985,7 @@ const CX = {
     flangeT3: 2.9,                        // front hub flange on 3-disc builds
     // slim centres: inserts on a 32 mm circle (2.9 mm wall to the 608 pocket, 2 mm outside),
     // front hub Ø24 flange + 14 mm hex boss (2.8 mm wall round the rod)
-    insertPCD: 32, insertD: 4.0, frontFlangeR: 12, frontHexAF: 14,
+    insertPCD: 48, insertD: 4.0, rearSeat: 1.2, capIn: 27.5, capWall: 1.8, frontFlangeR: 12, frontHexAF: 14,
 };
 CX.C = (CX.Np + CX.Ng) * CX.m / 2;                 // motor shaft distance from the rod
 CX.g1z = CX.bossTop + CX.washer;                   // rod gear sits on a washer on the top base bearing
@@ -3000,9 +3000,14 @@ CX.rodLen = top => Math.ceil((top - CX.nutBottom + 5) / 10) * 10;
 // 2 discs: rear disc on its carrier boss, front disc 1 mm above it; the front hub flange fills the space below
 const discT = () => Math.max(1, +params.cxDiscT || 2);
 const discLip = () => Math.max(0, +(params.cxLip ?? 3));
-CX.rearTop2 = () => CX.hubZ + CX.hubL + CX.carrierT + discT();
+// 2 discs: the rear disc drops over the bearing housing and bolts onto a 1.2 mm seat ring on top of
+// the green cog plate (4× M3 into heat-set inserts on a 48 mm circle). The front disc sits 1 mm in front
+// of it; its centre is a spoked cap that arches over the housing to the front hub's hex boss.
+CX.rearZ2 = () => CX.hubZ + CX.g2T + CX.rearSeat;                   // rear disc bottom
+CX.rearTop2 = () => CX.rearZ2() + discT();
 CX.frontDisc2 = () => CX.rearTop2() + CX.gap;                       // front disc bottom
-CX.flangeT2 = () => CX.frontDisc2() - CX.frontZ;                     // front hub flange thickness
+CX.flangeT2 = () => 2;                                               // front hub flange on 2-disc builds
+CX.capTop2 = () => CX.frontZ + CX.flangeT2() - CX.frontDisc2();     // cap spokes, measured from the front disc bottom
 
 function coaxCalc() {
     const D = Math.max(60, params.lbDiameter), R = D / 2;
@@ -3087,12 +3092,14 @@ function motorSeat(api, ang, layer) {
 // carry the jumper wires. ESP32-S3 SuperMini and a USB-C power breakout sit lower right with their
 // sockets against the case wall.
 const ELEC = {
-    uln: { w: 35, h: 32, r: 78, clear: 0.4, wall: 1.2, ledge: 2.5, leg: 8, rise: 3 },
+    uln: { w: 35, h: 32, r: 78, clear: 0.4, wall: 1.2, ledge: 2.5, leg: 8, rise: 0 },   // rise 0: on the plate, solder side in a 3 mm pocket
     ulnAng: { A: 315, B: 225, C: 135 },
     ulnSock: { A: 1, B: -1, C: -1 },                                   // which side edge faces the motor (+ = canvas +v)
     ulnList: n => (n === 3 ? ['A', 'B', 'C'] : ['A', 'B']),
     esp: { ang: 45, len: 22.5, wid: 18, get r() { return encR() - ENC.wall - 0.4 - this.len / 2; } },    // S3 SuperMini, USB-C at the wall
-    usb: { ang: 66, len: 16, wid: 13, get r() { return encR() - ENC.wall - 0.4 - this.len / 2; } },     // USB-C 5 V breakout, socket at the wall
+    // USB-C 5 V breakout (16 × 13), or with a battery an IP5306-type USB-C charge + boost module (25 × 21)
+    usb: { ang: 66, get len() { return params.cxBatt ? 25 : 16; }, get wid() { return params.cxBatt ? 21 : 13; }, get r() { return encR() - ENC.wall - 0.4 - this.len / 2; } },
+    batt: { ang: 270, r: 81, len: 77, wid: 21 },                        // one 18650 in an open holder along the top
     groove: { r0: 18.5, r1: 25.5, w: 5, depth: 3 },                    // wire channels in the plate top
 };
 // a radial rect with its limits in any order
@@ -3106,12 +3113,16 @@ function ulnCradle(k, part) {
     }
     return out;
 }
+const ulnPocket = k => { const u = ELEC.uln, H = u.h / 2 - u.ledge, W = u.w / 2 - u.ledge; return rr(u.r, ELEC.ulnAng[k], -H, H, -W, W); };
+const battPaths = () => { const b = ELEC.batt, o = 1.6, c = 0.3;
+    return { pad: rr(b.r, b.ang, -b.wid / 2 - o, b.wid / 2 + o, -b.len / 2 - o, b.len / 2 + o), inner: rr(b.r, b.ang, -b.wid / 2 - c, b.wid / 2 + c, -b.len / 2 - c, b.len / 2 + c) }; };
 const ulnPad = k => { const u = ELEC.uln; return rr(u.r, ELEC.ulnAng[k], -u.h / 2 - u.clear - u.wall, u.h / 2 + u.clear + u.wall, -u.w / 2 - u.clear - u.wall, u.w / 2 + u.clear + u.wall); };
 // moulded wire channels: a ring round the bearing boss, spokes out to each board and the ESP32
 function wireChannels(n) {
     const g = ELEC.groove, out = [ringPath(g.r0, g.r1)];
     for (const k of ELEC.ulnList(n)) out.push(rr(0, ELEC.ulnAng[k], g.r1 - 1, ELEC.uln.r - ELEC.uln.h / 2 + 1, -g.w / 2, g.w / 2));
     out.push(rr(0, ELEC.esp.ang, g.r1 - 1, ELEC.esp.r - ELEC.esp.len / 2 + 2, -g.w / 2, g.w / 2));
+    if (params.cxBatt) out.push(rr(0, ELEC.batt.ang, g.r1 - 1, ELEC.batt.r - ELEC.batt.wid / 2 + 1, -g.w / 2, g.w / 2));
     return out;
 }
 // Enclosure, two printed shells that meet in a hairline seam level with the rear disc:
@@ -3119,13 +3130,13 @@ function wireChannels(n) {
 //                flush), wall up to the seam, then a thinner spigot with a snap bead
 //   front shield slides over the spigot and clicks onto the bead; its wall clears the discs by
 //                1.5 mm and a bezel ring in front hides the disc rims, leaving just the pattern
-const ENC = { wall: 2.4, floorT: 3, ledgeR: 72, fixR: 74, fixAng: [20, 160, 250, 290], keyR: 82, keyAng: [255, 285], btnAng: 110,
+const ENC = { wall: 2.4, floorT: 3, ledgeR: 72, fixR: 74, fixAng: [20, 160, 240, 300], keyR: 82, keyAng: [255, 285], btnAng: 110,
               shell: 2, spigot: 6, bezelT: 2, btnZ: 12, btnD: 7 };
 const encR = () => Math.max(98, params.lbDiameter / 2 + 1.5 + ENC.shell);     // outside radius of both shells
 const encFront = () => (discCount() === 3 ? cx3().frontDisc : CX.frontDisc2()) + discT() + discLip();   // front of the front disc
 const encTop = () => {                                                         // the seam
-    const three = discCount() === 3, rearZ = three ? cx3().rearZ : CX.hubZ + CX.hubL;
-    return rearZ + CX.carrierT - discLip() - 1.5;
+    const rearPlate = discCount() === 3 ? cx3().rearZ + CX.carrierT : CX.rearZ2();
+    return rearPlate - discLip() - 1.5;
 };
 // Keyhole: head goes in the big hole, then the part drops onto the screw shank in the slot
 const keyhole = (x, y, slotW) => g => { g.moveTo(x + 4.5, y); g.arc(x, y, 4.5, 0, Math.PI * 2); g.rect(x - slotW / 2, y - 8, slotW, 8); };
@@ -3155,18 +3166,20 @@ const CX_PARTS = {
                 a.add(P2.circle(0, 0, CX.plateR));
                 if (z0 >= rebate - 1e-6) {                                   // pads under the boards that overhang the rim
                     a.add(...ulns.map(ulnPad), esp.pad, usb.pad);
+                    if (params.cxBatt) a.add(battPaths().pad);
+                    ENC.keyAng.forEach(dg => { const [x, y] = polar(ENC.keyR, dg); a.cut(keyhole(x, y, 10), P2.circle(x, y, 5.5)); });   // room for the enclosure's keyhole screw heads
                 } else a.cut(ringPath(ENC.ledgeR + 0.3, R + 2));
                 a.cut(P2.circle(0, 0, z1 <= CX.b1z ? 12 : pk));            // nut + washer recess, then the bottom 608
                 keyPts.forEach(([x, y]) => a.cut(keyhole(x, y, z1 <= rebate + 1e-6 ? 4.4 : z1 <= -2 + 1e-6 ? 9 : 0)));
                 ENC.fixAng.forEach(d => { const [x, y] = polar(ENC.fixR, d); a.cut(P2.circle(x, y, 1.7)); });   // M3 into the enclosure floor
-                if (z0 >= -ELEC.groove.depth - 1e-6) a.cut(...chans);          // wire channels
+                if (z0 >= -ELEC.groove.depth - 1e-6) a.cut(...chans, ...ulns.map(ulnPocket));   // wire channels + pockets for the boards' solder joints
                 floors.forEach(([ang, f]) => { if (f <= z0 + 1e-6) motorSeat(a, ang, 'cavity'); });
             } });
         }
         // ULN2003 corner cradles (the board drops in; a dab of hot glue holds it) and low trays for the ESP32 and USB-C breakout
-        L.push({ R, z0: 0, z1: ELEC.uln.rise, paint: a => ulns.forEach(k => a.add(...ulnCradle(k, 'post'))) });
-        L.push({ R, z0: ELEC.uln.rise, z1: ELEC.uln.rise + 2.4, paint: a => ulns.forEach(k => a.add(...ulnCradle(k, 'wall'))) });
+        L.push({ R, z0: 0, z1: 2.4, paint: a => ulns.forEach(k => a.add(...ulnCradle(k, 'wall'))) });        // corner walls locate the boards
         L.push({ R, z0: 0, z1: 2.5, paint: a => { a.add(esp.pad, usb.pad); a.cut(esp.inner, usb.inner); } });
+        if (params.cxBatt) { const b = battPaths(); L.push({ R, z0: 0, z1: 3, paint: a => { a.add(b.pad); a.cut(b.inner); } }); }   // rails round the 18650 holder
         const sp0 = CX.b1z + 7, sp1 = sp0 + CX.baseSpacer;              // spacer between the base bearings
         L.push({ R, z0: 0, z1: sp0, paint: a => { a.add(P2.circle(0, 0, 16)); a.cut(P2.circle(0, 0, pk)); } });
         L.push({ R, z0: sp0, z1: sp1, paint: a => { a.add(P2.circle(0, 0, 16)); a.cut(P2.circle(0, 0, 6.5)); } });
@@ -3190,10 +3203,11 @@ const CX_PARTS = {
     rearHub: () => {     // G2 teeth + bearing housing + rear-disc mount
         const R = (CX.Ng + 2) * CX.m / 2 + 1, gear = P2.poly(involuteGear(CX.Ng, CX.m, 0)), pk = pocket() / 2, H = CX.hubL;
         const inserts = a => [45, 135, 225, 315].forEach(d => { const t = d * Math.PI / 180; a.cut(P2.circle(CX.insertPCD / 2 * Math.cos(t), CX.insertPCD / 2 * Math.sin(t), CX.insertD / 2)); });
-        return zStack(R, [0, CX.g2T, 7, H - 7, H - 6, H], (a, z) => {
-            a.add(z < CX.g2T ? gear : P2.circle(0, 0, CX.hubR));
+        const seat = CX.g2T + CX.rearSeat, insB = seat - 5;
+        return zStack(R, [0, insB, CX.g2T, seat, 7, H - 7, H], (a, z) => {
+            a.add(z < CX.g2T ? gear : z < seat ? P2.circle(0, 0, CX.insertPCD / 2 + 5) : P2.circle(0, 0, CX.hubR));
             a.cut(P2.circle(0, 0, z < 7 || z > H - 7 ? pk : 6.5));
-            if (z > H - 6) inserts(a);
+            if (z > insB && z < seat) inserts(a);                           // inserts in the seat ring, through into the gear web
         });
     },
     frontHub: (flT = discCount() === 3 ? CX.flangeT3 : CX.flangeT2()) => buildPart([
@@ -3501,7 +3515,12 @@ function discSpec(which) {
     // boss: { r, layers: [[z0, z1, cutFn]] } under the plate (z 0 … boss.t); the plate starts at boss.t
     let hubOut, holes, boss = null;
     const carrier = (r, holeR, pts) => ({ r, t: CX.carrierT, layers: [[0, CX.carrierT, a => { a.cut(P2.circle(0, 0, holeR)); pts.forEach(([x, y]) => a.cut(P2.circle(x, y, 1.7))); }]] });
-    if (front) {
+    let cap = null;
+    if (front && !three) {                        // spoked cap over the rear hub's bearing housing
+        hubOut = CX.capIn + CX.capWall + 0.3;
+        holes = a => a.cut(P2.circle(0, 0, CX.capIn));
+        cap = { rIn: CX.capIn, rOut: CX.capIn + CX.capWall, top: CX.capTop2(), spokes: 3, hubR: 11 };
+    } else if (front) {
         hubOut = 11.5;                          // just covers the M8 washer
         holes = a => a.cut(P2.hex(CX.frontHexAF + 0.3));
     } else if (which === 'middle') {
@@ -3521,24 +3540,33 @@ function discSpec(which) {
         holes = a => { a.cut(P2.circle(0, 0, hole)); pts.forEach(([x, y]) => a.cut(P2.circle(x, y, 3.1))); };    // counterbores: heads flush in the plate
         boss = carrier(30.5, hole, pts);
     } else {
-        const pts = ring(4, CX.insertPCD / 2, 45), hole = CX.frontFlangeR + 0.8;   // the front hub flange passes through
-        hubOut = CX.insertPCD / 2 + 3.1 + 2.5;
-        holes = a => { a.cut(P2.circle(0, 0, hole)); pts.forEach(([x, y]) => a.cut(P2.circle(x, y, 3.1))); };
-        boss = carrier(CX.hubR, hole, pts);
+        const pts = ring(4, CX.insertPCD / 2, 45);                                  // M3 clearance onto the cog plate's inserts
+        hubOut = CX.capIn + CX.capWall + 0.3;
+        holes = a => { a.cut(P2.circle(0, 0, CX.hubR + 0.6)); pts.forEach(([x, y]) => a.cut(P2.circle(x, y, 1.7))); };
     }
     const pattern = makePattern(layerIdx, mmpp);
-    return { c, mmpp, R, t, front, layerIdx, hubOut, holes, pattern, boss };
+    return { c, mmpp, R, t, front, layerIdx, hubOut, holes, pattern, boss, cap };
 }
 // Disc as printed. A middle disc carries a boss underneath (z 0 … boss.t), its plate above.
 function coaxDisc(which, ang) {          // ang: draw the pattern at this rotation (3D view uses 0)
-    const { c, R, t, hubOut, holes, pattern, boss } = discSpec(which);
+    const { c, R, t, hubOut, holes, pattern, boss, cap } = discSpec(which);
     const res = Math.min(12, 4000 / (2 * R)), z0 = boss ? boss.t : 0;
     // Stiffening lip round the rim, like a pie dish: the rear disc's points back, the front disc's forward,
     // so neither enters the gap. The middle of three discs has neighbours both sides and gets none.
     const lip = which === 'middle' ? 0 : discLip();
     const lipTris = lip > 0 ? extrude(profile2D(R + 1, a => a.add(g => { g.arc(0, 0, R, 0, Math.PI * 2); g.moveTo(R - c.rim, 0); g.arc(0, 0, R - c.rim, 0, Math.PI * 2, true); }), Math.min(res, 8)),
         which === 'front' ? z0 + t : z0 - lip, which === 'front' ? z0 + t + lip : z0) : [];
-    const bossTris = boss ? [].concat(...boss.layers.filter(([z0, z1]) => z1 - z0 > 0.01).map(([z0, z1, cut]) => extrude(profile2D(boss.r + 1, a => { a.add(P2.circle(0, 0, boss.r)); cut(a); }, 20), z0, z1))) : [];
+    let bossTris = boss ? [].concat(...boss.layers.filter(([z0, z1]) => z1 - z0 > 0.01).map(([z0, z1, cut]) => extrude(profile2D(boss.r + 1, a => { a.add(P2.circle(0, 0, boss.r)); cut(a); }, 20), z0, z1))) : [];
+    if (cap) {     // wall up from the plate, then three spokes to a hub ring on the front hub's hex boss (prints plate-down; 16 mm bridges)
+        const ringP = P2.circle(0, 0, cap.rOut), wallTris = extrude(profile2D(cap.rOut + 1, a => { a.add(ringP); a.cut(P2.circle(0, 0, cap.rIn)); }, 20), t, cap.top);
+        const spokeTris = extrude(profile2D(cap.rOut + 1, a => {
+            a.add(ringP); a.cut(P2.circle(0, 0, cap.rIn));
+            a.add(P2.circle(0, 0, cap.hubR));
+            for (let i = 0; i < cap.spokes; i++) { const g = a.g; g.save(); g.rotate(i * 2 * Math.PI / cap.spokes + Math.PI / 2); a.add(P2.rect(cap.hubR - 1, -2.6, cap.rIn + 0.5, 2.6)); g.restore(); }
+            a.cut(P2.hex(CX.frontHexAF + 0.3));
+        }, 20), cap.top, cap.top + t);
+        bossTris = bossTris.concat(wallTris, spokeTris);
+    }
     if ((params.cxStyle || 'openwork') === 'openwork') {
         const shapes = profile2D(R + 1, a => {
             a.add(g => { g.arc(0, 0, R, 0, Math.PI * 2); g.moveTo(R - c.rim, 0); g.arc(0, 0, R - c.rim, 0, Math.PI * 2, true); });
@@ -3586,13 +3614,14 @@ function coaxBOM() {
         three ? '  2× 6806ZZ / 6806-2RS bearing (30×42×7)' : '',
         `  2× M8 thin nut (DIN 439, 5 mm or less: one under the base, one keyed in the rod gear), ${three ? 3 : 4}× M8 washer, 1× M8 dome (acorn) nut for the front`,
         `  ${three ? 3 : 2}× 28BYJ-48 stepper + driver (ULN2003, or TMC2209 with the bipolar mod)`,
-        `  4× M3 heat-set insert + 4× M3×10 button head (rear disc to its hub)`,
+        `  4× M3 heat-set insert + 4× M3×${three ? 10 : 6} button head (rear disc to its hub)`,
         three ? '  3× M3 heat-set insert + 3× M3×10 button head (middle disc to the middle hub)' : '',
         `  ${three ? 6 : 4}× M3×8 screws (motor ears, self-tap into the base)`,
         `  ${discCount()}× ULN2003 driver board (from the motor kits): drops into its corner cradles beside its motor, dab of hot glue`,
         '  1× ESP32-S3 SuperMini in its tray (firmware env esp32s3); its USB-C faces a window for flashing',
         '  1× USB-C 5 V breakout with 5.1 kΩ CC resistors (6-pin type) in its tray + any 5 V 2 A USB-C phone charger',
         '  1× 470 µF 10 V capacitor across the breakout\'s 5 V / GND; ~20 female-female jumper wires (10 cm), 4 red + 4 black for power',
+        params.cxBatt ? '  Battery: 1× 18650 (3000 mAh+, protected) in a 1-cell open holder + IP5306-type USB-C charge/boost module (5 V 2 A out) in place of the breakout' : '',
         params.cxEnc ? `  Enclosure: 4× M3×8 (base into the back), 2× wall screws for the keyholes (head under 9 mm), 1× 7 mm panel push button (momentary)` : '  Wall: 3× pan-head screws for the base keyholes (head under 9 mm)',
         '',
         'ASSEMBLE (bottom to top)',
@@ -3603,8 +3632,8 @@ function coaxBOM() {
     if (!three) lines.push(
         CX.hubSpacer > 0 ? `  4. Press 608s into both ends of the rear hub with the ${CX.hubSpacer} mm spacer between them; slide the hub onto the rod, teeth down.`
                          : '  4. Press a 608 into each end of the rear hub (they meet in the middle); slide the hub onto the rod, teeth down.',
-        '  5. Heat-set the 4 inserts into the hub top; bolt the rear disc on with M3×10 button heads (they sit flush in its counterbores).',
-        '  6. Washer on the hub\'s top bearing, then the front hub, front disc over its hex boss, M8 washer, dome nut.');
+        '  5. Heat-set the 4 inserts into the seat ring on the cog plate; drop the rear disc over the bearing housing and bolt it down with M3×6 button heads.',
+        '  6. Washer on the hub\'s top bearing, then the front hub; the front disc\'s spoked cap goes over the housing onto its hex boss; M8 washer, dome nut.');
     else lines.push(
         '  4. Middle hub: heat-set its 3 cap inserts. Press one 608 in from the bottom all the way up under the cap, then the second',
         L.midSpacer > 0 ? `     608 behind it with the ${L.midSpacer} mm spacer between.` : '     608 behind it (the two sit back to back).',
@@ -3734,7 +3763,7 @@ function v3DiscSignature() {
     return JSON.stringify(o) + (params.warpType === 'mesh' ? JSON.stringify(meshPoints) : '');
 }
 // Everything that changes the mechanism
-const v3MechSignature = () => [params.lbDrive, discCount(), discT(), params.lbDiameter, discLip()].join('|');
+const v3MechSignature = () => [params.lbDrive, discCount(), discT(), params.lbDiameter, discLip(), !!params.cxBatt].join('|');
 function pageStatus(t) { const e = document.getElementById('mpStatus'); if (e) e.textContent = t; const c = document.getElementById('cxStatus'); if (c && !V3.open) c.textContent = t; }
 
 function buildModelPageDOM() {
@@ -3790,6 +3819,7 @@ function buildModelPageDOM() {
         <input id="mpLip" type="range" min="0" max="8" step="0.5">
         <div class="r"><span>Disc style</span></div>
         <select id="mpStyle"><option value="openwork">Openwork, one colour (light through)</option><option value="twocolour">Solid base + black pattern (3MF)</option></select>
+        <label class="chk"><input type="checkbox" id="mpBatt"> 18650 battery inside (USB-C charging)</label>
         <div class="r"><span>Colours</span></div>
         <div class="cols" id="mpCols"></div>
         <h3>View</h3>
@@ -3821,6 +3851,7 @@ function buildModelPageDOM() {
     document.getElementById('mpT').oninput = e => { params.cxDiscT = +e.target.value; sync(); };
     document.getElementById('mpLip').oninput = e => { params.cxLip = +e.target.value; sync(); };
     document.getElementById('mpStyle').onchange = e => { params.cxStyle = e.target.value; sync(); };
+    document.getElementById('mpBatt').onchange = e => { params.cxBatt = e.target.checked; mpRefreshPanel(); };
     document.getElementById('mpEnc').onclick = () => { params.cxEnc = !params.cxEnc; mpRefreshPanel(); V3.onEnclosure && V3.onEnclosure(); };
     document.getElementById('mpCut').onclick = () => { V3.cut = !V3.cut; mpRefreshPanel(); V3.onCut && V3.onCut(); };
     document.getElementById('mpExplode').onclick = () => { V3.explodeTarget = V3.explodeTarget > 0.5 ? 0 : 1; mpRefreshPanel(); };
@@ -3841,6 +3872,7 @@ function mpRefreshPanel() {
     document.getElementById('mpTO').textContent = discT().toFixed(1) + ' mm';
     document.getElementById('mpExplode').textContent = V3.explodeTarget > 0.5 ? 'Assembled view' : 'Exploded view';
     document.getElementById('mpPlay').textContent = paused ? 'Play' : 'Pause';
+    const bt = document.getElementById('mpBatt'); bt.checked = !!params.cxBatt; bt.disabled = edge;
     const encBtn = document.getElementById('mpEnc');
     encBtn.disabled = edge; encBtn.setAttribute('aria-pressed', !edge && !!params.cxEnc);
     encBtn.title = edge ? 'The edge drive\'s back plate is its enclosure' : 'Back drum that hides the gears, motors and boards';
@@ -3892,7 +3924,9 @@ function mpRefreshPanel() {
         `<b style="color:#e4e4e7">Wiring (ESP32-S3 SuperMini, firmware env esp32s3):</b><br>` +
         `Motor A board IN1-4 ← GPIO 1, 2, 3, 4<br>Motor B board IN1-4 ← GPIO 5, 6, 7, 8<br>` + (discCount() === 3 ? `Motor C board IN1-4 ← GPIO 9, 10, 11, 12<br>` : '') +
         `Button ← GPIO 13 + GND · motor leads plug straight into their board<br>` +
-        `<b style="color:#e4e4e7">Power:</b> 5 V 2 A USB-C charger → USB-C breakout (470 µF across it) → ESP32 5V + every board's +, all GNDs joined. ~0.9 A peak with 3 motors; no buck converter needed.`;
+        (params.cxBatt
+          ? `<b style="color:#e4e4e7">Power (battery):</b> one 18650 in the top holder → IP5306-type USB-C charge + 5 V boost module (B+ / B−) → ESP32 5V + every board's +. Charges from the same USB-C. Roughly 3-4 h on a 3000 mAh cell with 2 discs turning; slow discs and coils-off when stopped stretch it.`
+          : `<b style="color:#e4e4e7">Power:</b> 5 V 2 A USB-C charger → USB-C breakout (470 µF across it) → ESP32 5V + every board's +, all GNDs joined. ~0.9 A peak with 3 motors; no buck converter needed.`);
 }
 
 function showPage(name) {
@@ -3920,8 +3954,8 @@ function discScrews(which) {
     if (isEdge() || which === 'front') return [];                    // edge cartridges ride on rollers; the front disc is clamped by the nut
     const three = discCount() === 3, ring = (n, r, d0) => Array.from({ length: n }, (_, i) => polar(r, d0 + i * 360 / n));
     if (which === 'middle') { const L = cx3(); return ring(3, L.capInsR, 90).map(([x, y]) => [x, y, L.frontZ - 0.3 - L.rearZ - 1.8]); }
-    const pcd = three ? cx3().insPCD : CX.insertPCD;
-    return ring(4, pcd / 2, 45).map(([x, y]) => [x, y, CX.carrierT]);
+    if (!three) return ring(4, CX.insertPCD / 2, 45).map(([x, y]) => [x, y, discT()]);   // heads on the plate, under the front cap
+    return ring(4, cx3().insPCD / 2, 45).map(([x, y]) => [x, y, CX.carrierT]);
 }
 async function openModelScene() {
     V3.open = true; V3.explode = V3.explodeTarget = 0;
@@ -3975,6 +4009,60 @@ async function openModelScene() {
         const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, h, 48), color ? mat(color) : steel);
         m.rotation.x = Math.PI / 2; m.geometry.translate(0, h / 2, 0); return m;
     };
+    // ── bought-part models ─────────────────────────────────────────
+    const steelMat = new THREE.MeshStandardMaterial({ color: 0xb4b9c0, metalness: 0.8, roughness: 0.32, side: THREE.DoubleSide });
+    const brightMat = new THREE.MeshStandardMaterial({ color: 0xdfe3e8, metalness: 0.95, roughness: 0.18, side: THREE.DoubleSide });
+    const goldMat = new THREE.MeshStandardMaterial({ color: 0xd4af37, metalness: 0.9, roughness: 0.25 });
+    const plastic = (color, rough = 0.55) => new THREE.MeshStandardMaterial({ color, roughness: rough, metalness: 0.02, side: THREE.DoubleSide });
+    const extrudeShape = (shape, depth, matl, seg = 24) => new THREE.Mesh(new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: false, curveSegments: seg }), matl);
+    const roundRect = (w, h, r) => { const s = new THREE.Shape(), x = -w / 2, y = -h / 2;
+        s.moveTo(x + r, y); s.lineTo(x + w - r, y); s.absarc(x + w - r, y + r, r, -Math.PI / 2, 0); s.lineTo(x + w, y + h - r); s.absarc(x + w - r, y + h - r, r, 0, Math.PI / 2);
+        s.lineTo(x + r, y + h); s.absarc(x + r, y + h - r, r, Math.PI / 2, Math.PI); s.lineTo(x, y + r); s.absarc(x + r, y + r, r, Math.PI, Math.PI * 1.5); return s; };
+    // 28BYJ-48. Origin on the shaft axis at the ear plane, body centre at +x 8 (the cover side), hanging down -z.
+    const motor28 = () => {
+        const g = new THREE.Group(), so = CX.motor.shaftOff;
+        // pressed-steel can with a rolled bottom edge and the crimped seam under the flange
+        const prof = [[0, -19], [12.4, -19], [13.5, -18.7], [14, -17.9], [14, -2.4], [14.3, -2.1], [14.3, -1.4], [14, -1.1], [14, -0.8], [0, -0.8]].map(([r, z]) => new THREE.Vector2(r, z));
+        const can = new THREE.Mesh(new THREE.LatheGeometry(prof, 56), steelMat); can.rotation.x = Math.PI / 2; can.position.x = so; g.add(can);
+        // flange with the two ear tabs, 35 mm hole centres
+        const fl = new THREE.Shape(), a0 = Math.atan2(13.56, -3.5), a1 = Math.atan2(13.56, 3.5);
+        fl.moveTo(3.5, 13.56); fl.lineTo(3.5, 17.5); fl.absarc(0, 17.5, 3.5, 0, Math.PI, false); fl.lineTo(-3.5, 13.56);
+        fl.absarc(0, 0, 14, a0, 2 * Math.PI - a0, false); fl.lineTo(-3.5, -17.5); fl.absarc(0, -17.5, 3.5, Math.PI, 2 * Math.PI, false);
+        fl.lineTo(3.5, -13.56); fl.absarc(0, 0, 14, -a1, a1, false);
+        for (const y of [-17.5, 17.5]) fl.holes.push(new THREE.Path().absarc(0, y, 2.1, 0, Math.PI * 2, true));
+        const flange = extrudeShape(fl, 0.8, steelMat, 32); flange.position.set(so, 0, -0.8); g.add(flange);
+        // blue wire cover on the outer side
+        const cv = new THREE.Shape(), ca = Math.asin(8.5 / 14);
+        cv.moveTo(14 * Math.cos(ca), -8.5); cv.lineTo(16.4, -8.5); cv.absarc(16.4, -7.3, 1.2, -Math.PI / 2, 0); cv.lineTo(17.6, 7.3); cv.absarc(16.4, 7.3, 1.2, 0, Math.PI / 2);
+        cv.lineTo(14 * Math.cos(ca), 8.5); cv.absarc(0, 0, 14, ca, -ca, true);
+        const cover = extrudeShape(cv, 17.2, plastic(0x2f6bd0, 0.5), 24); cover.position.set(so, 0, -18.6); g.add(cover);
+        // shaft boss, round shaft, then the double-D tip
+        const boss = new THREE.Mesh(new THREE.CylinderGeometry(4.6, 4.6, 1.5, 32), steelMat); boss.rotation.x = Math.PI / 2; boss.position.z = 0.75; g.add(boss);
+        const sh = new THREE.Mesh(new THREE.CylinderGeometry(2.5, 2.5, 2.5, 24), brightMat); sh.rotation.x = Math.PI / 2; sh.position.z = 2.75; g.add(sh);
+        const dd = new THREE.Shape(), fa = Math.acos(1.5 / 2.5);
+        dd.moveTo(1.5, -2.5 * Math.sin(fa)); dd.absarc(0, 0, 2.5, -fa, fa, false); dd.lineTo(-1.5, 2.5 * Math.sin(fa)); dd.absarc(0, 0, 2.5, Math.PI - fa, Math.PI + fa, false);
+        const tip = extrudeShape(dd, CX.motor.shaftTip - 4, brightMat, 16); tip.position.z = 4; g.add(tip);
+        return g;
+    };
+    // where a motor's 5-wire lead leaves its cover (motor-local), for wire routing
+    const MOTOR_LEAD = (j) => [CX.motor.shaftOff + 17.6, (j - 2) * 1.3, -15.5];
+    // USB-C receptacle: stadium shell 8.94 × 3.26 × 7.35 with the tongue inside; opening towards +x, bottom at z 0
+    const usbC = () => {
+        const g = new THREE.Group(), W = 8.94, H = 3.26, L = 7.35;
+        const stad = (w, h) => { const s = new THREE.Shape(), r = h / 2, hw = w / 2 - r; s.moveTo(-hw, -r); s.lineTo(hw, -r); s.absarc(hw, 0, r, -Math.PI / 2, Math.PI / 2); s.lineTo(-hw, r); s.absarc(-hw, 0, r, Math.PI / 2, Math.PI * 1.5); return s; };
+        const outer = stad(W, H); outer.holes.push(new THREE.Path(stad(W - 0.5, H - 0.5).getPoints(32)));
+        const geo = new THREE.ExtrudeGeometry(outer, { depth: L, bevelEnabled: false, curveSegments: 20 });
+        geo.applyMatrix4(new THREE.Matrix4().makeBasis(new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 1), new THREE.Vector3(1, 0, 0)));
+        geo.translate(-L / 2, 0, H / 2);
+        g.add(new THREE.Mesh(geo, brightMat));
+        const back = new THREE.Mesh(new THREE.ExtrudeGeometry(stad(W, H), { depth: 0.3, bevelEnabled: false, curveSegments: 20 }), brightMat);
+        back.geometry.applyMatrix4(new THREE.Matrix4().makeBasis(new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 1), new THREE.Vector3(1, 0, 0)));
+        back.geometry.translate(-L / 2, 0, H / 2); g.add(back);
+        g.add(box(L - 1.2, 6.6, 0.7, 0x18181b, 0.6, 0, H / 2 - 0.35));                 // tongue
+        for (let i = 0; i < 6; i++) g.add(box(L - 1.6, 0.3, 0.05, 0xd4af37, 0.6, -2.6 + i * 1.04, H / 2 + 0.35));
+        g.add(box(1.2, 10.2, 0.4, 0xd0d4da, -L / 2 + 1.6, 0, 0));                        // shell tabs soldered to the board
+        return g;
+    };
     const backMat = new THREE.MeshStandardMaterial({ color: 0xfff4dc, emissive: 0xffe8b8, emissiveIntensity: 0.6, side: THREE.DoubleSide });
 
     // scene state, rebuilt when the drive changes
@@ -4010,8 +4098,8 @@ async function openModelScene() {
                 const p = m(meshFrom(await build('pinion ' + k, () => EDGE_PARTS.pinion(k)), 0xef4444), E.back0 + 0.3, k === 'A' ? 2 : 0);
                 p.position.x = E.Cd * Math.cos(phi); p.position.y = E.Cd * Math.sin(phi);
                 pinions.push([p, phi, layer, E.N, EDGE.Np]);
-                const body = m(cyl(14, 19, 0x60a5fa), E.backZ - 19, 0);
-                body.position.x = (E.Cd - CX.motor.shaftOff) * Math.cos(phi); body.position.y = (E.Cd - CX.motor.shaftOff) * Math.sin(phi);
+                const mo = m(motor28(), E.backZ, 0);                             // behind the back plate, shaft through it
+                mo.position.x = E.Cd * Math.cos(phi); mo.position.y = E.Cd * Math.sin(phi); mo.rotation.z = phi + Math.PI;
             }
             discZ = { front: E.g / 2, rear: -E.g / 2 }; discOrder = { front: 3, rear: 1 }; mirrorRear = true;
             backZ = E.back0 + 0.05; backOrder = 0;
@@ -4045,13 +4133,11 @@ async function openModelScene() {
                 const phi = -ang, cx = Math.cos(phi), sy = Math.sin(phi);
                 const p = m(meshFrom(pin, 0xef4444), ear + CX.pinZ, 0); p.position.x = CX.C * cx; p.position.y = CX.C * sy;
                 pinions.push([p, phi, layer, CX.Ng, CX.Np]);
-                const body = m(cyl(14, 19, 0x60a5fa), ear - 19, 0); body.position.x = (CX.C + CX.motor.shaftOff) * cx; body.position.y = (CX.C + CX.motor.shaftOff) * sy;
-                const shaft = m(cyl(2.5, CX.motor.shaftTip), ear, 0); shaft.position.x = CX.C * cx; shaft.position.y = CX.C * sy;
+                const mo = m(motor28(), ear, 0); mo.position.x = CX.C * cx; mo.position.y = CX.C * sy; mo.rotation.z = phi;   // cover faces out
             }
-            // ── electronics: ULN2003 boards beside their motors, ESP32-S3 SuperMini + USB-C breakout, wiring in the channels ──
+            // ── electronics: ULN2003 boards recessed beside their motors, ESP32-S3 SuperMini, power, wiring in the channels ──
             const elec = new THREE.Group();
-            const gold = new THREE.MeshStandardMaterial({ color: 0xd4af37, metalness: 0.9, roughness: 0.25 });
-            const silver = new THREE.MeshStandardMaterial({ color: 0xd8dce2, metalness: 0.9, roughness: 0.2 });
+            const gold = goldMat, silver = brightMat;
             const pinMesh = (x, y, z, h) => { const c = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.32, h, 8), gold); c.rotation.x = Math.PI / 2; c.position.set(x, y, z + h / 2); return c; };
             // header along local x: black bar, gold pins, a black dupont housing on each pin
             const header = (g, x, y, n, z, dupont = true) => {
@@ -4059,59 +4145,82 @@ async function openModelScene() {
                 g.add(box(L, 2.5, 2.5, 0x111111, x + (L - 2.54) / 2, y, z));
                 for (let k = 0; k < n; k++) { g.add(pinMesh(x + k * 2.54, y, z, 8.5)); if (dupont) g.add(box(2.4, 2.4, 4, 0x1a1a1a, x + k * 2.54, y, z + 4.5)); }
             };
-            const roundLed = (g, x, y, z, color) => {
-                const m2 = new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.6, transparent: true, opacity: 0.85 });
-                const b = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.5, 3, 16), m2); b.rotation.x = Math.PI / 2; b.position.set(x, y, z + 1.5); g.add(b);
-                const d = new THREE.Mesh(new THREE.SphereGeometry(1.5, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), m2); d.rotation.x = Math.PI / 2; d.position.set(x, y, z + 3); g.add(d);
+            const roundLed = (g, x, y, z, color, r = 1.5) => {
+                const m2 = new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.5, transparent: true, opacity: 0.85 });
+                const b = new THREE.Mesh(new THREE.CylinderGeometry(r, r, 2 * r, 16), m2); b.rotation.x = Math.PI / 2; b.position.set(x, y, z + r); g.add(b);
+                const d = new THREE.Mesh(new THREE.SphereGeometry(r, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), m2); d.rotation.x = Math.PI / 2; d.position.set(x, y, z + 2 * r); g.add(d);
             };
+            const pcb = (w, h, t, color, r = 0.8) => { const p = extrudeShape(roundRect(w, h, r), t, plastic(color, 0.7), 8); return p; };
             const deg = d => d * Math.PI / 180;
             const pol = (r, a, z) => [r * Math.cos(a), r * Math.sin(a), z];
-            // local frames: a board at canvas angle `ang` has local +y pointing out (radially), local +x = canvas +v
+            const nA = a => Math.atan2(Math.sin(a), Math.cos(a));
+            // a board at canvas angle `ang`, radius r: local +y points out, local +x = canvas +v
             const frame = (r, ang) => { const th = deg(-ang), c = Math.cos(th), s = Math.sin(th);
                 return (x, y, z) => [r * c + y * c + x * s, r * s + y * s - x * c, z]; };
-            const ULN = ELEC.uln, UZ = ULN.rise + 1.6;                         // board top
+            const ULN = ELEC.uln, UZ = ULN.rise + 1.6;                         // board top (the board sits on the plate, solder side in a pocket)
             const IN_X = k => -5 + k * 2.54, PW_X = k => 6 + k * 2.54, PIN_Y = -12.5;
             const ulnBoard = (k) => {
                 const g = new THREE.Group(), s = ELEC.ulnSock[k], z = ULN.rise;
-                g.add(box(ULN.w, ULN.h, 1.6, 0x1b6e3c, 0, 0, z));
+                const p = pcb(ULN.w, ULN.h, 1.6, 0x1d6b3b); p.position.z = z; g.add(p);
+                for (const [i, j] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) { const ring = new THREE.Mesh(new THREE.RingGeometry(1.6, 2.6, 20), gold); ring.position.set(i * 14.5, j * 13, UZ + 0.02); g.add(ring); }
                 g.add(box(19.3, 6.4, 3.3, 0x141414, 0, 2, UZ + 0.5));                          // ULN2003A, DIP-16
                 for (let i = 0; i < 8; i++) for (const t of [-1, 1]) g.add(box(0.5, 1.4, 1.2, 0xbfc4ca, -8.9 + i * 2.54, 2 + t * 3.7, UZ));
-                g.add(box(9, 2.6, 4.5, 0x1d4ed8, -2, -5.5, UZ));                               // resistor network
-                g.add(box(5.8, 12.5, 7, 0xf2f0ea, s * (ULN.w / 2 - 3.4), 4, UZ));             // JST-XH socket facing the motor
-                g.add(box(1, 10.5, 5.5, 0x9a968c, s * (ULN.w / 2 - 0.9), 4, UZ + 0.8));
-                for (let i = 0; i < 4; i++) roundLed(g, -s * 13.5, -6 + i * 4.6, UZ, 0xff3b3b);
+                g.add(box(2, 1.2, 0.6, 0xf5f5f4, 0, 5.6, UZ + 3.8));                          // pin-1 notch mark
+                for (let i = 0; i < 4; i++) g.add(box(3.2, 1.6, 1.0, 0x1f2937, -6 + i * 4, -6.2, UZ));   // SMD resistors
+                g.add(box(5.8, 12.5, 7, 0xf2f0ea, s * (ULN.w / 2 - 3.4), 4, UZ));             // JST-XH motor socket, facing the motor
+                g.add(box(0.8, 10.5, 5.5, 0x8d8a80, s * (ULN.w / 2 - 0.5), 4, UZ + 0.8));
+                for (let i = 0; i < 4; i++) roundLed(g, -s * 13.5, -6 + i * 4.6, UZ, 0xff3b3b, 1.5);   // phase LEDs A-D
                 header(g, IN_X(0), PIN_Y, 4, UZ);                                              // IN1…IN4, facing the centre
                 header(g, PW_X(0), PIN_Y, 2, UZ);                                              // + / −
+                g.add(box(5.2, 2.6, 2.6, 0x111111, PW_X(0) + 7.6, PIN_Y, UZ + 2.5)); header(g, PW_X(0) + 6.35, PIN_Y, 2, UZ, false);   // ON/OFF jumper
                 return g;
             };
-            // ESP32-S3 SuperMini: x = out towards its USB-C, 9 pins down each side
-            const ESP = ELEC.esp, espLocal = frame(0, 0);
+            // ESP32-S3 SuperMini, 22.52 × 18 mm: x = out towards its USB-C, 9 castellated pins down each side
+            const ESP = ELEC.esp;
             const espBoard = () => {
-                const g = new THREE.Group(), top = 1.4;
-                g.add(box(ESP.len, ESP.wid, 1.2, 0x111827, 0, 0, 0.2));
-                g.add(box(7, 7, 0.9, 0x2a2a2a, -1, 0, top));                                   // ESP32-S3FH4R2
-                g.add(box(2.5, 2, 0.8, 0xbfc4ca, 4, -3.5, top));
-                g.add(box(3, 1.6, 1, 0x111111, -9.4, 0, top));                                  // antenna
-                g.add(box(9, 7.4, 3.2, 0xd8dce2, ESP.len / 2 - 3.6, 0, top - 0.2));             // USB-C
-                for (const s of [-1, 1]) g.add(box(3, 2, 1.4, 0xf5f5f4, 4.5, s * 3.2, top));   // BOOT / RST
-                roundLed(g, 2, 3.5, top, 0x22d3ee);                                             // RGB LED (GPIO 48)
+                const g = new THREE.Group(), top = 1.2;
+                g.add(pcb(ESP.len, ESP.wid, 1.0, 0x16203a, 0.8)); g.children[0].position.z = 0.2;
                 for (const s of [-1, 1]) for (let k = 0; k < 9; k++) {
                     const u = 10.16 - k * 2.54, v = s * 7.62;
-                    g.add(box(2.5, 2.5, 2.5, 0x111111, u, v, top)); g.add(pinMesh(u, v, top, 8.5)); g.add(box(2.4, 2.4, 4, 0x1a1a1a, u, v, top + 4.5));
+                    const pad = new THREE.Mesh(new THREE.CylinderGeometry(0.85, 0.85, 1.04, 16, 1, false, 0, Math.PI), gold);
+                    pad.rotation.x = Math.PI / 2; pad.rotation.y = s > 0 ? 0 : Math.PI; pad.position.set(u, s * 9, 0.7); g.add(pad);   // castellations
+                    g.add(box(2.5, 2.5, 2.5, 0x111111, u, v, top)); g.add(pinMesh(u, v, top - 2.5, 11)); g.add(box(2.4, 2.4, 4, 0x1a1a1a, u, v, top + 4.5));
                 }
+                g.add(box(7, 7, 0.85, 0x1c1c1e, -2, 0, top));                                  // ESP32-S3FH4R2
+                const dot = new THREE.Mesh(new THREE.CircleGeometry(0.4, 12), plastic(0x9ca3af)); dot.position.set(-4.8, 2.8, top + 0.86); g.add(dot);
+                g.add(box(3.2, 2.5, 0.8, 0xc9ccd1, 3.4, -3.4, top));                           // 40 MHz crystal
+                g.add(box(3.2, 1.6, 1.1, 0xe5e7eb, -9.6, 0, top));                             // ceramic antenna
+                g.add(box(2.9, 1.6, 1.1, 0x111111, 3.6, 3.6, top));                            // LDO
+                for (const s of [-1, 1]) { g.add(box(3.6, 3, 1.4, 0x2a2a2a, 5.6, s * 3.2, top)); g.add(box(1.6, 1.4, 0.5, 0xd8dce2, 5.6, s * 3.2, top + 1.4)); }   // BOOT / RST
+                g.add(box(2, 2, 0.9, 0xf8fafc, 0.8, 4.2, top)); roundLed(g, 0.8, 4.2, top + 0.9, 0x22d3ee, 0.5);              // WS2812 (GPIO 48)
+                const u = usbC(); u.position.set(ESP.len / 2 - 7.35 / 2 + 0.6, 0, top); g.add(u);
                 return g;
             };
             // S3 SuperMini header, from the USB end: one side TX RX 1-7, the other 5V GND 3V3 13-8
             const S3_PINS = { 43: [1, 0], 44: [1, 1], 1: [1, 2], 2: [1, 3], 3: [1, 4], 4: [1, 5], 5: [1, 6], 6: [1, 7], 7: [1, 8],
                               '5V': [-1, 0], GND: [-1, 1], '3V3': [-1, 2], 13: [-1, 3], 12: [-1, 4], 11: [-1, 5], 10: [-1, 6], 9: [-1, 7], 8: [-1, 8] };
             const toWorld = (t, u, v, z) => { const a = -t.ang * Math.PI / 180, c = Math.cos(a), s = Math.sin(a); return [t.r * c + u * c - v * s, t.r * s + u * s + v * c, z]; };
-            const espPin = (name, z = 9.9) => { const [s, k] = S3_PINS[name]; return toWorld(ESP, 10.16 - k * 2.54, s * 7.62, z); };
-            const usbBoard = () => {
-                const g = new THREE.Group(), t = ELEC.usb;
-                g.add(box(t.len, t.wid, 1.2, 0x18181b, 0, 0, 0.2));
-                g.add(box(9, 7.4, 3.2, 0xd8dce2, t.len / 2 - 3.6, 0, 1.2));
-                for (const s of [-1, 1]) g.add(box(2.5, 2.5, 0.1, 0xc9b26b, -t.len / 2 + 2.5, s * 3, 1.4));
-                const cap = new THREE.Mesh(new THREE.CylinderGeometry(4, 4, 11, 24), mat(0x1e3a8a)); cap.rotation.z = Math.PI / 2; cap.position.set(-1, 0, 5.5); g.add(cap);   // 470 µF lying down
+            const espPin = (name, z = 9.7) => { const [s, k] = S3_PINS[name]; return toWorld(ESP, 10.16 - k * 2.54, s * 7.62, z); };
+            // power in: plain USB-C breakout, or the 18650 charge + 5 V boost module when there's a battery
+            const PWR = ELEC.usb, batt = !!params.cxBatt;
+            const powerBoard = () => {
+                const g = new THREE.Group();
+                if (!batt) {
+                    g.add(pcb(PWR.len, PWR.wid, 1.2, 0x18181b, 0.6)); g.children[0].position.z = 0.2;
+                    const u = usbC(); u.position.set(PWR.len / 2 - 7.35 / 2 + 0.6, 0, 1.4); g.add(u);
+                    for (const s of [-1, 1]) g.add(box(1.6, 0.8, 0.5, 0x111111, 0.2, s * 5.2, 1.4));     // 5.1 kΩ CC resistors
+                    for (const s of [-1, 1]) g.add(box(2.5, 2.5, 0.1, 0xc9b26b, -PWR.len / 2 + 2.2, s * 3, 1.4));
+                    const cap = new THREE.Mesh(new THREE.CylinderGeometry(4, 4, 11, 24), plastic(0x1e3a8a, 0.4)); cap.rotation.z = Math.PI / 2; cap.position.set(-1, 0, 5.6); g.add(cap);
+                    const capTop = new THREE.Mesh(new THREE.CircleGeometry(4, 24), steelMat); capTop.rotation.y = Math.PI / 2; capTop.position.set(4.51, 0, 5.6); g.add(capTop);
+                } else {                                                                    // IP5306-type USB-C charge + boost module
+                    g.add(pcb(PWR.len, PWR.wid, 1.2, 0x1e40af, 0.6)); g.children[0].position.z = 0.2;
+                    const u = usbC(); u.position.set(PWR.len / 2 - 7.35 / 2 + 0.6, 0, 1.4); g.add(u);
+                    g.add(box(6.6, 6.6, 3, 0x2a2a2a, -2, -4.5, 1.4));                            // inductor
+                    g.add(box(4.9, 3.9, 1.2, 0x111111, -2, 4.5, 1.4));                            // IP5306
+                    for (let i = 0; i < 4; i++) roundLed(g, 5, -6 + i * 2.2, 1.4, 0x3b82f6, 0.5);
+                    for (const [y, c] of [[-7.5, 0xc9b26b], [-4.5, 0xc9b26b], [4.5, 0xc9b26b], [7.5, 0xc9b26b]]) g.add(box(2.4, 2.2, 0.1, c, -PWR.len / 2 + 2, y, 1.4));
+                    const cap = new THREE.Mesh(new THREE.CylinderGeometry(4, 4, 11, 24), plastic(0x1e3a8a, 0.4)); cap.rotation.z = Math.PI / 2; cap.position.set(-2, 3, 5.6); g.add(cap);
+                }
                 return g;
             };
             const place = (g, t) => { const a = t.ang * Math.PI / 180; g.position.set(t.r * Math.cos(a), -t.r * Math.sin(a), 0); g.rotation.z = -a; elec.add(g); };
@@ -4121,56 +4230,79 @@ async function openModelScene() {
                 const b = ulnBoard(k), th = deg(-ELEC.ulnAng[k]);
                 b.position.set(ULN.r * Math.cos(th), ULN.r * Math.sin(th), 0); b.rotation.z = th - Math.PI / 2; elec.add(b);
             }
-            place(espBoard(), ESP); place(usbBoard(), ELEC.usb);
+            place(espBoard(), ESP); place(powerBoard(), PWR);
+            // optional 18650: open holder lying along the top of the base
+            if (batt) {
+                const B = ELEC.batt, f = frame(B.r, B.ang), th = deg(-B.ang), hg = new THREE.Group();
+                hg.add(box(B.len, B.wid, 1.6, 0x18181b, 0, 0, 0));
+                for (const s of [-1, 1]) { hg.add(box(B.len, 1.4, 10, 0x18181b, 0, s * (B.wid / 2 - 0.7), 0)); hg.add(box(1.6, B.wid, 19, 0x18181b, s * (B.len / 2 - 0.8), 0, 0)); }
+                const cell = new THREE.Mesh(new THREE.CylinderGeometry(9.25, 9.25, 65, 40), plastic(0x0e7490, 0.35)); cell.rotation.z = Math.PI / 2; cell.position.set(-1.5, 0, 10.85); hg.add(cell);
+                const band = new THREE.Mesh(new THREE.CylinderGeometry(9.3, 9.3, 3, 40), plastic(0xf8fafc, 0.4)); band.rotation.z = Math.PI / 2; band.position.set(-30, 0, 10.85); hg.add(band);
+                const plus = new THREE.Mesh(new THREE.CylinderGeometry(3, 3, 1.2, 20), brightMat); plus.rotation.z = Math.PI / 2; plus.position.set(31.6, 0, 10.85); hg.add(plus);
+                const spring = new THREE.Mesh(new THREE.TorusGeometry(3.5, 0.4, 6, 20), brightMat); spring.rotation.y = Math.PI / 2; spring.position.set(-B.len / 2 + 3.5, 0, 10.85); hg.add(spring);
+                hg.position.set(B.r * Math.cos(th), B.r * Math.sin(th), 0); hg.rotation.z = th - Math.PI / 2; elec.add(hg);
+            }
 
             // ── wiring ──
             const wire = (pts, color, r = 0.55) => {
                 const clean = pts.filter((p, i) => i === 0 || Math.hypot(p[0] - pts[i - 1][0], p[1] - pts[i - 1][1], p[2] - pts[i - 1][2]) > 0.05);
                 const curve = new THREE.CatmullRomCurve3(clean.map(p => new THREE.Vector3(...p)), false, 'centripetal');
-                return new THREE.Mesh(new THREE.TubeGeometry(curve, Math.max(32, clean.length * 10), r, 6), mat(color));
+                return new THREE.Mesh(new THREE.TubeGeometry(curve, Math.max(40, clean.length * 10), r, 6), mat(color));
             };
-            const arc = (r, a0, a1, z) => { const k = Math.max(2, Math.ceil(Math.abs(a1 - a0) / 0.12)); return Array.from({ length: k + 1 }, (_, i) => pol(r, a0 + (a1 - a0) * i / k, z)); };
-            const G = ELEC.groove, GZ = -G.depth + 0.7, ringMid = (G.r0 + G.r1) / 2;
-            const espA = deg(-ESP.ang), espIn = ESP.r - ESP.len / 2;           // the ESP32's inner end, where its channel starts
-            // along the ESP's channel into the ring, round to a board's spoke, out to its pins
-            const viaChannels = (start, k, end, slot) => {
-                const bA = Math.atan2(Math.sin(deg(-ELEC.ulnAng[k])), Math.cos(deg(-ELEC.ulnAng[k]))), off = slot * 0.85, rRing = ringMid + off;
-                let a1 = bA; if (k === 'B' && a1 < espA) a1 += Math.PI * 2;        // B goes round over the top, C straight down
-                const spoke = (r, a, z) => { const p = pol(r, a, z); return [p[0] - Math.sin(a) * off, p[1] + Math.cos(a) * off, z]; };
-                return [start, [start[0], start[1], 12.5], spoke(espIn + 1, espA, 8), spoke(espIn - 3, espA, GZ), spoke(G.r1 + 4, espA, GZ),
-                        ...arc(rRing, espA, a1, GZ), spoke(G.r1 + 4, a1, GZ), spoke(ULN.r - ULN.h / 2 - 1, a1, GZ),
-                        spoke(ULN.r - ULN.h / 2 + 1, a1, 8), [end[0], end[1] - 0, end[2] + 2.5], end];
+            const arc = (r, a0, a1, z) => { const k = Math.max(2, Math.ceil(Math.abs(a1 - a0) / 0.1)); return Array.from({ length: k + 1 }, (_, i) => pol(r, a0 + (a1 - a0) * i / k, z)); };
+            const G = ELEC.groove, GZ = -G.depth + 0.6, ringMid = (G.r0 + G.r1) / 2;
+            const espA = deg(-ESP.ang), espIn = ESP.r - ESP.len / 2;
+            const sideOff = (p, a, off) => [p[0] - Math.sin(a) * off, p[1] + Math.cos(a) * off, p[2]];
+            // from a point near the ESP32 / power module: down into the ESP spoke, round the ring, out along spoke a1 to radius r1, up to `end`
+            const channel = (start, a1, r1, end, off) => {
+                const ring = ringMid + off * 0.8;
+                let b = nA(a1); const ccw = b >= espA - 1e-6;                      // A, B, battery go anticlockwise over the top; C clockwise
+                if (b < espA && ccw) b += Math.PI * 2;
+                return [start, sideOff(pol(espIn + 1, espA, 6), espA, off), sideOff(pol(espIn - 3, espA, GZ), espA, off), sideOff(pol(G.r1 + 3, espA, GZ), espA, off),
+                        ...arc(ring, espA, ccw ? b : nA(a1), GZ), sideOff(pol(G.r1 + 3, b, GZ), b, off), sideOff(pol(r1 - 2, b, GZ), b, off), [end[0], end[1], GZ + 1], [end[0], end[1], end[2] - 3], end];
             };
             const SIG = [0xf97316, 0xfacc15, 0x22c55e, 0x3b82f6];                 // IN1 orange, IN2 yellow, IN3 green, IN4 blue
             const PINS = { A: [1, 2, 3, 4], B: [5, 6, 7, 8], C: [9, 10, 11, 12] };
             ulns.forEach((k, bi) => {
-                const f = frame(ULN.r, ELEC.ulnAng[k]);
-                PINS[k].forEach((gp, j) => elec.add(wire(viaChannels(espPin(gp), k, f(IN_X(j), PIN_Y, UZ + 8.5), j - 1.5 + bi * 0.3), SIG[j], 0.42)));
-            });
-            // power: USB-C breakout → ESP32 5V/GND, and → each board's + / −
-            const usbPad = s => toWorld(ELEC.usb, -ELEC.usb.len / 2 + 2.5, s * 3, 1.6);
-            [['5V', 1, 0xdc2626, 0], ['GND', -1, 0x111111, 1]].forEach(([name, sgn, col, pi]) => {
-                const st = usbPad(sgn), e = espPin(name);
-                elec.add(wire([st, [st[0], st[1], 4], toWorld(ESP, -ESP.len / 2 - 2, -12 + pi * 1.5, 6), toWorld(ESP, -2, -11 + pi * 1.5, 12), [e[0], e[1], 13], e], col, 0.5));
-                ulns.forEach(k => {
-                    const f = frame(ULN.r, ELEC.ulnAng[k]);
-                    elec.add(wire(viaChannels(st, k, f(PW_X(pi), PIN_Y, UZ + 8.5), 2.2 + pi * 0.9), col, 0.5));
+                const f = frame(ULN.r, ELEC.ulnAng[k]), hdrR = ULN.r + PIN_Y;
+                PINS[k].forEach((gp, j) => {
+                    const st = espPin(gp), end = f(IN_X(j), PIN_Y, UZ + 8.6);
+                    elec.add(wire([st, [st[0], st[1], st[2] + 2.5], ...channel(toWorld(ESP, -ESP.len / 2 - 1, 0, 8), deg(-ELEC.ulnAng[k]), hdrR, end, (j - 1.5) * 0.9 + (bi - 1) * 0.2).slice(1)], SIG[j], 0.42));
                 });
             });
-            // motor leads: blue, pink, yellow, orange, red from each motor's cover straight into its board's socket
+            // power: module/breakout → ESP32 5V/GND (short hop), → each board's + / − (through the channels)
+            const pwrPad = s => toWorld(PWR, -PWR.len / 2 + 2.2, s * 3, 1.6);
+            [['5V', 1, 0xdc2626, 0], ['GND', -1, 0x111111, 1]].forEach(([name, sgn, col, pi]) => {
+                const st = pwrPad(sgn), e = espPin(name);
+                elec.add(wire([st, [st[0], st[1], 4], toWorld(ESP, -ESP.len / 2 - 2.5, -11 + pi * 1.4, 4), toWorld(ESP, -4, -11.5 + pi * 1.4, 11), [e[0], e[1], e[2] + 2.5], e], col, 0.5));
+                ulns.forEach(k => {
+                    const f = frame(ULN.r, ELEC.ulnAng[k]), end = f(PW_X(pi), PIN_Y, UZ + 8.6);
+                    elec.add(wire([st, [st[0], st[1], 3.5], ...channel(toWorld(ESP, -ESP.len / 2 - 1, -4, 6), deg(-ELEC.ulnAng[k]), ULN.r + PIN_Y, end, 2.6 + pi * 0.9).slice(1)], col, 0.5));
+                });
+                if (batt) {                                                             // cell → module B+ / B−
+                    const B = ELEC.batt, fb = frame(B.r, B.ang), be = fb(sgn * (B.len / 2 - 2), 0, 3);
+                    const bp = toWorld(PWR, -PWR.len / 2 + 2, sgn * 7.5, 1.6);
+                    elec.add(wire(channel(bp, deg(-B.ang), B.r - B.wid / 2, be, -3.4 - pi * 0.9).reverse(), col, 0.55));
+                }
+            });
+            // motor leads: blue, pink, yellow, orange, red out of each motor's cover, low along the plate into its board's socket
             const CAB = [0x2563eb, 0xf472b6, 0xfacc15, 0xf97316, 0xdc2626];
             motorList.forEach(([ang, ear, layer]) => {
                 const k = ['A', 'B', 'C'][layer]; if (!ulns.includes(k)) return;
                 const phi = ang === Math.PI ? Math.PI : -ang, s = ELEC.ulnSock[k], f = frame(ULN.r, ELEC.ulnAng[k]);
+                const c = Math.cos(phi), sn = Math.sin(phi), mW = ([x, y, z]) => [CX.C * c + x * c - y * sn, CX.C * sn + x * sn + y * c, ear + z];
                 CAB.forEach((col, j) => {
-                    const dy = 4 + (j - 2) * 1.6;                                   // the 5 contacts along the socket
-                    const sock = f(s * (ULN.w / 2 + 0.5), dy, UZ + 3.5), entry = f(s * (ULN.w / 2 + 8), dy, UZ + 3.5);
+                    const dy = 4 + (j - 2) * 2.5, zz = UZ + 3.5;                     // the socket's 5 contacts, 2.5 mm apart
+                    const sock = f(s * (ULN.w / 2 + 0.3), dy, zz), entry = f(s * (ULN.w / 2 + 7), dy, zz);
                     const eA = Math.atan2(entry[1], entry[0]), rr2 = Math.hypot(entry[0], entry[1]);
                     let a1 = eA; while (a1 - phi > Math.PI) a1 -= Math.PI * 2; while (phi - a1 > Math.PI) a1 += Math.PI * 2;
-                    elec.add(wire([pol(67.5, phi, ear - 6 + (j - 2) * 0.9), pol(73, phi, 6 + (j - 2) * 0.9), ...arc(rr2, phi + (a1 - phi) * 0.15, a1 - (a1 - phi) * 0.2, 7 + (j - 2) * 0.9), entry, sock], col, 0.45));
+                    const ex = mW(MOTOR_LEAD(j)), ex2 = mW([MOTOR_LEAD(j)[0] + 4, MOTOR_LEAD(j)[1], -15.5]);
+                    const lz = Math.max(1.2, Math.min(ex[2], 3)) + (j - 2) * 0.05;
+                    elec.add(wire([ex, ex2, pol(Math.hypot(ex2[0], ex2[1]) + 3, phi + (a1 - phi) * 0.08, lz), ...arc(rr2, phi + (a1 - phi) * 0.2, a1 - (a1 - phi) * 0.15, lz).slice(1, -1), entry, sock], col, 0.42));
                 });
             });
             m(elec, 0, 0);
+
             // enclosure: back drum + front shield (+ panel button on the drum), built the first time it's switched on
             let encGroup = null, shieldMesh = null;
             V3.onEnclosure = async () => {
@@ -4198,10 +4330,10 @@ async function openModelScene() {
                 if (encGroup) encGroup.visible = shieldMesh.visible = !!params.cxEnc;
             };
             if (params.cxEnc) await V3.onEnclosure();
-            discZ = three3 ? { rear: L.rearZ, middle: L.rearZ, front: L.frontDisc } : { rear: CX.hubZ + CX.hubL, front: CX.frontDisc2() };
+            discZ = three3 ? { rear: L.rearZ, middle: L.rearZ, front: L.frontDisc } : { rear: CX.rearZ2(), front: CX.frontDisc2() };
             discOrder = three3 ? { rear: 4, middle: 5, front: 8 } : { rear: 3, front: 5 }; mirrorRear = false;
-            backZ = (three3 ? L.rearZ : CX.hubZ + CX.hubL) - 6; backOrder = (three3 ? 4 : 3) - 0.5;
-            back = new THREE.Mesh(new THREE.RingGeometry(three3 ? 31.5 : 30, Math.min(coaxCalc().R * 1.12, encR() - ENC.wall - 0.6), 128), backMat);
+            backZ = three3 ? L.rearZ - 6 : CX.rearZ2() - discLip() - 0.8; backOrder = (three3 ? 4 : 3) - 0.5;
+            back = new THREE.Mesh(new THREE.RingGeometry(three3 ? 31.5 : 60, Math.min(coaxCalc().R * 1.12, encR() - ENC.wall - 0.6), 128), backMat);
         }
         back.visible = document.getElementById('mpBack').checked; root.add(back);
         document.getElementById('mpMech').onchange = e => { mech.visible = e.target.checked; };
