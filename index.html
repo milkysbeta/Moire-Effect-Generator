@@ -424,6 +424,12 @@
                             <button onclick="exportCoaxDisc('rear')" class="py-2 bg-zinc-700 hover:bg-zinc-600 rounded-lg text-xs">Rear disc (L2)</button>
                         </div>
                         <p id="cxStatus" class="text-xs text-zinc-400 mt-1" aria-live="polite"></p>
+                        <p class="slabel mt-3 mb-1">Drive controller</p>
+                        <div class="flex gap-1.5">
+                            <input id="cxDevice" type="text" value="moire.local" aria-label="Controller address" class="flex-1 min-w-0 bg-zinc-800 border border-zinc-700 rounded-lg px-2 py-1.5 text-xs">
+                            <button onclick="sendToDevice()" class="px-2.5 py-1.5 bg-emerald-700 hover:bg-emerald-600 rounded-lg text-xs font-medium">Send speeds</button>
+                        </div>
+                        <p id="cxDevStatus" class="text-xs text-zinc-400" aria-live="polite">Sends the L1/L2 speeds to the ESP32 running the firmware in /firmware.</p>
                     </div>
 
                 </div>
@@ -2988,6 +2994,28 @@ function drawCoaxOverlay() {
             (Math.sign(params.layer1Speed) === Math.sign(params.layer2Speed) ? '<br><span style="color:#f59e0b">L1 and L2 turn the same way, so flip one for counter-rotation.</span>' : '');
     }
 }
+
+// Push Layer 1 / Layer 2 speeds to the ESP32 drive (firmware/), as disc rpm.
+async function sendToDevice() {
+    const el = document.getElementById('cxDevice'), out = document.getElementById('cxDevStatus');
+    const host = el.value.trim().replace(/^https?:\/\//, '').replace(/\/.*$/, '') || 'moire.local';
+    try { localStorage.setItem('moireDevice', host); } catch (e) {}
+    const sp = coaxSpeeds();
+    const q = `front=${sp[0].rpm.toFixed(3)}&rear=${sp[1].rpm.toFixed(3)}`;
+    out.textContent = 'Sending…';
+    try {
+        const ctl = new AbortController(); const to = setTimeout(() => ctl.abort(), 5000);
+        const r = await fetch(`http://${host}/api/set?${q}`, { signal: ctl.signal });
+        clearTimeout(to);
+        const st = await r.json();
+        const clipped = Math.abs(sp[0].rpm) > st.maxDiscRpm || Math.abs(sp[1].rpm) > st.maxDiscRpm;
+        out.textContent = `Sent: front ${st.front.toFixed(2)} rpm, rear ${st.rear.toFixed(2)} rpm (${st.driver}).` +
+            (clipped ? ` Capped at ${st.maxDiscRpm.toFixed(2)} rpm, the motors' top speed.` : '');
+    } catch (e) {
+        out.textContent = `Couldn't reach ${host}. Check the ESP32 is on the same Wi-Fi, or type its IP address instead.`;
+    }
+}
+try { const d = localStorage.getItem('moireDevice'); if (d) document.getElementById('cxDevice').value = d; } catch (e) {}
 
 function cxStatus(t) { const el = document.getElementById('cxStatus'); if (el) el.textContent = t; }
 const tick = () => new Promise(r => setTimeout(r, 20));
