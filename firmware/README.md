@@ -8,21 +8,19 @@ Each motor drives its disc through a 15:45 gear pair, so the motor turns 3× fas
 
 | PlatformIO env  | Board                | Motor driver                          | Notes |
 |-----------------|----------------------|---------------------------------------|-------|
-| `esp32c3`       | ESP32-C3 SuperMini   | the ULN2003 boards that come with the 28BYJ-48 | Start here. **2 discs.** No motor mods. A little buzzy. Discs up to 4 rpm. |
-| `esp32c3-tmc`   | ESP32-C3 SuperMini   | TMC2209 (up to 3)                     | Near-silent, **2 or 3 discs**. Motors need the bipolar mod (below). Discs up to 6 rpm. |
-| `esp32s3`       | ESP32-S3 SuperMini   | ULN2003                               | **3 discs** with the stock driver boards. |
-| `esp32dev`      | classic ESP32 dev board | ULN2003                            | **3 discs**, different pins. |
+| `esp32s3`       | **ESP32-S3 SuperMini** | the ULN2003 boards from the 28BYJ-48 kits | **Recommended. 2 or 3 discs**, matches the 3D model's layout and wiring, panel button on GPIO 13, status LED. |
+| `esp32c3`       | ESP32-C3 SuperMini   | ULN2003                               | 2 discs only (the C3 has pins for two boards). |
+| `esp32c3-tmc`   | ESP32-C3 SuperMini   | TMC2209 (up to 3)                     | Near-silent. Motors need the bipolar mod (below). |
+| `esp32dev`      | classic ESP32 dev board | ULN2003                            | 3 discs, different pins. |
 
-A C3 SuperMini only has spare pins for two ULN2003 boards (each needs 4). For three discs on ULN2003 boards use an S3 SuperMini or a classic ESP32; or keep the C3 and use TMC2209s, which share one wire.
-
-ULN2003 pins: S3 SuperMini A = 1,2,4,5 · B = 6,7,8,9 · C = 10,11,12,13. Classic ESP32 A = 13,12,14,27 · B = 26,25,33,32 · C = 23,22,21,19 (IN1…IN4 in that order).
-
-Flash from this folder:
+Flash from this folder (first time over the S3's USB-C, through its window in the case):
 
 ```
-pio run -e esp32c3 -t upload
+pio run -e esp32s3 -t upload
 pio device monitor
 ```
+
+After that you never need to open the case: *Setup → Update firmware* on the web page takes `.pio/build/esp32s3/firmware.bin`, or `pio run -e esp32s3 -t upload --upload-port moire.local` sends it over Wi-Fi (asks for the admin password if one is set).
 
 ## First run
 
@@ -38,34 +36,46 @@ If a disc turns the wrong way, tick *Reverse motor* for it under *Setup*.
 
 Under *Setup → Set password* you can lock the drive. Anyone on your Wi-Fi can still watch the speeds, but every change (speeds, modes, Wi-Fi, the password itself) needs the password. The page remembers it in that browser; the generator has a *Controller password* box next to *Send speeds*. Five wrong tries lock edits for 30 seconds. Forgot it? Hold the board's **BOOT** button for 5 seconds while it's running, and the lock is cleared.
 
-### Power and mounting
+## Wiring plan: ESP32-S3 SuperMini + ULN2003 (the 3D model's layout)
 
-One USB-C 5 V breakout (2 A supply) feeds everything: 5 V and GND to the ESP32's 5V/GND pins and to the + / − pins of every ULN2003 board. The base plate has standoffs for the ULN2003 boards (M3 self-tap, 30 × 27 mm hole spacing; check yours) along the top, and trays for the ESP32-C3 SuperMini and the USB-C breakout at the bottom with their ports facing out. The optional enclosure (3D Model page → *Enclosure*) has windows over both ports and two keyholes for hanging it.
-
-## Wiring: ULN2003 (default)
+Your kit's parts: **28BYJ-48 5 V** motors (5-wire, unipolar, red = common +5 V) and their **ULN2003 boards** (35 × 32 mm, white 5-pin motor socket, IN1-IN4 + power pins, 4 LEDs). Each motor lead plugs straight into its own board's socket; it's keyed, so it only goes in one way.
 
 ```
-ESP32-C3 SuperMini            ULN2003 board (front disc, motor A = low seat)
-  GPIO0  ───────────────────  IN1
-  GPIO1  ───────────────────  IN2
-  GPIO3  ───────────────────  IN3
-  GPIO4  ───────────────────  IN4
+                         ESP32-S3 SuperMini (USB-C at the case wall, lower right)
+                      side 1: TX RX 1 2 3 4 5 6 7     side 2: 5V GND 3V3 13 12 11 10 9 8
 
-                              ULN2003 board (rear disc, motor B = high seat)
-  GPIO5  ───────────────────  IN1
-  GPIO6  ───────────────────  IN2
-  GPIO7  ───────────────────  IN3
-  GPIO10 ───────────────────  IN4
+Motor A board (upper right, beside motor A → front disc L1)   IN1 IN2 IN3 IN4 ← GPIO 1  2  3  4
+Motor B board (upper left,  beside motor B → L2)              IN1 IN2 IN3 IN4 ← GPIO 5  6  7  8
+Motor C board (lower left,  beside motor C → L3, 3 discs)     IN1 IN2 IN3 IN4 ← GPIO 9 10 11 12
+Panel button (bottom of the case)                             one leg → GPIO 13, other → GND
 
-5 V 2 A supply  +  ──┬── 5V pin on the SuperMini
-                     ├── + on both ULN2003 boards
-                     └── 470 µF capacitor + (− to GND)
-                GND ─┴── GND on the SuperMini and both boards (all grounds joined)
+USB-C breakout (lower right, socket at the case wall)
+  5 V ──┬── S3 SuperMini 5V pin
+        ├── + on every ULN2003 board (keep its ON/OFF jumper fitted)
+        └── 470 µF + (− to GND), soldered right on the breakout's pads
+  GND ──┴── S3 GND and − on every board: all grounds joined
 ```
 
-* GPIO2, 8 and 9 are the C3's boot pins, so they're left free on purpose.
-* Each motor draws about 0.25 A while turning; the firmware switches the coils off when a disc stops.
-* **Unplug the 5 V supply before plugging in USB to flash.** Most SuperMini boards have no diode between USB and the 5V pin.
+* **Wire colours in the 3D view:** IN1 orange, IN2 yellow, IN3 green, IN4 blue; 5 V red, GND black. 10 cm female-female jumpers reach every board.
+* **Channels:** the base has a 3 mm deep ring round the centre boss and a spoke out to each board and to the ESP32. Lay the jumpers in the ESP32's spoke, round the ring, and out along their board's spoke. The gears sit 12 mm above, so nothing can catch.
+* **Motor leads:** each board's socket faces its own motor, so only a few cm of lead is needed. Fold the spare in a flat zig-zag under the board, or cut the lead short and re-crimp a JST-XH 2.5 mm plug.
+* **Boards:** drop each ULN2003 into its four corner cradles (no holes to line up); a dab of hot glue on two corners holds it. The S3 and the USB-C breakout drop into their trays.
+* **Check your S3's silkscreen.** SuperMini clones vary, so wire by the GPIO numbers printed on your board. If yours differ, change `ULN_M1/M2/M3` and `PIN_BTN` in `platformio.ini`. GPIO 3 is a strapping pin, but only for JTAG selection, which is off by default, so it's fine as a motor output.
+* **Status LED** (the S3's RGB on GPIO 48): green running, amber paused, blue in setup hotspot.
+
+### Power: what to use
+
+You don't need the buck converter. Everything runs on **5 V**:
+
+* **Supply:** any **USB-C phone charger, 5 V 2 A or more.** Peak draw is about 0.9 A with three motors turning (each 28BYJ-48 coil is ~50 Ω, up to two coils on at once, ~0.2 A per motor) plus the ESP32 (~0.2 A with Wi-Fi). The firmware switches coils off when a disc stops.
+* **Socket:** one of your **USB-C breakout boards**. Use the **6-pin type with two 5.1 kΩ resistors on CC1/CC2**. A bare 2-pin breakout gets no power from a USB-C to USB-C cable (it does work with a USB-A to USB-C cable).
+* **Don't** power the motors from the S3's own USB-C or its 3V3 pin.
+* **Flashing while powered:** if your S3 SuperMini has a diode between its USB-C and its 5V pin (most do; a small SOD-123 part next to the socket), you can leave the power plugged in. If unsure, unplug the power before plugging in the computer, or skip the cable and update over Wi-Fi.
+* The buck converter is only needed if you move to a 12 V supply (TMC2209 option below).
+
+## Wiring: ULN2003 on a C3 SuperMini (2 discs)
+
+Motor A IN1-4 ← GPIO 0, 1, 3, 4 · Motor B IN1-4 ← GPIO 5, 6, 7, 10 · button ← GPIO 20. Power exactly as above. GPIO 2, 8 and 9 are the C3's boot pins, so they're left free.
 
 ## Wiring: TMC2209 (quiet option)
 
@@ -94,22 +104,22 @@ ESP32-C3 SuperMini                     TMC2209 front (addr 0)     TMC2209 rear (
 
 ## Shopping list
 
-**You have:** 28BYJ-48 + ULN2003 kits, a bearing kit, an ESP32-C3 SuperMini.
+**You have:** 28BYJ-48 5 V + ULN2003 kits, a bearing kit, an ESP32-S3 SuperMini, a USB-C phone charger, USB-C breakouts, a buck converter (not needed).
 
-**Check:** the bearing kit must include **4× 608 (8 × 22 × 7 mm)**. If it doesn't, buy a 10-pack of 608ZZ or 608-2RS (skateboard bearings).
+**Check:** the bearing kit must include **4× 608 (8 × 22 × 7 mm)** (plus **2× 6806, 30 × 42 × 7** for 3 discs). If it doesn't, buy a 10-pack of 608ZZ.
 
 **Electronics**
-* 5 V 2 A power supply (DC barrel + panel jack, or a USB-C PD trigger board set to 5 V)
 * 470 µF 10 V electrolytic capacitor
-* ~20 female–female Dupont jumpers, plus a small perfboard or screw-terminal board to tidy the power
-* Quiet upgrade, optional: 2× TMC2209 modules (BigTreeTech v1.3 or FYSETC), 12 V 1 A supply, mini 12→5 V buck converter (MP1584), 1 kΩ resistor, 100 µF 25 V capacitor
+* ~20 female-female Dupont jumpers, 10 cm (4 red + 4 black for power if you can)
+* 7 mm momentary panel push button (for the enclosure)
+* Quiet upgrade, optional: TMC2209 modules, 12 V 1 A supply, your buck converter set to 5 V, 1 kΩ resistor, 100 µF 25 V capacitor
 
 **Hardware** (matches the drive parts' build sheet)
 * M8 threaded rod: one 1 m length, cut 110 mm
-* 6× M8 nut (one spare), 4× M8 flat washer, 1× M8 penny/fender washer (24 mm OD)
+* 2× M8 thin nut (DIN 439, 5 mm or less), 1× M8 dome (acorn) nut, 4× M8 flat washer
 * 4× M3 heat-set inserts (about 4.5 mm OD, 4–5 mm long) + 4× M3×6 button-head screws (rear disc)
 * 4× M3×8 screws (motor ears)
-* Wall plugs + 4 screws if it hangs on a wall (the base has 4.6 mm holes)
+* 2 wall screws (head under 9 mm) for the keyholes
 
 **Consumables and tools**
 * PETG or PLA+ for the gears, hub and base; black + white/clear filament for the discs

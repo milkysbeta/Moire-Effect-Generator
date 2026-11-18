@@ -54,6 +54,8 @@ details summary{cursor:pointer;color:var(--muted);font-size:13px}
   <div class="row"><label>Reverse motor</label><div class="bar" id="invs"></div><span></span></div>
   <div class="row" id="curRow"><label for="current">Motor current</label><input type="range" id="current" min="50" max="400" step="10"><output id="currentO"></output></div>
   <p id="drv"></p>
+  <form id="fw" class="bar"><input type="file" id="fwFile" accept=".bin" aria-label="Firmware file"><button class="btn">Update firmware</button></form>
+  <p id="fwMsg">Upload firmware.bin from the PlatformIO build folder; the drive restarts with it.</p>
   <form id="wifi" class="bar"><input type="text" name="ssid" placeholder="Wi-Fi name" autocomplete="off"><input type="password" name="pass" placeholder="Password"><button class="btn primary">Save Wi-Fi &amp; restart</button></form>
 </details>
 </fieldset>
@@ -103,6 +105,9 @@ $('unlock').onsubmit=async e=>{e.preventDefault();key=$('key').value;$('key').va
 $('pw').onsubmit=async e=>{e.preventDefault();const n=e.target.new.value;if(n.length<4){$('pwMsg').textContent='Use at least 4 characters.';return}
   if(await api('new='+encodeURIComponent(n),'password')){key=n;try{localStorage.setItem('moireKey',key)}catch(e){}e.target.reset();$('pwMsg').textContent='Password set. This browser stays unlocked.'}};
 $('pwOff').onclick=async()=>{if(await api('new=','password'))$('pwMsg').textContent='Lock removed: anyone on the network can change settings.'};
+$('fw').onsubmit=async e=>{e.preventDefault();const f=$('fwFile').files[0];if(!f){$('fwMsg').textContent='Pick a .bin file first.';return}
+  $('fwMsg').textContent='Uploading '+f.name+'…';const d=new FormData();d.append('firmware',f,f.name);
+  try{const r=await fetch('/update?'+withKey(''),{method:'POST',body:d});$('fwMsg').textContent=r.ok?'Updated. Restarting… reload in 10 s.':(r.status===401?'Unlock first.':'Update failed.')}catch(x){$('fwMsg').textContent='Upload failed.'}};
 $('wifi').onsubmit=async e=>{e.preventDefault();const f=new FormData(e.target);const r=await fetch('/api/wifi?'+withKey(new URLSearchParams(f).toString()));if(!r.ok){lockMsg('Unlock first to change Wi-Fi.');return}document.body.innerHTML='<main><h1>Restarting…</h1><p>Rejoin your Wi-Fi, then open http://moire.local</p></main>'};
 api().then(()=>render(true));setInterval(()=>api(),1000);
 </script></body></html>)HTML";

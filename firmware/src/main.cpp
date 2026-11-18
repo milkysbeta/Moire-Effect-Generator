@@ -17,6 +17,10 @@
 // saved, or if joining fails, it opens an access point "Moire-Setup"
 // (password moiredisc) at http://192.168.4.1.
 //
+// Firmware updates without opening the case: the web page's Setup → Update firmware (upload the
+// .bin from .pio/build/<env>/firmware.bin), or `pio run -e <env> -t upload --upload-port moire.local`
+// (ArduinoOTA; uses the admin password when one is set).
+//
 // Edit lock: anyone on the network can watch the status, but once an admin password
 // is set (Setup on the web page) every change needs it. Forgot it? Hold the BOOT
 // button for 5 seconds while the drive is running: the password is cleared.
@@ -26,6 +30,8 @@
 #include <WebServer.h>
 #include <ESPmDNS.h>
 #include <Preferences.h>
+#include <ArduinoOTA.h>
+#include <Update.h>
 #include "web_ui.h"
 
 #if !defined(DRIVER_ULN2003) && !defined(DRIVER_TMC2209)
@@ -311,6 +317,37 @@ void checkPanelButton() {
         Serial.printf("Button: mode %s\n", modeName(S.mode));
     }
 }
+// Status LED (S3 SuperMini's RGB on GPIO 48): green running, amber paused, blue setup hotspot
+void statusLed() {
+#ifdef PIN_RGB
+    static uint32_t last = 0;
+    if (millis() - last < 250) return;
+    last = millis();
+    if (apMode) neopixelWrite(PIN_RGB, 0, 0, 24);
+    else if (S.running) neopixelWrite(PIN_RGB, 0, 18, 0);
+    else neopixelWrite(PIN_RGB, 20, 10, 0);
+#endif
+}
+// POST /update?key=… with the firmware .bin as the body (multipart form from the web page)
+void handleUpdateDone() {
+    bool ok = !Update.hasError();
+    cors(); server.send(ok ? 200 : 500, "text/plain", ok ? "Updated. Restarting…" : "Update failed");
+    if (ok) { delay(500); ESP.restart(); }
+}
+bool updateAllowed = false;
+void handleUpdateUpload() {
+    HTTPUpload& up = server.upload();
+    if (up.status == UPLOAD_FILE_START) {
+        updateAllowed = !adminPass.length() || sameText(server.arg("key"), adminPass);
+        if (updateAllowed) { Serial.printf("Update: %s\n", up.filename.c_str()); Update.begin(UPDATE_SIZE_UNKNOWN); }
+    } else if (!updateAllowed) {
+        return;
+    } else if (up.status == UPLOAD_FILE_WRITE) {
+        Update.write(up.buf, up.currentSize);
+    } else if (up.status == UPLOAD_FILE_END) {
+        Update.end(true);
+    }
+}
 void checkBootButton() {         // hold BOOT 5 s: clear the admin password
     static uint32_t downSince = 0;
     if (digitalRead(PIN_BOOT) == LOW) {
@@ -406,6 +443,10 @@ void setup() {
     server.collectHeaders(hdrs, 1);
     pinMode(PIN_BOOT, INPUT_PULLUP);
     pinMode(PIN_BTN, INPUT_PULLUP);
+    server.on("/update", HTTP_POST, [] { if (!updateAllowed) { cors(); server.send(401, "text/plain", "locked"); return; } handleUpdateDone(); }, handleUpdateUpload);
+    ArduinoOTA.setHostname("moire");
+    if (adminPass.length()) ArduinoOTA.setPassword(adminPass.c_str());
+    ArduinoOTA.begin();
     server.onNotFound([] { cors(); server.send(404, "text/plain", "not found"); });
     server.begin();
 }
@@ -418,4 +459,6 @@ void loop() {
     motorsRetry();
     checkBootButton();
     checkPanelButton();
+    ArduinoOTA.handle();
+    statusLed();
 }
