@@ -1,16 +1,21 @@
 # Moiré drive firmware
 
-Runs the coaxial drive from the generator's Lightbox → *Coaxial, two motors* panel.
-**Front disc = Layer 1, rear disc = Layer 2.** Speeds are disc rpm, positive = clockwise seen from the front.
+Runs the coaxial drive from the generator's Lightbox → *Coaxial* panel, for 2 or 3 discs.
+**Motor A → front disc = Layer 1, motor B → Layer 2, motor C → Layer 3** (3-disc builds). Speeds are disc rpm, positive = clockwise seen from the front. Set 2 or 3 discs under *Setup* on the control page.
 Each motor drives its disc through a 15:45 gear pair, so the motor turns 3× faster and the opposite way. The firmware handles that for you.
 
 ## Pick a build
 
 | PlatformIO env  | Board                | Motor driver                          | Notes |
 |-----------------|----------------------|---------------------------------------|-------|
-| `esp32c3`       | ESP32-C3 SuperMini   | the ULN2003 boards that come with the 28BYJ-48 | Start here. No motor mods. A little buzzy. Discs up to 4 rpm. |
-| `esp32c3-tmc`   | ESP32-C3 SuperMini   | 2× TMC2209                            | Near-silent. Motors need the bipolar mod (below). Discs up to 6 rpm. |
-| `esp32dev`      | classic ESP32 dev board | ULN2003                            | Same as `esp32c3`, different pins. |
+| `esp32c3`       | ESP32-C3 SuperMini   | the ULN2003 boards that come with the 28BYJ-48 | Start here. **2 discs.** No motor mods. A little buzzy. Discs up to 4 rpm. |
+| `esp32c3-tmc`   | ESP32-C3 SuperMini   | TMC2209 (up to 3)                     | Near-silent, **2 or 3 discs**. Motors need the bipolar mod (below). Discs up to 6 rpm. |
+| `esp32s3`       | ESP32-S3 SuperMini   | ULN2003                               | **3 discs** with the stock driver boards. |
+| `esp32dev`      | classic ESP32 dev board | ULN2003                            | **3 discs**, different pins. |
+
+A C3 SuperMini only has spare pins for two ULN2003 boards (each needs 4). For three discs on ULN2003 boards use an S3 SuperMini or a classic ESP32; or keep the C3 and use TMC2209s, which share one wire.
+
+ULN2003 pins: S3 SuperMini A = 1,2,4,5 · B = 6,7,8,9 · C = 10,11,12,13. Classic ESP32 A = 13,12,14,27 · B = 26,25,33,32 · C = 23,22,21,19 (IN1…IN4 in that order).
 
 Flash from this folder:
 
@@ -68,7 +73,7 @@ ESP32-C3 SuperMini                     TMC2209 front (addr 0)     TMC2209 rear (
                 └─ mini buck converter 12 V → 5 V ── SuperMini 5V pin
 ```
 
-* MS1/MS2 set each driver's UART address: front both low = 0, rear MS1 high = 1.
+* MS1/MS2 set each driver's UART address: motor A both low = 0; motor B MS1 high = 1; motor C (3 discs) MS2 high = 2. All PDN_UART pins join the same wire.
 * The drivers generate their own steps over UART (VACTUAL), so STEP/DIR just go to GND.
 * Motor current is set from the web page (default 150 mA). A 5 V 28BYJ-48 run bipolar at 12 V is limited by its own coil resistance to about 120 mA, which keeps it cool.
 

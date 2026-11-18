@@ -1,14 +1,16 @@
 // Moiré disc drive
-// ESP32 driving two 28BYJ-48 steppers: front disc = Layer 1 in the generator,
-// rear disc = Layer 2. Speeds are in disc rpm, positive = clockwise seen from the
-// front. Each motor turns its disc through a 15:45 gear pair, so the motor runs
-// 3× faster and the opposite way.
+// ESP32 driving up to three 28BYJ-48 steppers, one per disc:
+//   motor A → front disc  = Layer 1
+//   motor B → second disc = Layer 2 (rear disc on a 2-disc build, middle disc on a 3-disc build)
+//   motor C → rear disc   = Layer 3 (3-disc builds only)
+// Speeds are disc rpm, positive = clockwise seen from the front. Each motor turns its
+// disc through a 15:45 gear pair, so the motor runs 3× faster and the opposite way.
 //
-// Two driver options (pick the PlatformIO env):
+// Driver options (pick the PlatformIO env):
 //   ULN2003  the boards that ship with the motors. Half-stepping from a 4 kHz timer.
-//            Simple, no mods, a little buzzy.
-//   TMC2209  quiet StealthChop. The drivers make their own steps (VACTUAL), so the
-//            wiring is one UART line + enable. Motors need the bipolar mod.
+//            4 GPIOs per motor: a C3 SuperMini has pins for 2 motors; ESP32 / S3 for 3.
+//   TMC2209  quiet StealthChop. The drivers make their own steps (VACTUAL) and share
+//            one UART line (addresses 0, 1, 2). Motors need the bipolar mod.
 //
 // Web UI at http://moire.local (or the IP on the serial monitor). With no Wi-Fi
 // saved, or if joining fails, it opens an access point "Moire-Setup"
@@ -31,57 +33,70 @@ constexpr float GEAR_RATIO  = 45.0f / 15.0f;       // motor turns per disc turn
 #ifdef DRIVER_TMC2209
 constexpr float MAX_MOTOR_RPM = 18.0f;             // bipolar at 12 V
 const char* DRIVER_NAME = "TMC2209";
+constexpr int MOTORS = 3;
 #else
 constexpr float MAX_MOTOR_RPM = 12.0f;             // unipolar at 5 V starts skipping above ~13 rpm
 const char* DRIVER_NAME = "ULN2003";
+#ifdef ULN_M3
+constexpr int MOTORS = 3;
+#else
+constexpr int MOTORS = 2;
+#endif
 #endif
 constexpr float MAX_DISC_RPM = MAX_MOTOR_RPM / GEAR_RATIO;
 
 // ── Settings (saved in flash) ────────────────────────────────────
 enum Mode : uint8_t { STEADY = 0, BREATHE = 1, DRIFT = 2 };
 struct Settings {
-    float front = 1.0f, rear = -1.0f;      // disc rpm, + = clockwise from the front
+    float l[3] = { 1.0f, -1.0f, 0.5f };    // disc rpm per layer, + = clockwise from the front
+    uint8_t discs = 2;                     // discs on this build (2 or 3)
     uint8_t mode = STEADY;
     float period = 60.0f;                  // breathe period, s
     float depth  = 0.5f;                   // breathe depth, 0..1
     float drift  = 0.4f;                   // drift amount, 0..1
     float accel  = 0.3f;                   // disc rpm per second
     uint16_t current = 150;                // mA RMS per motor (TMC2209 only)
-    bool invFront = false, invRear = false;
+    bool inv[3] = { false, false, false };
     bool running = true;
+    uint8_t version = 2;
 } S;
 String wifiSsid, wifiPass;
 Preferences prefs;
 WebServer server(80);
 
-float curFront = 0, curRear = 0;           // disc rpm being driven (after ramping)
-bool okFront = true, okRear = true;        // driver reachable (TMC2209 reports this)
+float cur[3] = { 0, 0, 0 };                // disc rpm being driven (after ramping)
+bool ok[3] = { true, true, true };         // driver reachable (TMC2209 reports this)
 bool apMode = false;
 uint32_t saveAt = 0;
+int activeDiscs() { return min((int)S.discs, MOTORS); }
 
 // ════════════════════════════════════════════════════════════════
-//  Motor backends: motorsBegin(), motorRpm(i, rpm), motorsSetCurrent(mA)
+//  Motor backends: motorsBegin(), motorRpm(i, rpm), motorsSetCurrent(mA), motorsRetry()
 // ════════════════════════════════════════════════════════════════
 #ifdef DRIVER_ULN2003
 #include "esp_timer.h"
-#ifndef ULN_FRONT
-#define ULN_FRONT 0, 1, 3, 4
+#ifndef ULN_M1
+#define ULN_M1 0, 1, 3, 4
 #endif
-#ifndef ULN_REAR
-#define ULN_REAR 5, 6, 7, 10
+#ifndef ULN_M2
+#define ULN_M2 5, 6, 7, 10
 #endif
-const uint8_t ULN_PINS[2][4] = { { ULN_FRONT }, { ULN_REAR } };
+#ifdef ULN_M3
+const uint8_t ULN_PINS[3][4] = { { ULN_M1 }, { ULN_M2 }, { ULN_M3 } };
+#else
+const uint8_t ULN_PINS[2][4] = { { ULN_M1 }, { ULN_M2 } };
+#endif
 constexpr uint32_t ULN_TICK_US = 250;                         // 4 kHz
 constexpr float HALF_STEPS = MOTOR_STEPS * 2;                 // ~4076 half-steps per turn
 const uint8_t HALF_SEQ[8] = { 0b1000, 0b1100, 0b0100, 0b0110, 0b0010, 0b0011, 0b0001, 0b1001 };
-volatile float ulnRate[2] = { 0, 0 };                         // half-steps per tick, signed
-float ulnAcc[2] = { 0, 0 };
-uint8_t ulnPhase[2] = { 0, 0 };
-bool ulnPowered[2] = { false, false };
+volatile float ulnRate[3] = { 0, 0, 0 };                      // half-steps per tick, signed
+float ulnAcc[3] = { 0, 0, 0 };
+uint8_t ulnPhase[3] = { 0, 0, 0 };
+bool ulnPowered[3] = { false, false, false };
 
 void ulnWrite(int m, uint8_t bits) { for (int k = 0; k < 4; k++) digitalWrite(ULN_PINS[m][k], (bits >> (3 - k)) & 1); }
 void ulnTick(void*) {
-    for (int m = 0; m < 2; m++) {
+    for (int m = 0; m < MOTORS; m++) {
         float r = ulnRate[m];
         if (r == 0) {                                          // stopped: switch the coils off, they get hot
             if (ulnPowered[m]) { ulnWrite(m, 0); ulnPowered[m] = false; }
@@ -94,15 +109,15 @@ void ulnTick(void*) {
     }
 }
 void motorsBegin() {
-    for (auto& m : ULN_PINS) for (uint8_t p : m) { pinMode(p, OUTPUT); digitalWrite(p, LOW); }
+    for (int m = 0; m < MOTORS; m++) for (uint8_t p : ULN_PINS[m]) { pinMode(p, OUTPUT); digitalWrite(p, LOW); }
     esp_timer_create_args_t a = {};
     a.callback = ulnTick; a.name = "uln";
     esp_timer_handle_t t;
     esp_timer_create(&a, &t);
     esp_timer_start_periodic(t, ULN_TICK_US);
-    Serial.println("ULN2003 drivers ready");
+    Serial.printf("ULN2003: %d motors\n", MOTORS);
 }
-void motorRpm(int i, float rpm) { ulnRate[i] = rpm / 60.0f * HALF_STEPS * ULN_TICK_US / 1e6f; }
+void motorRpm(int i, float rpm) { if (i < MOTORS) ulnRate[i] = rpm / 60.0f * HALF_STEPS * ULN_TICK_US / 1e6f; }
 void motorsSetCurrent(uint16_t) {}
 void motorsRetry() {}
 #endif
@@ -122,8 +137,8 @@ constexpr float R_SENSE    = 0.11f;                            // BTT / FYSETC T
 constexpr int   MICROSTEPS = 16;
 constexpr float VACTUAL_HZ = 12000000.0f / 16777216.0f;        // µsteps/s per VACTUAL unit
 HardwareSerial& TMCSerial = Serial1;
-TMC2209Stepper drv[2] = { TMC2209Stepper(&TMCSerial, R_SENSE, 0), TMC2209Stepper(&TMCSerial, R_SENSE, 1) };
-int32_t lastV[2] = { INT32_MIN, INT32_MIN };
+TMC2209Stepper drv[3] = { TMC2209Stepper(&TMCSerial, R_SENSE, 0), TMC2209Stepper(&TMCSerial, R_SENSE, 1), TMC2209Stepper(&TMCSerial, R_SENSE, 2) };
+int32_t lastV[3] = { INT32_MIN, INT32_MIN, INT32_MIN };
 
 bool setupDriver(TMC2209Stepper& d) {
     d.begin();
@@ -146,36 +161,39 @@ void motorsBegin() {
     digitalWrite(PIN_TMC_EN, LOW);                             // active low; idle current is set low anyway
     TMCSerial.begin(115200, SERIAL_8N1, PIN_TMC_RX, PIN_TMC_TX);
     delay(50);
-    okFront = setupDriver(drv[0]);
-    okRear  = setupDriver(drv[1]);
-    Serial.printf("TMC2209 front (addr 0): %s, rear (addr 1): %s\n", okFront ? "OK" : "NOT FOUND", okRear ? "OK" : "NOT FOUND");
+    for (int i = 0; i < MOTORS; i++) {          // set up all three, so switching to 3 discs later just works
+        ok[i] = setupDriver(drv[i]);
+        Serial.printf("TMC2209 addr %d (motor %c): %s\n", i, 'A' + i, ok[i] ? "OK" : "NOT FOUND");
+    }
 }
 void motorRpm(int i, float rpm) {
+    if (i >= activeDiscs() || !ok[i]) return;
     int32_t v = (int32_t)lroundf(rpm / 60.0f * MOTOR_STEPS * MICROSTEPS / VACTUAL_HZ);
     if (v != lastV[i]) { drv[i].VACTUAL(v); lastV[i] = v; }
 }
-void motorsSetCurrent(uint16_t mA) { drv[0].rms_current(mA); drv[1].rms_current(mA); }
+void motorsSetCurrent(uint16_t mA) { for (int i = 0; i < activeDiscs(); i++) drv[i].rms_current(mA); }
 void motorsRetry() {                                           // drivers powered after the ESP32? try again
     static uint32_t last = 0;
-    if ((okFront && okRear) || millis() - last < 5000) return;
+    if (millis() - last < 5000) return;
     last = millis();
-    if (!okFront) { okFront = setupDriver(drv[0]); lastV[0] = INT32_MIN; }
-    if (!okRear)  { okRear  = setupDriver(drv[1]); lastV[1] = INT32_MIN; }
+    for (int i = 0; i < activeDiscs(); i++) if (!ok[i]) { ok[i] = setupDriver(drv[i]); lastV[i] = INT32_MIN; }
 }
 #endif
 
 // ── Persistence ──────────────────────────────────────────────────
 void loadSettings() {
     prefs.begin("moire", true);
-    if (prefs.getBytesLength("s") == sizeof(Settings)) prefs.getBytes("s", &S, sizeof(Settings));
+    Settings tmp;
+    if (prefs.getBytesLength("s2") == sizeof(Settings)) { prefs.getBytes("s2", &tmp, sizeof(Settings)); if (tmp.version == 2) S = tmp; }
     wifiSsid = prefs.getString("ssid", "");
     wifiPass = prefs.getString("pass", "");
     prefs.end();
+    S.discs = constrain(S.discs, 2, 3);
 }
 void saveSoon() { saveAt = millis() + 2000; }   // debounce flash writes while sliders move
 void saveNow() {
     prefs.begin("moire", false);
-    prefs.putBytes("s", &S, sizeof(Settings));
+    prefs.putBytes("s2", &S, sizeof(Settings));
     prefs.end();
     saveAt = 0;
 }
@@ -184,47 +202,39 @@ void saveNow() {
 float smoothNoise(float t, float seed) {   // smooth wander in -1..1 from incommensurate sines
     return (sinf(t * 0.0731f + seed) + 0.6f * sinf(t * 0.1913f + seed * 2.3f) + 0.35f * sinf(t * 0.4127f + seed * 4.1f)) / 1.95f;
 }
-void targets(float t, float& f, float& r) {
-    f = S.front; r = S.rear;
-    if (!S.running) { f = r = 0; return; }
-    if (S.mode == BREATHE) {
-        float w = 2 * PI * t / max(5.0f, S.period);
-        f *= 1 + S.depth * sinf(w);
-        r *= 1 + S.depth * sinf(w + PI / 2);       // rear lags a quarter cycle
-    } else if (S.mode == DRIFT) {
-        f *= 1 + S.drift * smoothNoise(t, 1.7f);
-        r *= 1 + S.drift * smoothNoise(t, 5.3f);
-    }
-    f = constrain(f, -MAX_DISC_RPM, MAX_DISC_RPM);
-    r = constrain(r, -MAX_DISC_RPM, MAX_DISC_RPM);
+float target(int i, float t) {
+    if (!S.running || i >= activeDiscs()) return 0;
+    float v = S.l[i];
+    if (S.mode == BREATHE) v *= 1 + S.depth * sinf(2 * PI * t / max(5.0f, S.period) + i * PI / 2);   // each disc a quarter-cycle behind the last
+    else if (S.mode == DRIFT) v *= 1 + S.drift * smoothNoise(t, 1.7f + i * 3.6f);
+    return constrain(v, -MAX_DISC_RPM, MAX_DISC_RPM);
 }
-float discToMotor(float discRpm, bool invert) { return (invert ? 1 : -1) * discRpm * GEAR_RATIO; }  // gears reverse direction
 void motionTick() {
     static uint32_t last = millis();
     uint32_t now = millis();
     float dt = (now - last) / 1000.0f; last = now;
-    float tf, tr; targets(now / 1000.0f, tf, tr);
     float step = max(0.01f, S.accel) * dt;
-    curFront += constrain(tf - curFront, -step, step);
-    curRear  += constrain(tr - curRear,  -step, step);
-    if (fabsf(curFront) < 0.0005f && tf == 0) curFront = 0;
-    if (fabsf(curRear)  < 0.0005f && tr == 0) curRear = 0;
-    motorRpm(0, discToMotor(curFront, S.invFront));
-    motorRpm(1, discToMotor(curRear,  S.invRear));
+    for (int i = 0; i < 3; i++) {
+        float tg = target(i, now / 1000.0f);
+        cur[i] += constrain(tg - cur[i], -step, step);
+        if (tg == 0 && fabsf(cur[i]) < 0.0005f) cur[i] = 0;
+        motorRpm(i, (S.inv[i] ? 1 : -1) * cur[i] * GEAR_RATIO);   // gears reverse the direction
+    }
 }
 
 // ── Web API ──────────────────────────────────────────────────────
 const char* modeName(uint8_t m) { return m == BREATHE ? "breathe" : m == DRIFT ? "drift" : "steady"; }
+const char* tf(bool b) { return b ? "true" : "false"; }
 String stateJson() {
-    char b[700];
+    char b[800];
     snprintf(b, sizeof b,
-        "{\"front\":%.3f,\"rear\":%.3f,\"curFront\":%.3f,\"curRear\":%.3f,\"mode\":\"%s\",\"period\":%.1f,\"depth\":%.2f,"
-        "\"drift\":%.2f,\"accel\":%.2f,\"current\":%u,\"invFront\":%s,\"invRear\":%s,\"running\":%s,"
-        "\"driver\":\"%s\",\"driverFront\":%s,\"driverRear\":%s,\"maxDiscRpm\":%.2f,\"ratio\":%.1f,\"ap\":%s,\"ip\":\"%s\"}",
-        S.front, S.rear, curFront, curRear, modeName(S.mode), S.period, S.depth, S.drift, S.accel, S.current,
-        S.invFront ? "true" : "false", S.invRear ? "true" : "false", S.running ? "true" : "false",
-        DRIVER_NAME, okFront ? "true" : "false", okRear ? "true" : "false", MAX_DISC_RPM, GEAR_RATIO,
-        apMode ? "true" : "false", (apMode ? WiFi.softAPIP() : WiFi.localIP()).toString().c_str());
+        "{\"l\":[%.3f,%.3f,%.3f],\"cur\":[%.3f,%.3f,%.3f],\"inv\":[%s,%s,%s],\"ok\":[%s,%s,%s],"
+        "\"discs\":%d,\"motors\":%d,\"mode\":\"%s\",\"period\":%.1f,\"depth\":%.2f,\"drift\":%.2f,\"accel\":%.2f,"
+        "\"current\":%u,\"running\":%s,\"driver\":\"%s\",\"maxDiscRpm\":%.2f,\"ratio\":%.1f,\"ap\":%s,\"ip\":\"%s\"}",
+        S.l[0], S.l[1], S.l[2], cur[0], cur[1], cur[2], tf(S.inv[0]), tf(S.inv[1]), tf(S.inv[2]), tf(ok[0]), tf(ok[1]), tf(ok[2]),
+        activeDiscs(), MOTORS, modeName(S.mode), S.period, S.depth, S.drift, S.accel,
+        S.current, tf(S.running), DRIVER_NAME, MAX_DISC_RPM, GEAR_RATIO,
+        tf(apMode), (apMode ? WiFi.softAPIP() : WiFi.localIP()).toString().c_str());
     return b;
 }
 void cors() { server.sendHeader("Access-Control-Allow-Origin", "*"); server.sendHeader("Cache-Control", "no-store"); }
@@ -240,21 +250,23 @@ bool argB(const char* k, bool& v) {
 }
 void handleSet() {
     bool ch = false;
-    ch |= argF("front", S.front, -MAX_DISC_RPM, MAX_DISC_RPM);
-    ch |= argF("rear",  S.rear,  -MAX_DISC_RPM, MAX_DISC_RPM);
+    const char* lk[3] = { "l1", "l2", "l3" };
+    const char* ik[3] = { "inv1", "inv2", "inv3" };
+    for (int i = 0; i < 3; i++) { ch |= argF(lk[i], S.l[i], -MAX_DISC_RPM, MAX_DISC_RPM); ch |= argB(ik[i], S.inv[i]); }
+    ch |= argF("front", S.l[0], -MAX_DISC_RPM, MAX_DISC_RPM);  // older name for l1
+    float dsc = S.discs;
+    if (argF("discs", dsc, 2, 3)) { S.discs = (uint8_t)lroundf(dsc); ch = true; }
     ch |= argF("period", S.period, 5, 600);
     ch |= argF("depth",  S.depth,  0, 1);
     ch |= argF("drift",  S.drift,  0, 1);
     ch |= argF("accel",  S.accel,  0.02, 5);
-    ch |= argB("invFront", S.invFront);
-    ch |= argB("invRear",  S.invRear);
     ch |= argB("run", S.running);
     if (server.hasArg("mode")) {
         String m = server.arg("mode");
         S.mode = m == "breathe" ? BREATHE : m == "drift" ? DRIFT : STEADY; ch = true;
     }
-    float cur = S.current;
-    if (argF("current", cur, 50, 400)) { S.current = (uint16_t)cur; motorsSetCurrent(S.current); ch = true; }
+    float c = S.current;
+    if (argF("current", c, 50, 400)) { S.current = (uint16_t)c; motorsSetCurrent(S.current); ch = true; }
     if (ch) saveSoon();
     cors(); server.send(200, "application/json", stateJson());
 }

@@ -10,13 +10,13 @@ const char WEB_UI[] PROGMEM = R"HTML(<!doctype html>
 main{max-width:520px;margin:0 auto;display:flex;flex-direction:column;gap:14px}
 h1{font-size:22px;margin:4px 0 0}p{margin:0;color:var(--muted);font-size:13px}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:12px}
-.row{display:grid;grid-template-columns:110px 1fr 70px;gap:10px;align-items:center}
+.row{display:grid;grid-template-columns:110px 1fr 70px;gap:10px;align-items:center}.row[hidden]{display:none}
 .row label{color:var(--muted);font-size:13px}output{font:500 13px ui-monospace,Consolas,monospace;text-align:right}
 input[type=range]{width:100%;accent-color:var(--accent)}
 .seg{display:flex;gap:6px;flex-wrap:wrap}.seg button,.btn{font:inherit;font-size:13px;padding:7px 12px;border-radius:8px;border:1px solid var(--line);background:transparent;color:var(--ink);cursor:pointer}
 .seg button[aria-pressed=true]{background:var(--accent);border-color:var(--accent);color:#111}
 .btn.primary{background:var(--accent);border-color:var(--accent);color:#111;font-weight:600}
-.live{display:grid;grid-template-columns:1fr 1fr;gap:8px}.chip{background:var(--bg);border-radius:8px;padding:8px 10px}
+.live{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px}.chip{background:var(--bg);border-radius:8px;padding:8px 10px}.chip[hidden]{display:none}
 .chip b{display:block;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;font-weight:500}
 .chip span{font:500 17px ui-monospace,Consolas,monospace}
 .warn{color:#f87171;font-size:13px}.bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
@@ -24,13 +24,14 @@ input[type=text],input[type=password]{font:inherit;padding:8px 10px;border-radiu
 details summary{cursor:pointer;color:var(--muted);font-size:13px}
 </style></head><body><main>
 <h1>Moiré drive</h1>
-<p>Front disc = Layer 1, rear disc = Layer 2. Positive speed turns clockwise seen from the front.</p>
+<p>Front disc = Layer 1, then Layer 2, then Layer 3 at the back. Positive speed turns clockwise seen from the front.</p>
 <div class="card">
-  <div class="live"><div class="chip"><b>Front now</b><span id="cf">–</span></div><div class="chip"><b>Rear now</b><span id="cr">–</span></div></div>
+  <div class="live"><div class="chip"><b id="n0"></b><span id="c0">–</span></div><div class="chip"><b id="n1"></b><span id="c1">–</span></div><div class="chip" id="chip2"><b id="n2"></b><span id="c2">–</span></div></div>
   <p class="warn" id="warn" hidden></p>
-  <div class="row"><label for="front">Front disc</label><input type="range" id="front" step="0.01"><output id="frontO"></output></div>
-  <div class="row"><label for="rear">Rear disc</label><input type="range" id="rear" step="0.01"><output id="rearO"></output></div>
-  <div class="bar"><button class="btn primary" id="run">Pause</button><button class="btn" id="flip">Swap directions</button><button class="btn" id="zero">Stop both</button></div>
+  <div class="row"><label for="l0" id="m0"></label><input type="range" id="l0" step="0.01"><output id="o0"></output></div>
+  <div class="row"><label for="l1" id="m1"></label><input type="range" id="l1" step="0.01"><output id="o1"></output></div>
+  <div class="row" id="row2"><label for="l2" id="m2"></label><input type="range" id="l2" step="0.01"><output id="o2"></output></div>
+  <div class="bar"><button class="btn primary" id="run">Pause</button><button class="btn" id="flip">Swap directions</button><button class="btn" id="zero">Stop all</button></div>
 </div>
 <div class="card">
   <div class="row"><label>Motion</label><div class="seg" id="mode"><button data-v="steady">Steady</button><button data-v="breathe">Breathe</button><button data-v="drift">Drift</button></div><span></span></div>
@@ -40,7 +41,8 @@ details summary{cursor:pointer;color:var(--muted);font-size:13px}
   <div class="row"><label for="accel">Ramp</label><input type="range" id="accel" min="0.02" max="2" step="0.01"><output id="accelO"></output></div>
 </div>
 <details class="card"><summary>Setup</summary>
-  <div class="row"><label>Reverse motor</label><div class="bar"><label><input type="checkbox" id="invFront"> front</label><label><input type="checkbox" id="invRear"> rear</label></div><span></span></div>
+  <div class="row" id="discRow"><label>Discs</label><div class="seg" id="discs"><button data-v="2">2</button><button data-v="3">3</button></div><span></span></div>
+  <div class="row"><label>Reverse motor</label><div class="bar" id="invs"></div><span></span></div>
   <div class="row" id="curRow"><label for="current">Motor current</label><input type="range" id="current" min="50" max="400" step="10"><output id="currentO"></output></div>
   <p id="drv"></p>
   <form id="wifi" class="bar"><input type="text" name="ssid" placeholder="Wi-Fi name" autocomplete="off"><input type="password" name="pass" placeholder="Password"><button class="btn primary">Save Wi-Fi &amp; restart</button></form>
@@ -48,29 +50,37 @@ details summary{cursor:pointer;color:var(--muted);font-size:13px}
 </main>
 <script>
 const $=id=>document.getElementById(id);let st=null,timer=null;
-const fmt={front:v=>(+v).toFixed(2)+' rpm',rear:v=>(+v).toFixed(2)+' rpm',period:v=>v+' s',depth:v=>Math.round(v*100)+'%',drift:v=>Math.round(v*100)+'%',accel:v=>(+v).toFixed(2)+'/s',current:v=>v+' mA'};
+const fmt={period:v=>v+' s',depth:v=>Math.round(v*100)+'%',drift:v=>Math.round(v*100)+'%',accel:v=>(+v).toFixed(2)+'/s',current:v=>v+' mA'};
+const names=n=>n===3?['Front (L1)','Middle (L2)','Rear (L3)']:['Front (L1)','Rear (L2)'];
 async function api(q){const r=await fetch('/api/'+(q?'set?'+q:'state'));st=await r.json();render(false)}
-function send(k,v){clearTimeout(timer);timer=setTimeout(()=>api(k+'='+encodeURIComponent(v)),120)}
+function send(q){clearTimeout(timer);timer=setTimeout(()=>api(q),120)}
 function render(all){
-  ['front','rear'].forEach(k=>{const e=$(k);e.min=-st.maxDiscRpm;e.max=st.maxDiscRpm});
+  const n=st.discs,nm=names(n);
+  for(let i=0;i<3;i++){const e=$('l'+i);e.min=-st.maxDiscRpm;e.max=st.maxDiscRpm;
+    if(all||document.activeElement!==e)e.value=st.l[i];$('o'+i).textContent=(+e.value).toFixed(2)+' rpm';
+    $('n'+i).textContent=(nm[i]||'')+' now';$('m'+i).textContent=nm[i]||'';$('c'+i).textContent=st.cur[i].toFixed(2)+' rpm'}
+  $('row2').hidden=$('chip2').hidden=n<3;
   for(const k in fmt){const e=$(k);if(all||document.activeElement!==e){e.value=st[k]}$(k+'O').textContent=fmt[k](e.value)}
-  $('cf').textContent=st.curFront.toFixed(2)+' rpm';$('cr').textContent=st.curRear.toFixed(2)+' rpm';
   $('run').textContent=st.running?'Pause':'Run';
   document.querySelectorAll('#mode button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.v===st.mode));
+  document.querySelectorAll('#discs button').forEach(b=>b.setAttribute('aria-pressed',+b.dataset.v===n));
+  $('discRow').hidden=st.motors<3;
   document.querySelectorAll('[data-for]').forEach(r=>r.hidden=r.dataset.for!==st.mode);
-  $('invFront').checked=st.invFront;$('invRear').checked=st.invRear;
+  $('invs').innerHTML=nm.map((x,i)=>`<label><input type="checkbox" data-i="${i}" ${st.inv[i]?'checked':''}> ${x}</label>`).join('');
+  $('invs').querySelectorAll('input').forEach(c=>c.onchange=e=>api('inv'+(+c.dataset.i+1)+'='+(e.target.checked?1:0)));
   $('curRow').hidden=st.driver!=='TMC2209';
-  $('drv').textContent='Driver: '+st.driver+' · max '+st.maxDiscRpm.toFixed(2)+' disc rpm · gears '+st.ratio+':1 · '+(st.ap?'access point ':'')+st.ip;
-  const w=[];if(!st.driverFront)w.push('front driver not answering');if(!st.driverRear)w.push('rear driver not answering');
-  if(Math.sign(st.front)===Math.sign(st.rear)&&st.front&&st.rear)w.push('both discs turn the same way, so no counter-rotation');
+  $('drv').textContent='Driver: '+st.driver+' ('+st.motors+' motors) · max '+st.maxDiscRpm.toFixed(2)+' disc rpm · gears '+st.ratio+':1 · '+(st.ap?'access point ':'')+st.ip;
+  const w=[];for(let i=0;i<n;i++)if(!st.ok[i])w.push(nm[i]+' driver not answering');
+  const live=st.l.slice(0,n).filter(v=>v);if(live.length>1&&live.every(v=>Math.sign(v)===Math.sign(live[0])))w.push('all discs turn the same way, so there is no counter-rotation');
   $('warn').hidden=!w.length;$('warn').textContent=w.join(' · ');
 }
-for(const k in fmt)$(k).addEventListener('input',e=>{$(k+'O').textContent=fmt[k](e.target.value);send(k,e.target.value)});
+for(let i=0;i<3;i++)$('l'+i).addEventListener('input',e=>{$('o'+i).textContent=(+e.target.value).toFixed(2)+' rpm';send('l'+(i+1)+'='+e.target.value)});
+for(const k in fmt)$(k).addEventListener('input',e=>{$(k+'O').textContent=fmt[k](e.target.value);send(k+'='+e.target.value)});
 document.querySelectorAll('#mode button').forEach(b=>b.onclick=()=>api('mode='+b.dataset.v));
+document.querySelectorAll('#discs button').forEach(b=>b.onclick=()=>api('discs='+b.dataset.v));
 $('run').onclick=()=>api('run='+(st.running?0:1));
-$('flip').onclick=()=>api('front='+(-st.front)+'&rear='+(-st.rear));
-$('zero').onclick=()=>api('front=0&rear=0');
-['invFront','invRear'].forEach(k=>$(k).onchange=e=>api(k+'='+(e.target.checked?1:0)));
+$('flip').onclick=()=>api(st.l.map((v,i)=>'l'+(i+1)+'='+(-v)).join('&'));
+$('zero').onclick=()=>api('l1=0&l2=0&l3=0');
 $('wifi').onsubmit=async e=>{e.preventDefault();const f=new FormData(e.target);await fetch('/api/wifi?'+new URLSearchParams(f));document.body.innerHTML='<main><h1>Restarting…</h1><p>Rejoin your Wi-Fi, then open http://moire.local</p></main>'};
 api().then(()=>render(true));setInterval(()=>api(),1000);
 </script></body></html>)HTML";
