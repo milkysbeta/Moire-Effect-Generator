@@ -7,6 +7,7 @@
     <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
     <script src="tailwind.js"></script>
     <style>
+        .print-hidden { display:none !important; }
         body { font-family: system-ui, sans-serif; }
         #canvas { image-rendering: crisp-edges; max-width:100%; height:auto; }
         #shaderCanvas { position:absolute; top:0; left:0; pointer-events:none; max-width:100%; height:auto; display:none; }
@@ -106,28 +107,28 @@
                 <!-- Disc arm controls (disc styles and the doubling-back warp) -->
                 <div id="armControls" class="hidden mb-2 p-2 rounded-lg bg-zinc-900 border border-violet-800/60">
                     <p class="text-zinc-500 text-xs mb-1">Arms run from the hub to the disc rim. Layer 2 gets the extra arms, Layer 3 twice that; the count difference sets how many lobes the moiré throws.</p>
-                    <div data-arm="shape"><div class="row"><span>Arms</span><span id="val-armN">21</span></div>
-                    <input type="range" id="armN" min="3" max="60" step="1" value="21" class="w-full accent-violet-500 mb-1"></div>
-                    <div data-arm="disc-vortex disc-double disc-reverse2 disc-reverse"><div class="row"><span>Extra arms per layer</span><span id="val-armD">6</span></div>
-                    <input type="range" id="armD" min="0" max="10" step="1" value="6" class="w-full accent-violet-500 mb-1"></div>
+                    <div data-arm="shape"><div class="row"><span>Arms</span><span id="val-armN">12</span></div>
+                    <input type="range" id="armN" min="3" max="60" step="1" value="12" class="w-full accent-violet-500 mb-1"></div>
+                    <div data-arm="disc-vortex disc-double disc-reverse2 disc-reverse"><div class="row"><span>Extra arms per layer</span><span id="val-armD">2</span></div>
+                    <input type="range" id="armD" min="0" max="10" step="1" value="2" class="w-full accent-violet-500 mb-1"></div>
                     <div data-arm="disc-flow disc-vortex"><div class="row"><span>Twist</span><span id="val-armTwist">1</span></div>
                     <input type="range" id="armTwist" min="0.1" max="3" step="0.05" value="1" class="w-full accent-violet-500 mb-1"></div>
-                    <div data-arm="disc-flow disc-vortex disc-double disc-reverse"><div class="row"><span>Arm width</span><span id="val-armOpen">0.5</span></div>
-                    <input type="range" id="armOpen" min="0.15" max="0.9" step="0.01" value="0.5" class="w-full accent-violet-500 mb-1"></div>
+                    <div data-arm="disc-flow disc-vortex disc-double disc-reverse"><div class="row"><span>Arm width</span><span id="val-armOpen">0.45</span></div>
+                    <input type="range" id="armOpen" min="0.15" max="0.9" step="0.01" value="0.45" class="w-full accent-violet-500 mb-1"></div>
                     <div data-arm="disc-flow disc-vortex disc-double disc-reverse2 disc-reverse"><div class="row"><span>Hub size</span><span id="val-armHub">0.15</span></div>
                     <input type="range" id="armHub" min="0.03" max="0.6" step="0.01" value="0.15" class="w-full accent-violet-500 mb-1"></div>
                     <div data-arm="disc-double disc-reverse2 disc-reverse"><div class="row"><span>Reverse at</span><span id="val-armMid">0.55</span></div>
                     <input type="range" id="armMid" min="0.1" max="0.9" step="0.01" value="0.55" class="w-full accent-violet-500 mb-1"></div>
                     <div data-arm="disc-double"><div class="row"><span>2nd reverse at</span><span id="val-armM2">0.78</span></div>
                     <input type="range" id="armM2" min="0.3" max="0.95" step="0.01" value="0.78" class="w-full accent-violet-500 mb-1"></div>
-                    <div data-arm="disc-double disc-reverse2 disc-reverse"><div class="row"><span>Inner sweep °</span><span id="val-armSin">38</span></div>
-                    <input type="range" id="armSin" min="0" max="120" step="1" value="38" class="w-full accent-violet-500 mb-1"></div>
-                    <div data-arm="disc-double disc-reverse2 disc-reverse"><div class="row"><span>Doubling-back sweep °</span><span id="val-armSout">38</span></div>
-                    <input type="range" id="armSout" min="0" max="160" step="1" value="38" class="w-full accent-violet-500 mb-1"></div>
+                    <div data-arm="disc-double disc-reverse2 disc-reverse"><div class="row"><span>Inner sweep °</span><span id="val-armSin">30</span></div>
+                    <input type="range" id="armSin" min="0" max="120" step="1" value="30" class="w-full accent-violet-500 mb-1"></div>
+                    <div data-arm="disc-double disc-reverse2 disc-reverse"><div class="row"><span>Doubling-back sweep °</span><span id="val-armSout">30</span></div>
+                    <input type="range" id="armSout" min="0" max="160" step="1" value="30" class="w-full accent-violet-500 mb-1"></div>
                     <div data-arm="disc-double"><div class="row"><span>Outer sweep °</span><span id="val-armS3">32</span></div>
                     <input type="range" id="armS3" min="0" max="120" step="1" value="32" class="w-full accent-violet-500 mb-1"></div>
-                    <div data-arm="disc-double disc-reverse2 disc-reverse"><div class="row"><span>Kink sharpness</span><span id="val-armSharp">1</span></div>
-                    <input type="range" id="armSharp" min="0" max="1" step="0.05" value="1" class="w-full accent-violet-500 mb-1"></div>
+                    <div data-arm="disc-double disc-reverse2 disc-reverse"><div class="row"><span>Kink sharpness</span><span id="val-armSharp">0.6</span></div>
+                    <input type="range" id="armSharp" min="0" max="1" step="0.05" value="0.6" class="w-full accent-violet-500 mb-1"></div>
                     <div data-arm="disc-reverse2 disc-reverse"><div class="row"><span>Rim curve</span><span id="val-armEntry">0.5</span></div>
                     <input type="range" id="armEntry" min="0" max="1" step="0.05" value="0.5" class="w-full accent-violet-500 mb-1"></div>
                     <div data-arm="disc-reverse2"><div class="row"><span>Width at hub</span><span id="val-armWHub">0.25</span></div>
@@ -173,10 +174,12 @@
                 <input type="range" id="cellCount" min="5" max="120" value="26" class="w-full accent-emerald-600 mb-2">
                 <div class="row"><span>Cell Size <span class="text-zinc-500">(shape draw size px)</span></span><span id="val-cellSize">59</span></div>
                 <input type="range" id="cellSize" min="2" max="120" value="59" class="w-full accent-emerald-600 mb-1">
+                <div class="print-hidden" hidden>
                 <div class="row"><span>&#x3b; Osc Speed <span class="text-zinc-500 text-xs">(Hz, 0=off)</span></span><span id="val-cellSizeOscSpeed">0.00</span></div>
                 <input type="range" id="cellSizeOscSpeed" min="0" max="5" step="0.1" value="0" class="w-full accent-purple-500 mb-1">
                 <div class="row"><span>&#x3b; Osc Depth <span class="text-zinc-500 text-xs">(±px amplitude)</span></span><span id="val-cellSizeOscDepth">0</span></div>
                 <input type="range" id="cellSizeOscDepth" min="0" max="60" step="1" value="0" class="w-full accent-purple-500 mb-2">
+                </div>
                 <div class="row"><span>Stroke</span><span id="val-stroke">5.00</span></div>
                 <input type="range" id="stroke" min="1" max="20" value="5" step="0.5" class="w-full accent-emerald-600">
             </div>
@@ -218,10 +221,12 @@
                     <input type="range" id="warpStrength" min="0" max="80" value="80" class="w-full accent-emerald-600 mb-2">
                     <div class="row"><span>Radius <span class="text-zinc-500 text-xs">(Flag %)</span></span><span id="val-warpRadius">100</span></div>
                     <input type="range" id="warpRadius" min="5" max="100" value="100" class="w-full accent-emerald-600 mb-2">
+                    <div class="print-hidden" hidden>
                     <div class="row"><span>Osc Speed <span class="text-zinc-500 text-xs">(Hz, 0=off)</span></span><span id="val-warpOscSpeed">0.00</span></div>
                     <input type="range" id="warpOscSpeed" min="0" max="5" step="0.1" value="0" class="w-full accent-purple-500 mb-2">
                     <div class="row"><span>Warp → RGB Drive <span class="text-zinc-500 text-xs">(multiplier)</span></span><span id="val-warpRgbDrive">0.00</span></div>
                     <input type="range" id="warpRgbDrive" min="0" max="5" value="0" step="0.05" class="w-full accent-rose-500 mb-2">
+                    </div>
                 </div>
                 <!-- Warp layer select -->
                 <div class="mt-2">
@@ -233,7 +238,7 @@
                         <button onclick="invertWarpLayers()" class="px-2 py-1 text-xs rounded bg-zinc-700 hover:bg-zinc-600 text-zinc-300" title="Invert layer selection">⇅</button>
                     </div>
                 </div>
-                <div class="flex items-center justify-between mt-2">
+                <div class="flex items-center justify-between mt-2 print-hidden" hidden>
                     <label class="text-xs text-zinc-400">Animate Warp</label>
                     <label class="relative inline-flex items-center cursor-pointer">
                         <input type="checkbox" id="animateWarp" class="sr-only peer">
@@ -259,10 +264,12 @@
                         <span class="text-xs text-zinc-400 w-10">Color</span>
                         <input type="color" id="layer1Color" value="#ffffff" class="flex-1 h-7 rounded border border-zinc-600">
                     </div>
+                    <div class="print-hidden" hidden>
                     <div class="row"><span>Opacity</span><span id="val-layer1Opacity">100</span></div>
                     <input type="range" id="layer1Opacity" min="0" max="100" value="100" class="w-full accent-emerald-600 mb-2">
                     <div class="row"><span>RGB Shift</span><span id="val-layer1RgbShift">0</span></div>
                     <input type="range" id="layer1RgbShift" min="0" max="40" value="0" step="0.5" class="w-full accent-rose-500 mb-2">
+                    </div>
                     <div class="row"><span>Rot Speed °/s</span><span id="val-layer1Speed">7.9</span></div>
                     <input type="range" id="layer1Speed" min="-100" max="100" value="42" class="w-full accent-emerald-600 mb-2">
                     <div class="row"><span>Offset X</span><span id="val-layer1OffsetX">0</span></div>
@@ -285,10 +292,12 @@
                         <span class="text-xs text-zinc-400 w-10">Color</span>
                         <input type="color" id="layer2Color" value="#ffffff" class="flex-1 h-7 rounded border border-zinc-600">
                     </div>
+                    <div class="print-hidden" hidden>
                     <div class="row"><span>Opacity</span><span id="val-layer2Opacity">100</span></div>
                     <input type="range" id="layer2Opacity" min="0" max="100" value="100" class="w-full accent-emerald-600 mb-2">
                     <div class="row"><span>RGB Shift</span><span id="val-layer2RgbShift">0</span></div>
                     <input type="range" id="layer2RgbShift" min="0" max="40" value="0" step="0.5" class="w-full accent-rose-500 mb-2">
+                    </div>
                     <div class="row"><span>Rot Speed °/s</span><span id="val-layer2Speed">4.0</span></div>
                     <input type="range" id="layer2Speed" min="-100" max="100" value="31" class="w-full accent-emerald-600 mb-2">
                     <div class="row"><span>Offset X</span><span id="val-layer2OffsetX">0</span></div>
@@ -311,10 +320,12 @@
                         <span class="text-xs text-zinc-400 w-10">Color</span>
                         <input type="color" id="layer3Color" value="#ffffff" class="flex-1 h-7 rounded border border-zinc-600">
                     </div>
+                    <div class="print-hidden" hidden>
                     <div class="row"><span>Opacity</span><span id="val-layer3Opacity">100</span></div>
                     <input type="range" id="layer3Opacity" min="0" max="100" value="100" class="w-full accent-emerald-600 mb-2">
                     <div class="row"><span>RGB Shift</span><span id="val-layer3RgbShift">0</span></div>
                     <input type="range" id="layer3RgbShift" min="0" max="40" value="0" step="0.5" class="w-full accent-rose-500 mb-2">
+                    </div>
                     <div class="row"><span>Rot Speed °/s</span><span id="val-layer3Speed">-4.0</span></div>
                     <input type="range" id="layer3Speed" min="-100" max="100" value="-31" class="w-full accent-emerald-600 mb-2">
                     <div class="row"><span>Offset X</span><span id="val-layer3OffsetX">0</span></div>
@@ -328,8 +339,8 @@
                 </div>
             </div>
 
-            <!-- Shaders -->
-            <div class="sep">
+            <!-- Shaders: visual only, hidden in the print build -->
+            <div class="sep print-hidden" hidden>
                 <p class="slabel">Shaders</p>
                 <!-- Colour XY Gradient (applied per-layer via 2D canvas) -->
                 <div class="rounded-xl border border-zinc-700 bg-zinc-800/50 p-3 mb-2">
@@ -595,7 +606,7 @@ const params = {
     shColorNoise: false, colorNoiseScale: 5, colorNoiseSpeed: 0.5, colorNoiseExpand: 0, colorNoiseOpacity: 50,
     shBlur:       false, blurPersist: 0.85,
     // Lightbox
-    armN: 21, armD: 6, armTwist: 1, armOpen: 0.5, armHub: 0.15, armMid: 0.55, armM2: 0.78, armSin: 38, armSout: 38, armS3: 32, armSharp: 1, armEntry: 0.5, armWHub: 0.25, armWKink: 0.45, armWRim: 0.6, armMirror: true,
+    armN: 12, armD: 2, armTwist: 1, armOpen: 0.45, armHub: 0.15, armMid: 0.55, armM2: 0.78, armSin: 30, armSout: 30, armS3: 32, armSharp: 0.6, armEntry: 0.5, armWHub: 0.25, armWKink: 0.45, armWRim: 0.6, armMirror: true,
     lightbox: false, lbDiameter: 200, lbModule: 2, lbPlanetTeeth: 18,
     lbPlanetGap: 0.2, lbCentreHole: 8, lbAxleHole: 5, lbBaseT: 1.6, lbRibH: 0.6, lbDrive: 'planet', lbDiscs: '2', cxStyle: 'openwork', cxDiscT: 2, cxRim: 4,
 };
@@ -1453,7 +1464,14 @@ function drawShaders(time) {
 // ════════════════════════════════════════════════════════════════════
 //  Main render loop
 // ════════════════════════════════════════════════════════════════════
+// Print build: only what can become a physical disc. Visual-only effects stay off.
+function printOnly() {
+    params.shGrad = params.shNoise = params.shColorNoise = params.shBlur = false;
+    params.cellSizeOscSpeed = 0; params.warpOscSpeed = 0; params.warpRgbDrive = 0; params.animateWarp = false;
+    for (let n = 1; n <= 3; n++) { params['layer' + n + 'RgbShift'] = 0; params['layer' + n + 'Opacity'] = 100; }
+}
 function renderFrame(time = 0) {
+    printOnly();
     if (!lastTime) lastTime = time;
     const delta = Math.min((time - lastTime) / 1000, 0.1);
     lastTime = time;
@@ -1985,6 +2003,11 @@ function smoothWidth(u, m, w0, w1, w2) {
     return herm((u - m) / (1 - m), 1 - m, w1, w2, mk, end(d1));
 }
 
+// Past the hub and the rim an arm carries straight on in its end direction
+function extendEnds(f) {
+    const e = 0.01, s0 = (f(e) - f(0)) / e, s1 = (f(1) - f(1 - e)) / e;
+    return u => u < 0 ? f(0) + s0 * u : u > 1 ? f(1) + s1 * (u - 1) : f(u);
+}
 function drawDiscArms(c, spacing, size, maxDist, rot, warpOn) {
     const style = params.shape, li = GEO.layer || 0, side = layerSide(li);
     const N = Math.max(2, Math.round(params.armN));
@@ -1995,8 +2018,7 @@ function drawDiscArms(c, spacing, size, maxDist, rot, warpOn) {
     const theta =
         style === 'disc-flow'   ? (u, r) => -side * params.armTwist * Math.log(r / hub) :
         style === 'disc-vortex' ? (u, r) => -side * params.armTwist * (N / Nl) * Math.log(r / hub) :
-        style === 'disc-double' ? u => doubleTheta(Math.min(1, Math.max(0, u)), side) :
-                                  u => reverseTheta(Math.min(1, Math.max(0, u)), side);
+                                  extendEnds(style === 'disc-double' ? u => doubleTheta(u, side) : u => reverseTheta(u, side));
     const steps = 96, u0 = -0.04, u1 = 1.04;                       // run a little past hub and rim so prints join up
     const halfAng = params.armOpen * Math.PI / Nl;                 // angular half-width (all but Reversing arms+)
     for (let j = 0; j < Nl; j++) {
@@ -2005,11 +2027,11 @@ function drawDiscArms(c, spacing, size, maxDist, rot, warpOn) {
             const u = u0 + (u1 - u0) * i / steps, r = Math.max(1, hub + u * span);
             const th = theta(u, r) + off;
             if (style === 'disc-reverse2') {                       // true width, offset square to the arm
-                const du = 0.004, ra = Math.max(1, hub + (u - du) * span), rb = hub + (u + du) * span;
+                const du = 0.012, ra = Math.max(1, hub + (u - du) * span), rb = hub + (u + du) * span;
                 const ta = theta(u - du, ra) + off, tb = theta(u + du, rb) + off;
                 let tx = rb * Math.cos(tb) - ra * Math.cos(ta), ty = rb * Math.sin(tb) - ra * Math.sin(ta);
                 const m = Math.hypot(tx, ty) || 1; tx /= m; ty /= m;
-                const hw = smoothWidth(u, params.armMid, params.armWHub, params.armWKink, params.armWRim) * (Math.PI * rim / Nl);
+                const hw = Math.min(0.92 * Math.PI * r / Nl, smoothWidth(u, params.armMid, params.armWHub, params.armWKink, params.armWRim) * (Math.PI * rim / Nl));
                 const x = r * Math.cos(th), y = r * Math.sin(th);
                 Lp.push([x - ty * hw, y + tx * hw]); Rp.push([x + ty * hw, y - tx * hw]);
             } else {
@@ -2937,23 +2959,30 @@ async function exportLightbox3D(which) {
 const CX = {
     m: 1.5, Np: 15, Ng: 45,              // 3:1 reduction, centre distance 45 mm
     fit: 0.2,                            // extra clearance on printed bearing pockets / holes
-    b608: { od: 22, w: 7 }, rod: 8.4, nutAF: 13.3, nutH: 6.8, washer: 1.6,
+    b608: { od: 22, w: 7 }, rod: 8.4, nutAF: 13.3, nutH: 5.2, washer: 1.6,   // nutH: pocket for an M8 thin (jam) nut
     motor: { body: 28.6, h: 19.5, ears: 17.5, shaftOff: 8, boss: 0.5 },
     plateT: 9, feetH: 4, plateR: 76,
     b1z: -4, baseSpacer: 4, bossTop: 14,  // base 608s at -4…3 and 7…14 with a 4 mm spacer between inner races
-    g1T: 8, hubL: 22, hubR: 25, g2T: 8,
+    g1T: 6.5, hubL: 22, hubR: 25, g2T: 6, pinT: 6,
+    gap: 1.0,                             // air between neighbouring discs
+    carrierT: 2,                          // boss under a bolted disc, so its screw heads sit flush in the plate
+    flangeT3: 2.9,                        // front hub flange on 3-disc builds
     insertPCD: 42, insertD: 4.0, frontFlangeR: 17, frontHexAF: 19.7,
 };
 CX.C = (CX.Np + CX.Ng) * CX.m / 2;                 // motor shaft distance from the rod
 CX.g1z = CX.bossTop + CX.washer;                   // rod gear sits on a washer on the top base bearing
 CX.hubZ = CX.g1z + CX.g1T + 1;                     // a 1 mm boss on the rod gear carries the hub's inner race
-CX.earA = CX.g1z - 2;                              // pinion A level with the rod gear
-CX.earB = CX.hubZ - 2;                             // pinion B level with G2
+CX.earA = CX.g1z + (CX.g1T - CX.pinT) / 2 - 2;     // pinion A centred on the rod gear
+CX.earB = CX.hubZ + (CX.g2T - CX.pinT) / 2 - 2;    // pinion B level with G2
 CX.frontZ = CX.hubZ + CX.hubL + CX.washer;         // front hub bottom
 CX.hubSpacer = CX.hubL - 14;                       // between the hub's two 608 inner races
 CX.nutBottom = CX.b1z - CX.washer - 6.5;           // underside of the bottom M8 nut, inside the plate recess
 CX.rodLen = top => Math.ceil((top - CX.nutBottom + 5) / 10) * 10;
-CX.gap = 2.5;                                      // air between the discs
+// 2 discs: rear disc on its carrier boss, front disc 1 mm above it; the front hub flange fills the space below
+const discT = () => Math.max(1, +params.cxDiscT || 2);
+CX.rearTop2 = () => CX.hubZ + CX.hubL + CX.carrierT + discT();
+CX.frontDisc2 = () => CX.rearTop2() + CX.gap;                       // front disc bottom
+CX.flangeT2 = () => CX.frontDisc2() - CX.frontZ;                     // front hub flange thickness
 
 function coaxCalc() {
     const D = Math.max(60, params.lbDiameter), R = D / 2;
@@ -2994,6 +3023,13 @@ function traceToShapes(data, S, res, tol) {
         const sm = p.map((q, i) => { const a = p[(i - 1 + m) % m], b = p[(i + 1) % m]; return [(a[0] + 2 * q[0] + b[0]) / 4, (a[1] + 2 * q[1] + b[1]) / 4]; });
         return mkShape(simplifyLoop(sm, tol));
     }).filter(s => Math.abs(s.area) > 0.02));
+}
+// A part from break heights: paintAt(api, zMid) draws the slice between each pair
+function zStack(R, breaks, paintAt, res) {
+    const b = [...new Set(breaks.map(z => +z.toFixed(3)))].sort((x, y) => x - y);
+    const L = [];
+    for (let i = 0; i < b.length - 1; i++) { const zm = (b[i] + b[i + 1]) / 2; L.push({ R, z0: b[i], z1: b[i + 1], res, paint: a => paintAt(a, zm) }); }
+    return buildPart(L);
 }
 // A part is a stack of extruded profiles: [{R, z0, z1, paint}]
 function buildPart(layers) {
@@ -3060,22 +3096,20 @@ const CX_PARTS = {
         ]);
     },
     rearHub: () => {     // G2 teeth + bearing housing + rear-disc mount
-        const R = (CX.Ng + 2) * CX.m / 2 + 1, gear = P2.poly(involuteGear(CX.Ng, CX.m, 0)), pk = pocket(), H = CX.hubL;
-        const inserts = a => [0, 90, 180, 270].forEach(d => { const t = (d + 45) * Math.PI / 180; a.cut(P2.circle(CX.insertPCD / 2 * Math.cos(t), CX.insertPCD / 2 * Math.sin(t), CX.insertD / 2)); });
-        return buildPart([
-            { R, z0: 0, z1: 7, paint: a => { a.add(gear); a.cut(P2.circle(0, 0, pk / 2)); } },
-            { R, z0: 7, z1: CX.g2T, paint: a => { a.add(gear); a.cut(P2.circle(0, 0, 6.5)); } },
-            { R, z0: CX.g2T, z1: H - 7, paint: a => { a.add(P2.circle(0, 0, CX.hubR)); a.cut(P2.circle(0, 0, 6.5)); } },
-            { R, z0: H - 7, z1: H - 6, paint: a => { a.add(P2.circle(0, 0, CX.hubR)); a.cut(P2.circle(0, 0, pk / 2)); } },
-            { R, z0: H - 6, z1: H, paint: a => { a.add(P2.circle(0, 0, CX.hubR)); a.cut(P2.circle(0, 0, pk / 2)); inserts(a); } },
-        ]);
+        const R = (CX.Ng + 2) * CX.m / 2 + 1, gear = P2.poly(involuteGear(CX.Ng, CX.m, 0)), pk = pocket() / 2, H = CX.hubL;
+        const inserts = a => [45, 135, 225, 315].forEach(d => { const t = d * Math.PI / 180; a.cut(P2.circle(CX.insertPCD / 2 * Math.cos(t), CX.insertPCD / 2 * Math.sin(t), CX.insertD / 2)); });
+        return zStack(R, [0, CX.g2T, 7, H - 7, H - 6, H], (a, z) => {
+            a.add(z < CX.g2T ? gear : P2.circle(0, 0, CX.hubR));
+            a.cut(P2.circle(0, 0, z < 7 || z > H - 7 ? pk : 6.5));
+            if (z > H - 6) inserts(a);
+        });
     },
-    frontHub: () => buildPart([
-        { R: 18, z0: 0, z1: 2.9, paint: a => { a.add(P2.circle(0, 0, CX.frontFlangeR)); a.cut(P2.circle(0, 0, CX.rod / 2)); } },
-        { R: 18, z0: 2.9, z1: 2.9 + Math.max(1, +params.cxDiscT || 2), paint: a => { a.add(P2.hex(CX.frontHexAF)); a.cut(P2.circle(0, 0, CX.rod / 2)); } },
+    frontHub: (flT = discCount() === 3 ? CX.flangeT3 : CX.flangeT2()) => buildPart([
+        { R: 18, z0: 0, z1: flT, paint: a => { a.add(P2.circle(0, 0, CX.frontFlangeR)); a.cut(P2.circle(0, 0, CX.rod / 2)); } },
+        { R: 18, z0: flT, z1: flT + discT(), paint: a => { a.add(P2.hex(CX.frontHexAF)); a.cut(P2.circle(0, 0, CX.rod / 2)); } },
     ]),
     pinion: () => buildPart([
-        { R: (CX.Np + 2) * CX.m / 2 + 1, z0: 0, z1: 8, res: 40, paint: a => { a.add(P2.poly(involuteGear(CX.Np, CX.m, 0))); a.cut(P2.dbore(5.2, 1.65)); } },
+        { R: (CX.Np + 2) * CX.m / 2 + 1, z0: 0, z1: CX.pinT, res: 40, paint: a => { a.add(P2.poly(involuteGear(CX.Np, CX.m, 0))); a.cut(P2.dbore(5.2, 1.65)); } },
     ]),
     spacer: (len, od = 12, id = CX.rod) => () => buildPart([
         { R: od / 2 + 1, z0: 0, z1: len, res: od > 20 ? 20 : 40, paint: a => { a.add(P2.circle(0, 0, od / 2)); a.cut(P2.circle(0, 0, id / 2)); } },
@@ -3096,23 +3130,27 @@ const CX_PARTS = {
 //   sleeve        carries the rod clamp from the middle hub's top 608 up to the front hub
 const discCount = () => (+params.lbDiscs === 3 ? 3 : 2);
 function cx3() {
-    const t = Math.max(1, +params.cxDiscT || 2);
+    const t = discT();
     const L = { journalR: 14.95, shoulderR: 17, capT: 7, hub2L: 20, hub2R: 30,
-                p6806: 42 + CX.fit, bossR: 21, capInsR: 11, insPCD: 52 };
-    L.hub1L = 9 + L.hub2L;                      // teeth + shoulder, then the outer hub's length
+                p6806: 42 + CX.fit, bossR: 21, capInsR: 11, insPCD: 52, recessR: 18 };
+    L.hub1L = CX.g2T + 1 + L.hub2L;             // teeth + shoulder, then the outer hub's length
     L.hub1Z = CX.hubZ;
-    L.hub2Z = CX.hubZ + 9;                      // on the shoulder
+    L.hub2Z = CX.hubZ + CX.g2T + 1;             // outer hub sits on the shoulder
     L.hub1Top = L.hub1Z + L.hub1L;
-    L.rearZ = L.hub2Z + L.hub2L;
+    L.rearZ = L.hub2Z + L.hub2L;                // == hub1Top
     L.midSpacer = L.hub1L - 7 - L.capT - 7;     // between the middle hub's 608 inner races
     L.outerSpacer = L.hub2L - 14;               // between the 6806 inner races
-    L.bossT = t + 2.5;                          // middle disc boss: rear disc + air gap
+    L.rearTop = L.rearZ + CX.carrierT + t;      // rear disc on its carrier
+    L.bossT = L.rearTop + CX.gap - L.rearZ;     // middle disc boss: up to 1 mm above the rear disc
     L.midPlateZ = L.rearZ + L.bossT;
-    L.frontZ = L.midPlateZ + t + 0.3;           // front hub sits on the sleeve, just clear of the middle disc
+    L.midTop = L.midPlateZ + t;
+    L.frontDisc = L.midTop + CX.gap;            // front disc bottom
+    L.frontZ = L.frontDisc - CX.flangeT3;       // front hub flange sinks into a recess in the middle disc
+    L.recessFloor = L.frontZ - 0.3;             // (local to the middle disc: see discSpec)
     L.sleeveZ = L.hub1Top - L.capT;             // top 608's inner race
     L.sleeveL = +(L.frontZ - L.sleeveZ).toFixed(1);
-    L.earC = L.hub2Z - 2;
-    L.rodL = CX.rodLen(L.frontZ + 2.9 + t + 1.6 + 6.5);
+    L.earC = L.hub2Z + (CX.g2T - CX.pinT) / 2 - 2;
+    L.rodL = CX.rodLen(L.frontDisc + t + 1.6 + 6.5);
     return L;
 }
 const MOTOR_ANG = { A: 0, B: Math.PI, C: Math.PI / 2 };   // seat angles on the base (canvas frame)
@@ -3123,26 +3161,20 @@ Object.assign(CX_PARTS, {
         const L = cx3(), R = (CX.Ng + 2) * CX.m / 2 + 1, gear = P2.poly(involuteGear(CX.Ng, CX.m, 0)), pk = pocket() / 2;
         const ins = a => [90, 210, 330].forEach(d => { const r = d * Math.PI / 180; a.cut(P2.circle(L.capInsR * Math.cos(r), L.capInsR * Math.sin(r), CX.insertD / 2)); });
         const top = L.hub1L, cap0 = top - L.capT;
-        return buildPart([
-            { R, z0: 0, z1: 7, paint: a => { a.add(gear); a.cut(P2.circle(0, 0, pk)); } },
-            { R, z0: 7, z1: 8, paint: a => { a.add(gear); a.cut(P2.circle(0, 0, pk + 0.2)); } },
-            { R, z0: 8, z1: 9, paint: a => { a.add(P2.circle(0, 0, L.shoulderR)); a.cut(P2.circle(0, 0, pk + 0.2)); } },
-            { R, z0: 9, z1: cap0 - 7, paint: a => { a.add(P2.circle(0, 0, L.journalR)); a.cut(P2.circle(0, 0, pk + 0.2)); } },   // loose: the top 608 slides through
-            { R, z0: cap0 - 7, z1: cap0, paint: a => { a.add(P2.circle(0, 0, L.journalR)); a.cut(P2.circle(0, 0, pk)); } },
-            { R, z0: cap0, z1: cap0 + 1, paint: a => { a.add(P2.circle(0, 0, L.journalR)); a.cut(P2.circle(0, 0, 6.5)); } },
-            { R, z0: cap0 + 1, z1: top, paint: a => { a.add(P2.circle(0, 0, L.journalR)); a.cut(P2.circle(0, 0, 6.5)); ins(a); } },
-        ]);
+        return zStack(R, [0, CX.g2T, CX.g2T + 1, 7, cap0 - 7, cap0, cap0 + 1, top], (a, z) => {
+            a.add(z < CX.g2T ? gear : z < CX.g2T + 1 ? P2.circle(0, 0, L.shoulderR) : P2.circle(0, 0, L.journalR));
+            if (z > cap0) { a.cut(P2.circle(0, 0, 6.5)); if (z > cap0 + 1) ins(a); }
+            else a.cut(P2.circle(0, 0, z < 7 || z > cap0 - 7 ? pk : pk + 0.2));   // loose middle: the top 608 slides through
+        });
     },
     outerHub: () => {
         const L = cx3(), R = (CX.Ng + 2) * CX.m / 2 + 1, gear = P2.poly(involuteGear(CX.Ng, CX.m, 0)), pk = L.p6806 / 2, H = L.hub2L;
         const ins = a => [45, 135, 225, 315].forEach(d => { const r = d * Math.PI / 180; a.cut(P2.circle(L.insPCD / 2 * Math.cos(r), L.insPCD / 2 * Math.sin(r), CX.insertD / 2)); });
-        return buildPart([
-            { R, z0: 0, z1: 7, paint: a => { a.add(gear); a.cut(P2.circle(0, 0, pk)); } },
-            { R, z0: 7, z1: 8, paint: a => { a.add(gear); a.cut(P2.circle(0, 0, 18)); } },
-            { R, z0: 8, z1: H - 7, paint: a => { a.add(P2.circle(0, 0, L.hub2R)); a.cut(P2.circle(0, 0, 18)); } },
-            { R, z0: H - 7, z1: H - 6, paint: a => { a.add(P2.circle(0, 0, L.hub2R)); a.cut(P2.circle(0, 0, pk)); } },
-            { R, z0: H - 6, z1: H, paint: a => { a.add(P2.circle(0, 0, L.hub2R)); a.cut(P2.circle(0, 0, pk)); ins(a); } },
-        ]);
+        return zStack(R, [0, CX.g2T, 7, H - 7, H - 6, H], (a, z) => {
+            a.add(z < CX.g2T ? gear : P2.circle(0, 0, L.hub2R));
+            a.cut(P2.circle(0, 0, z < 7 || z > H - 7 ? pk : 18));
+            if (z > H - 6) ins(a);
+        });
     },
 });
 
@@ -3171,21 +3203,32 @@ function discSpec(which) {
     const layerIdx = front ? 0 : which === 'middle' ? 1 : (three ? 2 : 1);
     const L3 = three ? cx3() : null;
     const ring = (n, r, d0) => Array.from({ length: n }, (_, i) => { const a = (d0 + i * 360 / n) * Math.PI / 180; return [r * Math.cos(a), r * Math.sin(a)]; });
+    // boss: { r, layers: [[z0, z1, cutFn]] } under the plate (z 0 … boss.t); the plate starts at boss.t
     let hubOut, holes, boss = null;
+    const carrier = (r, holeR, pts) => ({ r, t: CX.carrierT, layers: [[0, CX.carrierT, a => { a.cut(P2.circle(0, 0, holeR)); pts.forEach(([x, y]) => a.cut(P2.circle(x, y, 1.7))); }]] });
     if (front) {
         hubOut = 19;
         holes = a => a.cut(P2.hex(CX.frontHexAF + 0.3));
     } else if (which === 'middle') {
         hubOut = 24;
-        const pts = ring(3, L3.capInsR, 90);
-        holes = a => { a.cut(P2.circle(0, 0, 6.8)); pts.forEach(([x, y]) => a.cut(P2.circle(x, y, 3.1))); };   // counterbores: M3 button heads sit in the plate
-        boss = { r: L3.bossR, t: L3.bossT, holes: a => { a.cut(P2.circle(0, 0, 6.8)); pts.forEach(([x, y]) => a.cut(P2.circle(x, y, 1.7))); } };
+        const pts = ring(3, L3.capInsR, 90), recess = L3.frontZ - 0.3 - L3.rearZ;   // recess floor, measured from the boss bottom
+        const headFloor = recess - 1.8;                                             // M3 button heads sit below the recess floor
+        holes = a => a.cut(P2.circle(0, 0, L3.recessR));                            // the plate is open over the front hub flange
+        boss = { r: L3.bossR, t: L3.bossT, layers: [
+            [0, headFloor, a => { a.cut(P2.circle(0, 0, 6.8)); pts.forEach(([x, y]) => a.cut(P2.circle(x, y, 1.7))); }],
+            [headFloor, recess, a => { a.cut(P2.circle(0, 0, 6.8)); pts.forEach(([x, y]) => a.cut(P2.circle(x, y, 3.1))); }],
+            [recess, L3.bossT, a => a.cut(P2.circle(0, 0, L3.recessR))],
+        ] };
     } else if (three) {
         hubOut = 31;
-        holes = a => { a.cut(P2.circle(0, 0, 22)); ring(4, L3.insPCD / 2, 45).forEach(([x, y]) => a.cut(P2.circle(x, y, 1.7))); };
+        const pts = ring(4, L3.insPCD / 2, 45);
+        holes = a => { a.cut(P2.circle(0, 0, 22)); pts.forEach(([x, y]) => a.cut(P2.circle(x, y, 3.1))); };    // counterbores: heads flush in the plate
+        boss = carrier(30.5, 22, pts);
     } else {
         hubOut = 26;
-        holes = a => { a.cut(P2.circle(0, 0, 18)); ring(4, CX.insertPCD / 2, 45).forEach(([x, y]) => a.cut(P2.circle(x, y, 1.7))); };
+        const pts = ring(4, CX.insertPCD / 2, 45);
+        holes = a => { a.cut(P2.circle(0, 0, 18)); pts.forEach(([x, y]) => a.cut(P2.circle(x, y, 3.1))); };
+        boss = carrier(25, 18, pts);
     }
     const pattern = (g, r0, r1, angOverride) => {          // the layer's pattern, clipped to an annulus
         g.save();
@@ -3207,7 +3250,7 @@ function discSpec(which) {
 function coaxDisc(which, ang) {          // ang: draw the pattern at this rotation (3D view uses 0)
     const { c, R, t, hubOut, holes, pattern, boss } = discSpec(which);
     const res = Math.min(12, 4000 / (2 * R)), z0 = boss ? boss.t : 0;
-    const bossTris = boss ? extrude(profile2D(boss.r + 1, a => { a.add(P2.circle(0, 0, boss.r)); boss.holes(a); }, 20), 0, boss.t) : [];
+    const bossTris = boss ? [].concat(...boss.layers.filter(([z0, z1]) => z1 - z0 > 0.01).map(([z0, z1, cut]) => extrude(profile2D(boss.r + 1, a => { a.add(P2.circle(0, 0, boss.r)); cut(a); }, 20), z0, z1))) : [];
     if ((params.cxStyle || 'openwork') === 'openwork') {
         const shapes = profile2D(R + 1, a => {
             a.add(g => { g.arc(0, 0, R, 0, Math.PI * 2); g.moveTo(R - c.rim, 0); g.arc(0, 0, R - c.rim, 0, Math.PI * 2, true); });
@@ -3242,7 +3285,7 @@ function coaxBOM() {
         `MOIRÉ COAXIAL DRIVE (${three ? 'three' : 'two'} discs): build sheet`,
         '',
         `Disc diameter ${c.D} mm · gears module ${CX.m}, ${CX.Np}:${CX.Ng} (3:1) · motor shafts ${CX.C} mm from the rod`,
-        `Depth from the wall to the front of the front disc: ${(((three ? L.frontZ : CX.frontZ) + 2.9 + (+params.cxDiscT || 2)) + CX.plateT + CX.feetH).toFixed(0)} mm`,
+        `Depth from the wall to the front of the front disc: ${((three ? L.frontDisc : CX.frontDisc2()) + discT() + CX.plateT + CX.feetH).toFixed(0)} mm · ${CX.gap} mm between discs`,
         '',
         'PRINT (PETG or PLA+, 0.2 mm layers, 4 walls for gears; gears and hubs teeth-down)',
         ...parts,
@@ -3250,23 +3293,23 @@ function coaxBOM() {
         three ? '  The middle disc has a boss underneath: flip it so the plate lies on the bed.' : '',
         '',
         'BUY',
-        `  1× M8 threaded rod, ${three ? L.rodL : CX.rodLen(CX.frontZ + 2.9 + (+params.cxDiscT || 2) + 1.6 + 6.5)} mm`,
+        `  1× M8 threaded rod, ${three ? L.rodL : CX.rodLen(CX.frontDisc2() + discT() + 1.6 + 6.5)} mm`,
         `  ${three ? 4 : 4}× 608ZZ bearing (8×22×7)`,
         three ? '  2× 6806ZZ / 6806-2RS bearing (30×42×7)' : '',
-        `  4× M8 nut (one spare), ${three ? 2 : 3}× M8 washer, 1× M8 penny washer (24 mm OD)`,
+        `  3× M8 nut + 1× M8 thin (jam) nut, ${three ? 2 : 3}× M8 washer, 1× M8 penny washer (24 mm OD)`,
         `  ${three ? 3 : 2}× 28BYJ-48 stepper + driver (ULN2003, or TMC2209 with the bipolar mod)`,
-        `  4× M3 heat-set insert + 4× M3×6 button head (rear disc to its hub)`,
+        `  4× M3 heat-set insert + 4× M3×10 button head (rear disc to its hub)`,
         three ? '  3× M3 heat-set insert + 3× M3×10 button head (middle disc to the middle hub)' : '',
         `  ${three ? 6 : 4}× M3×8 screws (motor ears, self-tap into the base)`,
         '',
         'ASSEMBLE (bottom to top)',
         `  1. Press a 608 into the underside of the base, drop the ${CX.baseSpacer} mm spacer in from the top, press the second 608 in.`,
         '  2. Rod up through the base with a nut + washer under the bottom bearing (they sit in the recess on the back). Washer on the top bearing.',
-        '  3. Thread a nut down onto that washer and drop the rod gear over it, nut inside the gear\'s hex pocket.',
+        '  3. Thread the thin M8 nut down onto that washer and drop the rod gear over it, nut inside the gear\'s hex pocket.',
     ];
     if (!three) lines.push(
         `  4. Press 608s into both ends of the rear hub with the ${CX.hubSpacer} mm spacer between them; slide the hub onto the rod, teeth down.`,
-        '  5. Heat-set the 4 inserts into the hub top; bolt the rear disc on with button heads.',
+        '  5. Heat-set the 4 inserts into the hub top; bolt the rear disc on with M3×10 button heads (they sit flush in its counterbores).',
         '  6. Washer on the hub\'s top bearing, then the front hub, front disc over its hex boss, penny washer, nut.');
     else lines.push(
         '  4. Middle hub: heat-set its 3 cap inserts. Push one 608 in from the bottom all the way up under the cap (it slides through the',
@@ -3481,7 +3524,7 @@ async function open3DView() {
     add(meshFrom(parts.spBase, 0xeab308), CX.b1z + 7, 0);
     for (const z of [CX.b1z, CX.bossTop - 7]) add(cyl(11, 7), z, 0);              // base 608s
     spin.push([add(meshFrom(parts.rodGear, 0xf97316), CX.g1z, 1), 0]);
-    const frontTop = (three3 ? L.frontZ : CX.frontZ) + 2.9 + t;
+    const frontTop = (three3 ? L.frontDisc : CX.frontDisc2()) + t;
     add(cyl(4, frontTop + 8.1 - CX.nutBottom), CX.nutBottom, 0);                    // M8 rod, nut to nut
     if (!three3) {
         spin.push([add(meshFrom(parts.rearHub, 0x10b981), CX.hubZ, 2), 1]);
@@ -3508,7 +3551,7 @@ async function open3DView() {
     }
 
     // ── Discs: the real printed solids, rebuilt when the pattern changes ──
-    const discZ = three3 ? { rear: L.rearZ, middle: L.rearZ, front: L.frontZ + 2.9 } : { rear: CX.hubZ + CX.hubL, front: CX.frontZ + 2.9 };
+    const discZ = three3 ? { rear: L.rearZ, middle: L.rearZ, front: L.frontDisc } : { rear: CX.hubZ + CX.hubL, front: CX.frontDisc2() };
     const discOrder = three3 ? { rear: 4, middle: 5, front: 8 } : { rear: 3, front: 5 };
     const discGroup = new THREE.Group(); scene.add(discGroup);
     let discs = [];
