@@ -368,6 +368,12 @@
                 <div id="lightboxControls" class="hidden space-y-2">
                     <div class="row"><span>Disc Ø <span class="text-zinc-500 text-xs">(mm)</span></span><span id="val-lbDiameter">200</span></div>
                     <input type="range" id="lbDiameter" min="50" max="500" value="200" class="w-full accent-amber-500 mb-1">
+                    <div class="row"><span>Drive</span></div>
+                    <select id="lbDrive" class="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm mb-2">
+                        <option value="planet">Rim gear + 3 planets (one disc)</option>
+                        <option value="coaxial">Coaxial, two motors (front L1 + rear L2)</option>
+                    </select>
+                    <div id="lbPlanetUI" class="space-y-2">
                     <div class="row"><span>Module <span class="text-zinc-500 text-xs">(tooth size mm)</span></span><span id="val-lbModule">2</span></div>
                     <input type="range" id="lbModule" min="0.5" max="6" value="2" step="0.25" class="w-full accent-amber-500 mb-1">
                     <div class="row"><span>Planet Teeth</span><span id="val-lbPlanetTeeth">18</span></div>
@@ -399,6 +405,26 @@
                         <button onclick="exportLightbox3D(4)" class="py-2 bg-zinc-700 hover:bg-zinc-600 rounded-lg text-xs">STL Planet</button>
                     </div>
                     <p id="lb3dStatus" class="text-xs text-zinc-400 mt-1" aria-live="polite"></p>
+                    </div>
+                    <div id="lbCoaxUI" class="space-y-2 hidden">
+                        <p class="text-zinc-500 text-xs">Front disc = Layer 1, rear disc = Layer 2, each on its own 28BYJ-48 motor on one M8 rod. Give L1 and L2 opposite speeds to counter-rotate.</p>
+                        <div class="row"><span>Disc style</span></div>
+                        <select id="cxStyle" class="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm mb-1">
+                            <option value="openwork">Openwork, one colour (light through)</option>
+                            <option value="twocolour">Solid base + black pattern (3MF)</option>
+                        </select>
+                        <div class="row"><span>Disc thickness <span class="text-zinc-500 text-xs">(mm)</span></span><span id="val-cxDiscT">2</span></div>
+                        <input type="range" id="cxDiscT" min="1.2" max="4" value="2" step="0.2" class="w-full accent-amber-500 mb-1">
+                        <div class="row"><span>Rim width <span class="text-zinc-500 text-xs">(mm)</span></span><span id="val-cxRim">4</span></div>
+                        <input type="range" id="cxRim" min="2" max="15" value="4" step="0.5" class="w-full accent-amber-500 mb-1">
+                        <div id="cxInfo" class="text-xs text-zinc-400 p-2 bg-zinc-900 rounded-lg leading-relaxed"></div>
+                        <div id="cxBtns" class="grid grid-cols-2 gap-1">
+                            <button onclick="exportCoaxParts()" class="py-2 bg-amber-700 hover:bg-amber-600 rounded-lg text-xs font-semibold col-span-2">&#x2B07; Drive parts (STL zip + build sheet)</button>
+                            <button onclick="exportCoaxDisc('front')" class="py-2 bg-zinc-700 hover:bg-zinc-600 rounded-lg text-xs">Front disc (L1)</button>
+                            <button onclick="exportCoaxDisc('rear')" class="py-2 bg-zinc-700 hover:bg-zinc-600 rounded-lg text-xs">Rear disc (L2)</button>
+                        </div>
+                        <p id="cxStatus" class="text-xs text-zinc-400 mt-1" aria-live="polite"></p>
+                    </div>
 
                 </div>
             </div>
@@ -512,7 +538,7 @@ const params = {
     shBlur:       false, blurPersist: 0.85,
     // Lightbox
     lightbox: false, lbDiameter: 200, lbModule: 2, lbPlanetTeeth: 18,
-    lbPlanetGap: 0.2, lbCentreHole: 8, lbAxleHole: 5, lbBaseT: 1.6, lbRibH: 0.6,
+    lbPlanetGap: 0.2, lbCentreHole: 8, lbAxleHole: 5, lbBaseT: 1.6, lbRibH: 0.6, lbDrive: 'planet', cxStyle: 'openwork', cxDiscT: 2, cxRim: 4,
 };
 
 // ════════════════════════════════════════════════════════════════════
@@ -561,9 +587,9 @@ const numericIds = new Set([
     'noiseScale','noiseSpeed','noiseOpacity',
     'colorNoiseScale','colorNoiseSpeed','colorNoiseExpand','colorNoiseOpacity',
     'blurPersist',
-    'lbDiameter','lbModule','lbPlanetTeeth','lbPlanetGap','lbCentreHole','lbAxleHole','lbBaseT','lbRibH',
+    'lbDiameter','lbModule','lbPlanetTeeth','lbPlanetGap','lbCentreHole','lbAxleHole','lbBaseT','lbRibH','cxDiscT','cxRim',
 ]);
-const selectIds = new Set(['shape','blendMode','warpType','cutout','meshMode']);
+const selectIds = new Set(['shape','blendMode','warpType','cutout','meshMode','lbDrive','cxStyle']);
 const colorIds  = new Set(['bgColor','layer1Color','layer2Color','layer3Color',
                             'gradColorA','gradColorB']);
 
@@ -1383,7 +1409,7 @@ function renderFrame(time = 0) {
     if (params.lightbox) {
         // Clip the moiré pattern to the ring gear pitch circle so the
         // gear teeth sit exactly on the edge of the visible disc.
-        const _g = lbCalcGear();
+        const _g = params.lbDrive === 'coaxial' ? coaxCalc() : lbCalcGear();
         ctx.save();
         ctx.beginPath();
         ctx.arc(_g.cx, _g.cy, _g.patternR_mm * _g.S, 0, Math.PI * 2);
@@ -1423,7 +1449,7 @@ function renderFrame(time = 0) {
     if (clipped) ctx.restore();
 
     // Lightbox gear overlay (drawn outside the clip region so teeth are visible)
-    if (params.lightbox) drawLightboxOverlay();
+    if (params.lightbox) (params.lbDrive === 'coaxial' ? drawCoaxOverlay : drawLightboxOverlay)();
 
     // Mirror to pop-out window if open
     if (popoutWin && !popoutWin.closed && popoutCanvas) {
@@ -2172,6 +2198,13 @@ function drawSvgImport(c, spacing, size, maxDist, rot, warpOn) {
 //  Circular disc with external gear ring + 3 planetary gears
 //  (12 / 4 / 8 o'clock positions) for laser-cut / 3D-print builds.
 // ════════════════════════════════════════════════════════════════════
+function syncDriveUI() {
+    const coax = params.lbDrive === 'coaxial';
+    document.getElementById('lbPlanetUI').classList.toggle('hidden', coax);
+    document.getElementById('lbCoaxUI').classList.toggle('hidden', !coax);
+}
+document.getElementById('lbDrive').addEventListener('change', () => { syncDriveUI(); if (paused) renderFrame(lastTime); });
+
 function toggleLightbox() {
     params.lightbox = !params.lightbox;
     const btn = document.getElementById('lightboxToggle');
@@ -2692,6 +2725,305 @@ async function exportLightbox3D(which) {
 }
 
 // ════════════════════════════════════════════════════════════════════
+//  COAXIAL TWO-MOTOR DRIVE
+//  The layout follows dushyantahuja's Instructables build and KineticPrints'
+//  Moire Disc: one rod carries the front disc; the rear disc rides on that
+//  rod on its own bearings. Each disc has its own motor, so the discs can
+//  counter-rotate at any speed: front disc = Layer 1, rear disc = Layer 2.
+//
+//  Bought parts: M8 threaded rod 110 mm, 4× 608ZZ bearings, 2× 28BYJ-48 steppers
+//  (bipolar mod for TMC2209), M8 nuts and washers, M3 heat-set inserts and screws.
+//
+//  Stack heights in mm (z = 0 is the top face of the base plate):
+//    base plate    -5 … 0      bottom 608 pocket opens underneath
+//    rod boss       0 … 20     608 at -5…2 and 13…20, 11 mm spacer between inner races
+//    washer + nut  20 … 28.1   nut sits inside G1's hex pocket and keys it to the rod
+//    G1 (rod gear) 21.6 … 30.6 driven by motor A's pinion
+//    lock nut + washer … 38.7
+//    rear hub      38.7 … 74.7 G2 teeth at the bottom (motor B); 608 at each end, 22 mm spacer
+//    rear disc     74.7 … +t   bolted to the hub top with 4× M3 (PCD 42)
+//    washer        74.7 … 76.3 on the top bearing's inner race (rotates with the rod)
+//    front hub     76.3 … 79.2 flange, then a hex boss through the front disc
+//    front disc    79.2 … +t   clamped by an M8 penny washer and nut
+// ════════════════════════════════════════════════════════════════════
+const CX = {
+    m: 1.5, Np: 15, Ng: 45,              // 3:1 reduction, centre distance 45 mm
+    fit: 0.2,                            // extra clearance on printed bearing pockets / holes
+    b608: { od: 22, w: 7 }, rod: 8.4, nutAF: 13.3, nutH: 6.8, washer: 1.6,
+    motor: { body: 28.6, h: 19.5, ears: 17.5, shaftOff: 8, boss: 0.5 },
+    bossTop: 20, plateT: 5, plateR: 76,
+    g1z: 21.6, g1T: 9, hubZ: 38.7, hubL: 36, hubR: 25, g2T: 8,
+    insertPCD: 42, insertD: 4.0, frontFlangeR: 17, frontHexAF: 19.7,
+};
+CX.C = (CX.Np + CX.Ng) * CX.m / 2;                 // motor shaft distance from the rod
+CX.earA = CX.g1z + 0.5 - 2;                        // pinion A centred on G1
+CX.earB = CX.hubZ - 2;                             // pinion B level with G2
+CX.frontZ = CX.hubZ + CX.hubL + CX.washer;         // front hub bottom
+CX.gap = 2.5;                                      // air between the discs
+
+function coaxCalc() {
+    const D = Math.max(60, params.lbDiameter), R = D / 2;
+    const rim = Math.max(2, +params.cxRim || 4);
+    const S = (canvas.width * 0.47) / R;           // screen px per mm
+    return { D, R, rim, S, cx: canvas.width / 2, cy: canvas.height / 2, patternR_mm: R - rim };
+}
+
+// ── 2D profile → traced outline (draw with canvas, trace at res px/mm) ──
+// paint(api): api.add(path) fills solid, api.cut(path) removes. Paths are
+// functions that add sub-paths to the canvas context in millimetres.
+const P2 = {
+    circle: (x, y, r) => g => { g.moveTo(x + r, y); g.arc(x, y, r, 0, Math.PI * 2); },
+    poly:   pts => g => { pts.forEach(([x, y], i) => i ? g.lineTo(x, y) : g.moveTo(x, y)); g.closePath(); },
+    hex:    (AF, rot = 0) => P2.poly(Array.from({ length: 6 }, (_, i) => { const a = rot + i * Math.PI / 3; const r = AF / Math.sqrt(3); return [r * Math.cos(a), r * Math.sin(a)]; })),
+    rect:   (x0, y0, x1, y1) => P2.poly([[x0, y0], [x1, y0], [x1, y1], [x0, y1]]),
+    dbore:  (d, flat) => g => {      // round shaft with one flat, flat at +x
+        const r = d / 2, a = Math.acos(flat / r);
+        g.moveTo(flat, -r * Math.sin(a)); g.arc(0, 0, r, a, Math.PI * 2 - a); g.closePath();
+    },
+};
+function profile2D(R, paint, res = 20) {
+    const S = Math.ceil(2 * R * res) + 6, cv = document.createElement('canvas');
+    cv.width = cv.height = S;
+    const g = cv.getContext('2d');
+    g.translate(S / 2, S / 2); g.scale(res, res); g.fillStyle = '#fff';
+    const api = {
+        g,
+        add(...paths) { g.globalCompositeOperation = 'source-over'; for (const p of paths) { g.beginPath(); p(g); g.fill(); } },
+        cut(...paths) { g.globalCompositeOperation = 'destination-out'; for (const p of paths) { g.beginPath(); p(g); g.fill(); } g.globalCompositeOperation = 'source-over'; },
+    };
+    paint(api);
+    return traceToShapes(g.getImageData(0, 0, S, S).data, S, res, 0.01);
+}
+function traceToShapes(data, S, res, tol) {
+    return nest(traceContours(data, S, 128).map(l => {
+        const p = l.map(([x, y]) => [(x - S / 2) / res, (y - S / 2) / res]), m = p.length;
+        const sm = p.map((q, i) => { const a = p[(i - 1 + m) % m], b = p[(i + 1) % m]; return [(a[0] + 2 * q[0] + b[0]) / 4, (a[1] + 2 * q[1] + b[1]) / 4]; });
+        return mkShape(simplifyLoop(sm, tol));
+    }).filter(s => Math.abs(s.area) > 0.02));
+}
+// A part is a stack of extruded profiles: [{R, z0, z1, paint}]
+function buildPart(layers) {
+    let tris = [];
+    // ~0.05 mm/px for small parts, coarser for the big base plate (keeps tracing under ~3 s)
+    for (const L of layers) tris = tris.concat(extrude(profile2D(L.R, L.paint, L.res || (L.R > 50 ? 12 : 20)), L.z0, L.z1));
+    return tris;
+}
+
+// ── Printed parts ─────────────────────────────────────────────────
+const pocket = () => CX.b608.od + CX.fit;
+function motorSeat(api, sx, earZ, layer) {   // sx = +1 motor A side, -1 motor B side
+    const bx = sx * (CX.C + CX.motor.shaftOff);             // motor body centre
+    if (layer === 'solid' || layer === 'body' || layer === 'top') {
+        api.add(P2.rect(bx - 18, -23, bx + 18, 23));
+        api.cut(P2.circle(0, 0, 37));                         // keep clear of the gears
+    }
+    if (layer === 'body' || layer === 'top') {
+        api.cut(P2.circle(bx, 0, CX.motor.body / 2));
+        api.cut(P2.rect(sx > 0 ? bx : bx - 22, -9.5, sx > 0 ? bx + 22 : bx, 9.5));   // wire cover + cable exit
+    }
+    if (layer === 'top') for (const ty of [-CX.motor.ears, CX.motor.ears]) api.cut(P2.circle(bx, ty, 1.4));  // M3 self-tap
+}
+const CX_PARTS = {
+    base: () => {
+        const L = [], R = CX.plateR + 1, pk = pocket();
+        const mounts = api => [60, 120, 240, 300].forEach(a => api.cut(P2.circle(66 * Math.cos(a * Math.PI / 180), 66 * Math.sin(a * Math.PI / 180), 2.3)));
+        L.push({ R, z0: -CX.plateT, z1: 0, paint: a => { a.add(P2.circle(0, 0, CX.plateR)); a.cut(P2.circle(0, 0, pk / 2)); mounts(a); } });
+        L.push({ R, z0: 0, z1: 2, paint: a => { a.add(P2.circle(0, 0, 16)); a.cut(P2.circle(0, 0, pk / 2)); } });
+        L.push({ R, z0: 2, z1: 13, paint: a => { a.add(P2.circle(0, 0, 16)); a.cut(P2.circle(0, 0, 6.5)); } });
+        L.push({ R, z0: 13, z1: CX.bossTop, paint: a => { a.add(P2.circle(0, 0, 16)); a.cut(P2.circle(0, 0, pk / 2)); } });
+        for (const [sx, ear] of [[1, CX.earA], [-1, CX.earB]]) {
+            const floor = ear - CX.motor.h;
+            if (floor > 0) L.push({ R, z0: 0, z1: floor, paint: a => motorSeat(a, sx, ear, 'solid') });
+            L.push({ R, z0: Math.max(0, floor), z1: ear - 10, paint: a => motorSeat(a, sx, ear, 'body') });
+            L.push({ R, z0: ear - 10, z1: ear, paint: a => motorSeat(a, sx, ear, 'top') });
+        }
+        return buildPart(L);
+    },
+    rodGear: () => {     // G1: hex pocket underneath keys it to an M8 nut on the rod
+        const R = (CX.Ng + 2) * CX.m / 2 + 1, gear = P2.poly(involuteGear(CX.Ng, CX.m, 0));
+        return buildPart([
+            { R, z0: 0, z1: CX.nutH, paint: a => { a.add(gear); a.cut(P2.hex(CX.nutAF)); } },
+            { R, z0: CX.nutH, z1: CX.g1T, paint: a => { a.add(gear); a.cut(P2.circle(0, 0, CX.rod / 2)); } },
+        ]);
+    },
+    rearHub: () => {     // G2 teeth + bearing housing + rear-disc mount
+        const R = (CX.Ng + 2) * CX.m / 2 + 1, gear = P2.poly(involuteGear(CX.Ng, CX.m, 0)), pk = pocket(), H = CX.hubL;
+        const inserts = a => [0, 90, 180, 270].forEach(d => { const t = (d + 45) * Math.PI / 180; a.cut(P2.circle(CX.insertPCD / 2 * Math.cos(t), CX.insertPCD / 2 * Math.sin(t), CX.insertD / 2)); });
+        return buildPart([
+            { R, z0: 0, z1: 7, paint: a => { a.add(gear); a.cut(P2.circle(0, 0, pk / 2)); } },
+            { R, z0: 7, z1: CX.g2T, paint: a => { a.add(gear); a.cut(P2.circle(0, 0, 6.5)); } },
+            { R, z0: CX.g2T, z1: H - 7, paint: a => { a.add(P2.circle(0, 0, CX.hubR)); a.cut(P2.circle(0, 0, 6.5)); } },
+            { R, z0: H - 7, z1: H - 6, paint: a => { a.add(P2.circle(0, 0, CX.hubR)); a.cut(P2.circle(0, 0, pk / 2)); } },
+            { R, z0: H - 6, z1: H, paint: a => { a.add(P2.circle(0, 0, CX.hubR)); a.cut(P2.circle(0, 0, pk / 2)); inserts(a); } },
+        ]);
+    },
+    frontHub: () => buildPart([
+        { R: 18, z0: 0, z1: 2.9, paint: a => { a.add(P2.circle(0, 0, CX.frontFlangeR)); a.cut(P2.circle(0, 0, CX.rod / 2)); } },
+        { R: 18, z0: 2.9, z1: 2.9 + Math.max(1, +params.cxDiscT || 2), paint: a => { a.add(P2.hex(CX.frontHexAF)); a.cut(P2.circle(0, 0, CX.rod / 2)); } },
+    ]),
+    pinion: () => buildPart([
+        { R: (CX.Np + 2) * CX.m / 2 + 1, z0: 0, z1: 8, res: 40, paint: a => { a.add(P2.poly(involuteGear(CX.Np, CX.m, 0))); a.cut(P2.dbore(5.2, 1.65)); } },
+    ]),
+    spacer: len => () => buildPart([
+        { R: 7, z0: 0, z1: len, res: 40, paint: a => { a.add(P2.circle(0, 0, 6)); a.cut(P2.circle(0, 0, CX.rod / 2)); } },
+    ]),
+};
+
+// ── Discs with mounts ─────────────────────────────────────────────
+// which: 'front' (Layer 1) or 'rear' (Layer 2). style: 'openwork' (one colour, light
+// passes through) or 'twocolour' (solid base + pattern ribs, two filaments).
+function coaxDisc(which) {
+    const c = coaxCalc(), mmpp = 1 / c.S, R = c.R, t = Math.max(1, +params.cxDiscT || 2);
+    const front = which === 'front', layerIdx = front ? 0 : 1;
+    const holeR = front ? CX.frontHexAF / Math.sqrt(3) + 0.3 : 18;
+    const hubOut = front ? 19 : 26;
+    const holes = a => {
+        if (front) a.cut(P2.hex(CX.frontHexAF + 0.3));
+        else {
+            a.cut(P2.circle(0, 0, holeR));
+            [45, 135, 225, 315].forEach(d => { const r = d * Math.PI / 180; a.cut(P2.circle(CX.insertPCD / 2 * Math.cos(r), CX.insertPCD / 2 * Math.sin(r), 1.7)); });
+        }
+    };
+    const res = Math.min(12, 4000 / (2 * R));
+    const pattern = (g, r0, r1) => {          // the layer's pattern, clipped to an annulus
+        g.save();
+        g.beginPath(); g.arc(0, 0, r1, 0, Math.PI * 2); g.moveTo(r0, 0); g.arc(0, 0, r0, 0, Math.PI * 2, true); g.clip('evenodd');
+        g.scale(mmpp, mmpp);
+        g.translate(params['layer' + (layerIdx + 1) + 'OffsetX'] || 0, params['layer' + (layerIdx + 1) + 'OffsetY'] || 0);
+        const ang = layerAngle[layerIdx] || 0;
+        g.rotate(ang * Math.PI / 180);
+        g.strokeStyle = '#fff'; g.lineWidth = params.stroke; g.lineCap = 'square';
+        const prevStep = GEO.step; GEO.step = Math.max(1, 0.4 / mmpp);
+        try { drawShapeInto(g, params.cellCount, params.cellSize, Math.max(canvas.width, canvas.height) * 0.82, ang, params.warpLayers[layerIdx]); }
+        finally { GEO.step = prevStep; }
+        g.restore();
+    };
+    if ((params.cxStyle || 'openwork') === 'openwork') {
+        const shapes = profile2D(R + 1, a => {
+            a.add(g => { g.arc(0, 0, R, 0, Math.PI * 2); g.moveTo(R - c.rim, 0); g.arc(0, 0, R - c.rim, 0, Math.PI * 2, true); });
+            a.add(P2.circle(0, 0, hubOut));
+            pattern(a.g, hubOut - 0.5, R - c.rim + 0.5);
+            holes(a);
+        }, res);
+        return { parts: [{ name: `${which} disc`, tris: extrude(shapes, 0, t) }], pieces: shapes.filter(s => s.depth % 2 === 0).length };
+    }
+    const base = profile2D(R + 1, a => { a.add(P2.circle(0, 0, R)); holes(a); }, Math.min(res, 8));
+    const ribs = profile2D(R + 1, a => pattern(a.g, hubOut, R - 1), res);
+    const ribH = Math.max(0.2, +params.lbRibH || 0.6);
+    return { parts: [
+        { name: `${which} disc base (clear or white)`, tris: extrude(base, 0, t) },
+        { name: `${which} disc pattern (black)`, tris: extrude(ribs, t, t + ribH) },
+    ], pieces: 1 };
+}
+
+// ── Speeds, bill of materials, overlay ────────────────────────────
+function coaxSpeeds() {
+    const ratio = CX.Ng / CX.Np, out = [];
+    for (const [n, name] of [[1, 'Front disc (L1)'], [2, 'Rear disc (L2)']]) {
+        const dps = params['layer' + n + 'Speed'] || 0, rpm = dps / 6;
+        out.push({ name, rpm, motorRpm: rpm * ratio, dir: dps >= 0 ? 'clockwise' : 'anticlockwise' });
+    }
+    return out;
+}
+function coaxBOM() {
+    const c = coaxCalc(), sp = coaxSpeeds();
+    return [
+        'MOIRÉ COAXIAL DRIVE — build sheet',
+        '',
+        `Disc diameter ${c.D} mm · gears module ${CX.m}, ${CX.Np}:${CX.Ng} (3:1) · motor shafts ${CX.C} mm from the rod`,
+        '',
+        'PRINT (PETG or PLA, 0.2 mm layers, 4 walls for gears)',
+        '  1× base.stl            plate down; bottom bearing pocket opens underneath',
+        '  1× rod-gear.stl        hex pocket down',
+        '  1× rear-hub.stl        gear teeth down',
+        '  1× front-hub.stl       flange down',
+        '  2× pinion.stl          D-bore for the 28BYJ-48 shaft',
+        '  1× spacer-11mm.stl     between the two base bearings',
+        '  1× spacer-22mm.stl     between the two rear-hub bearings',
+        '  1× front disc (Layer 1) and 1× rear disc (Layer 2) from the disc buttons',
+        '',
+        'BUY',
+        '  1× M8 threaded rod, 110 mm',
+        '  4× 608ZZ bearing (8×22×7)',
+        '  5× M8 nut, 4× M8 washer, 1× M8 penny washer (24 mm OD)',
+        '  2× 28BYJ-48 stepper, converted to bipolar (cut the red-wire trace) for TMC2209',
+        '  2× TMC2209 driver, 1× ESP32 (C3/C6/S3), 12 V supply',
+        '  4× M3 heat-set insert + 4× M3×6 button head (rear disc to hub)',
+        '  4× M3×8 screws (motor ears, self-tap into the base)',
+        '',
+        'ASSEMBLE (bottom to top)',
+        '  1. Press a 608 into the underside of the base, drop the 11 mm spacer in from the top, press the second 608 in.',
+        '  2. Rod up through the base: nut + washer under the bottom bearing, washer + nut on top. Snug, not tight; the rod must spin freely.',
+        '  3. Rod gear onto the rod with that top nut inside its hex pocket; lock nut on top, then a washer.',
+        '  4. Press 608s into both ends of the rear hub with the 22 mm spacer between them; slide the hub onto the rod, teeth down.',
+        '  5. Heat-set the 4 inserts into the hub top; bolt the rear disc on with button heads.',
+        '  6. Washer on the hub\'s top bearing, then the front hub, front disc over its hex boss, penny washer, nut.',
+        '  7. Push a pinion onto each motor shaft until its top is level with the shaft end. Screw motor A into the low seat',
+        '     (meshes the rod gear) and motor B into the high seat (meshes the rear hub). Both should turn by hand with a little play.',
+        '',
+        'SPEEDS (from the layer settings)',
+        ...sp.map(s => `  ${s.name}: ${Math.abs(s.rpm).toFixed(2)} rpm ${s.dir} → motor ${Math.abs(s.motorRpm).toFixed(2)} rpm (motor turns the opposite way)`),
+        '  28BYJ-48 bipolar: 2048 full steps per output turn; at 1/16 microstepping that is 32768 steps per turn.',
+    ].join('\n');
+}
+
+function drawCoaxOverlay() {
+    const c = coaxCalc(), c2d = canvas.getContext('2d');
+    c2d.save();
+    c2d.lineWidth = 1.5;
+    c2d.strokeStyle = 'rgba(251,191,36,0.9)';
+    c2d.beginPath(); c2d.arc(c.cx, c.cy, c.R * c.S, 0, Math.PI * 2); c2d.stroke();
+    c2d.strokeStyle = 'rgba(251,191,36,0.35)';
+    c2d.beginPath(); c2d.arc(c.cx, c.cy, (c.R - c.rim) * c.S, 0, Math.PI * 2); c2d.stroke();
+    c2d.strokeStyle = 'rgba(100,215,255,0.8)';
+    c2d.beginPath(); c2d.arc(c.cx, c.cy, 26 * c.S, 0, Math.PI * 2); c2d.stroke();   // rear hub area
+    c2d.restore();
+    const el = document.getElementById('cxInfo');
+    if (el) {
+        const sp = coaxSpeeds(), lineMM = params.stroke / c.S;
+        el.innerHTML = `Disc Ø <b>${c.D} mm</b> &nbsp;·&nbsp; gears ${CX.Np}:${CX.Ng} (3:1)<br>` +
+            sp.map(s => `${s.name}: <b>${Math.abs(s.rpm).toFixed(2)} rpm</b> ${s.dir} → motor ${Math.abs(s.motorRpm).toFixed(1)} rpm`).join('<br>') +
+            `<br>Pattern line width: <b>${lineMM.toFixed(2)} mm</b>` +
+            (lineMM < 0.4 ? ' <span style="color:#f59e0b">(below a 0.4 mm nozzle)</span>' : '') +
+            (Math.sign(params.layer1Speed) === Math.sign(params.layer2Speed) ? '<br><span style="color:#f59e0b">L1 and L2 turn the same way, so flip one for counter-rotation.</span>' : '');
+    }
+}
+
+function cxStatus(t) { const el = document.getElementById('cxStatus'); if (el) el.textContent = t; }
+const tick = () => new Promise(r => setTimeout(r, 20));
+
+async function exportCoaxParts() {
+    const btns = [...document.querySelectorAll('#cxBtns button')]; btns.forEach(b => b.disabled = true);
+    try {
+        await loadEarcut();
+        const list = [
+            ['base.stl', CX_PARTS.base], ['rod-gear.stl', CX_PARTS.rodGear], ['rear-hub.stl', CX_PARTS.rearHub],
+            ['front-hub.stl', CX_PARTS.frontHub], ['pinion.stl', CX_PARTS.pinion],
+            ['spacer-11mm.stl', CX_PARTS.spacer(11)], ['spacer-22mm.stl', CX_PARTS.spacer(22)],
+        ];
+        const files = [];
+        for (const [name, fn] of list) { cxStatus('Building ' + name + '…'); await tick(); files.push([name, stlBinary(fn())]); }
+        files.push(['BUILD-SHEET.txt', coaxBOM()]);
+        downloadBlob(zipStore(files), 'moire-coaxial-drive.zip');
+        cxStatus('Saved moire-coaxial-drive.zip: 7 parts and a build sheet.');
+    } catch (e) { cxStatus('Export didn\'t work: ' + (e.message || e)); }
+    finally { btns.forEach(b => b.disabled = false); }
+}
+async function exportCoaxDisc(which) {
+    const btns = [...document.querySelectorAll('#cxBtns button')]; btns.forEach(b => b.disabled = true);
+    try {
+        await loadEarcut();
+        cxStatus(`Tracing the ${which} disc…`); await tick();
+        const d = coaxDisc(which);
+        const name = `moire-${which}-disc-${coaxCalc().D}mm`;
+        if (d.parts.length === 1) downloadBlob(new Blob([stlBinary(d.parts[0].tris)]), name + '.stl');
+        else downloadBlob(threeMF(d.parts), name + '.3mf');
+        cxStatus(`Saved the ${which} disc.` + (d.pieces > 1 ? ` Heads up: it falls apart into ${d.pieces} pieces. Thicken the lines or change the pattern so every line reaches the rim or hub.` : ''));
+    } catch (e) { cxStatus('Export didn\'t work: ' + (e.message || e)); }
+    finally { btns.forEach(b => b.disabled = false); }
+}
+
+// ════════════════════════════════════════════════════════════════════
 //  Editable value labels (click-to-type on any slider display)
 // ════════════════════════════════════════════════════════════════════
 function initEditableValues() {
@@ -2840,8 +3172,10 @@ function applyFullState(state) {
     function setSelect(id, val) { const el = document.getElementById(id); if (el) el.value = val; }
     function setColor(id, val)  { const el = document.getElementById(id); if (el) el.value = val; }
 
-    ['lbDiameter','lbModule','lbPlanetTeeth','lbPlanetGap','lbAxleHole','lbCentreHole','lbBaseT','lbRibH']
+    ['lbDiameter','lbModule','lbPlanetTeeth','lbPlanetGap','lbAxleHole','lbCentreHole','lbBaseT','lbRibH','cxDiscT','cxRim']
         .forEach(id => { if (params[id] !== undefined) setSlider(id, params[id]); });
+    ['lbDrive','cxStyle'].forEach(id => { if (params[id]) setSelect(id, params[id]); });
+    syncDriveUI();
     setSelect('shape', params.shape);
     document.getElementById('svgImportUI').classList.toggle('hidden', params.shape !== 'svg-import');
     setSelect('blendMode', params.blendMode);
