@@ -95,7 +95,49 @@
                     <option value="hex-tile">Hex Tile (honeycomb)</option>
                     <option value="triangle">Isometric Triangles</option>
                     <option value="svg-import">SVG Import…</option>
+                    <optgroup label="Disc arms (from the disc explorer)">
+                        <option value="disc-flow">Flowing rings</option>
+                        <option value="disc-vortex">Vortex (offset)</option>
+                        <option value="disc-double">Double reverse</option>
+                        <option value="disc-reverse2">Reversing arms+</option>
+                        <option value="disc-reverse">Reversing arms</option>
+                    </optgroup>
                 </select>
+                <!-- Disc arm controls (disc styles and the doubling-back warp) -->
+                <div id="armControls" class="hidden mb-2 p-2 rounded-lg bg-zinc-900 border border-violet-800/60">
+                    <p class="text-zinc-500 text-xs mb-1">Arms run from the hub to the disc rim. Layer 2 gets the extra arms, Layer 3 twice that; the count difference sets how many lobes the moiré throws.</p>
+                    <div data-arm="shape"><div class="row"><span>Arms</span><span id="val-armN">21</span></div>
+                    <input type="range" id="armN" min="3" max="60" step="1" value="21" class="w-full accent-violet-500 mb-1"></div>
+                    <div data-arm="disc-vortex disc-double disc-reverse2 disc-reverse"><div class="row"><span>Extra arms per layer</span><span id="val-armD">6</span></div>
+                    <input type="range" id="armD" min="0" max="10" step="1" value="6" class="w-full accent-violet-500 mb-1"></div>
+                    <div data-arm="disc-flow disc-vortex"><div class="row"><span>Twist</span><span id="val-armTwist">1</span></div>
+                    <input type="range" id="armTwist" min="0.1" max="3" step="0.05" value="1" class="w-full accent-violet-500 mb-1"></div>
+                    <div data-arm="disc-flow disc-vortex disc-double disc-reverse"><div class="row"><span>Arm width</span><span id="val-armOpen">0.5</span></div>
+                    <input type="range" id="armOpen" min="0.15" max="0.9" step="0.01" value="0.5" class="w-full accent-violet-500 mb-1"></div>
+                    <div data-arm="disc-flow disc-vortex disc-double disc-reverse2 disc-reverse"><div class="row"><span>Hub size</span><span id="val-armHub">0.15</span></div>
+                    <input type="range" id="armHub" min="0.03" max="0.6" step="0.01" value="0.15" class="w-full accent-violet-500 mb-1"></div>
+                    <div data-arm="disc-double disc-reverse2 disc-reverse"><div class="row"><span>Reverse at</span><span id="val-armMid">0.55</span></div>
+                    <input type="range" id="armMid" min="0.1" max="0.9" step="0.01" value="0.55" class="w-full accent-violet-500 mb-1"></div>
+                    <div data-arm="disc-double"><div class="row"><span>2nd reverse at</span><span id="val-armM2">0.78</span></div>
+                    <input type="range" id="armM2" min="0.3" max="0.95" step="0.01" value="0.78" class="w-full accent-violet-500 mb-1"></div>
+                    <div data-arm="disc-double disc-reverse2 disc-reverse"><div class="row"><span>Inner sweep °</span><span id="val-armSin">38</span></div>
+                    <input type="range" id="armSin" min="0" max="120" step="1" value="38" class="w-full accent-violet-500 mb-1"></div>
+                    <div data-arm="disc-double disc-reverse2 disc-reverse"><div class="row"><span>Doubling-back sweep °</span><span id="val-armSout">38</span></div>
+                    <input type="range" id="armSout" min="0" max="160" step="1" value="38" class="w-full accent-violet-500 mb-1"></div>
+                    <div data-arm="disc-double"><div class="row"><span>Outer sweep °</span><span id="val-armS3">32</span></div>
+                    <input type="range" id="armS3" min="0" max="120" step="1" value="32" class="w-full accent-violet-500 mb-1"></div>
+                    <div data-arm="disc-double disc-reverse2 disc-reverse"><div class="row"><span>Kink sharpness</span><span id="val-armSharp">1</span></div>
+                    <input type="range" id="armSharp" min="0" max="1" step="0.05" value="1" class="w-full accent-violet-500 mb-1"></div>
+                    <div data-arm="disc-reverse2 disc-reverse"><div class="row"><span>Rim curve</span><span id="val-armEntry">0.5</span></div>
+                    <input type="range" id="armEntry" min="0" max="1" step="0.05" value="0.5" class="w-full accent-violet-500 mb-1"></div>
+                    <div data-arm="disc-reverse2"><div class="row"><span>Width at hub</span><span id="val-armWHub">0.25</span></div>
+                    <input type="range" id="armWHub" min="0.05" max="1" step="0.01" value="0.25" class="w-full accent-violet-500 mb-1"></div>
+                    <div data-arm="disc-reverse2"><div class="row"><span>Width at kink</span><span id="val-armWKink">0.45</span></div>
+                    <input type="range" id="armWKink" min="0.05" max="1" step="0.01" value="0.45" class="w-full accent-violet-500 mb-1"></div>
+                    <div data-arm="disc-reverse2"><div class="row"><span>Width at rim</span><span id="val-armWRim">0.6</span></div>
+                    <input type="range" id="armWRim" min="0.05" max="1" step="0.01" value="0.6" class="w-full accent-violet-500 mb-1"></div>
+                    <label class="flex items-center gap-2 text-xs text-zinc-300 mt-1" data-arm="disc-flow disc-vortex disc-double disc-reverse2 disc-reverse"><input type="checkbox" id="armMirror" checked> Mirror alternate layers (counter-wound discs)</label>
+                </div>
                 <!-- SVG import panel -->
                 <div id="svgImportUI" class="hidden mb-2 p-2 rounded-lg bg-zinc-900 border border-dashed border-violet-600">
                     <div class="flex gap-1.5">
@@ -151,6 +193,8 @@
                     <option value="flag" selected>Flag — Centre Bulge</option>
                     <option value="sine">Sine (global)</option>
                     <option value="ripple">Ripple (global)</option>
+                    <option value="reverse">Reverse: doubling back (any pattern)</option>
+                    <option value="reverse-double">Double reverse (any pattern)</option>
                 </select>
                 <!-- Mesh warp controls -->
                 <div id="meshControls" class="hidden">
@@ -551,6 +595,7 @@ const params = {
     shColorNoise: false, colorNoiseScale: 5, colorNoiseSpeed: 0.5, colorNoiseExpand: 0, colorNoiseOpacity: 50,
     shBlur:       false, blurPersist: 0.85,
     // Lightbox
+    armN: 21, armD: 6, armTwist: 1, armOpen: 0.5, armHub: 0.15, armMid: 0.55, armM2: 0.78, armSin: 38, armSout: 38, armS3: 32, armSharp: 1, armEntry: 0.5, armWHub: 0.25, armWKink: 0.45, armWRim: 0.6, armMirror: true,
     lightbox: false, lbDiameter: 200, lbModule: 2, lbPlanetTeeth: 18,
     lbPlanetGap: 0.2, lbCentreHole: 8, lbAxleHole: 5, lbBaseT: 1.6, lbRibH: 0.6, lbDrive: 'planet', lbDiscs: '2', cxStyle: 'openwork', cxDiscT: 2, cxRim: 4,
 };
@@ -592,6 +637,7 @@ function fmtSpeed(v) {
 const speedIds = new Set(['layer1Speed','layer2Speed','layer3Speed']);
 
 const numericIds = new Set([
+    'armN','armD','armTwist','armOpen','armHub','armMid','armM2','armSin','armSout','armS3','armSharp','armEntry','armWHub','armWKink','armWRim',
     'cellCount','cellSize','cellSizeOscSpeed','cellSizeOscDepth','stroke','blendStrength',
     'warpStrength','warpRadius','warpOscSpeed','warpRgbDrive','meshStrength',
     'layer1OffsetX','layer1OffsetY','layer1Opacity','layer1RgbShift',
@@ -632,10 +678,14 @@ document.getElementById('warpType').addEventListener('change', e => {
     document.getElementById('globalWarpControls').classList.toggle('hidden', isMesh);
     meshCanvas.style.pointerEvents = (isMesh && meshEditMode) ? 'auto' : 'none';
     params.warpType = e.target.value;
+    document.getElementById('globalWarpControls').classList.toggle('hidden', isMesh || params.warpType.startsWith('reverse'));
+    syncArmUI();
 });
+document.getElementById('armMirror').addEventListener('change', e => { params.armMirror = e.target.checked; });
 document.getElementById('meshMode').addEventListener('change', e => { params.meshMode = e.target.value; });
 document.getElementById('shape').addEventListener('change', e => {
     document.getElementById('svgImportUI').classList.toggle('hidden', e.target.value !== 'svg-import');
+    params.shape = e.target.value; syncArmUI();
 });
 document.getElementById('svgFileInput').addEventListener('change', e => {
     if (e.target.files[0]) loadSVGFile(e.target.files[0]);
@@ -1527,6 +1577,7 @@ function warpRgbExtra(layerIdx) {
 }
 
 function renderLayerOn(c, angle, offX, offY, color, layerIdx) {
+    GEO.layer = layerIdx || 0;
     const baseRgbShift = layerIdx !== undefined ? (params['layer'+(layerIdx+1)+'RgbShift'] || 0) : 0;
     const rgbShift = baseRgbShift + warpRgbExtra(layerIdx);
     const layerOpaque = !params.shGrad && rgbShift === 0;
@@ -1598,6 +1649,7 @@ function renderLayerOn(c, angle, offX, offY, color, layerIdx) {
         case 'hex-tile':    drawHexTile(c, spacing, size, maxDist, angle, warpOn);     break;
         case 'triangle':    drawTriGrid(c, spacing, size, maxDist, angle, warpOn);     break;
         case 'svg-import':  drawSvgImport(c, spacing, size, maxDist, angle, warpOn);   break;
+        default: if (isDiscStyle(params.shape)) drawDiscArms(c, spacing, size, maxDist, angle, warpOn);
     }
     c.restore();
 }
@@ -1645,6 +1697,7 @@ function _renderLayerCore(c, angle, offX, offY, color, warpOn) {
         case 'hex-tile':    drawHexTile(c, spacing2, size2, maxDist2, angle, warpOn);     break;
         case 'triangle':    drawTriGrid(c, spacing2, size2, maxDist2, angle, warpOn);     break;
         case 'svg-import':  drawSvgImport(c, spacing2, size2, maxDist2, angle, warpOn);   break;
+        default: if (isDiscStyle(params.shape)) drawDiscArms(c, spacing2, size2, maxDist2, angle, warpOn);
     }
     c.restore();
 }
@@ -1654,7 +1707,7 @@ function _renderLayerCore(c, angle, offX, offY, color, warpOn) {
 // ════════════════════════════════════════════════════════════════════
 function segs(warpOn)    { return (warpOn && params.warpType !== 'none') ? 64 : 1; }
 function isMesh()        { return params.warpType === 'mesh'; }
-function hasWarp(warpOn) { return warpOn && params.warpType !== 'none' && (isMesh() || params.warpStrength > 0); }
+function hasWarp(warpOn) { return warpOn && params.warpType !== 'none' && (isMesh() || params.warpType.startsWith('reverse') || params.warpStrength > 0); }
 
 // World-to-canvas for mesh: add mesh displacement to a point
 function mwarp(px, py, layerRot) {
@@ -1689,12 +1742,13 @@ function effectiveWarpStrength() {
 //  the SVG recorder (SvgSink), so exports match the screen exactly.
 //  GEO.clip (exports only) trims paths to the cutout / disc edge.
 // ════════════════════════════════════════════════════════════════════
-const GEO = { clip: null, step: 8 };   // step = sample spacing (px) along warped edges
+const GEO = { clip: null, step: 8, layer: 0 };   // layer: which layer is being drawn (disc styles + reverse warp use it)   // step = sample spacing (px) along warped edges
 
 // Warp function for a layer, or null when nothing moves.
 // axis 'y' = legacy warps displace horizontal lines vertically.
 function warpFn(rot, warpOn, axis) {
     if (!hasWarp(warpOn)) return null;
+    if (params.warpType.startsWith('reverse')) return reverseWarpFn();
     if (isMesh()) return (x, y) => { const p = mwarp(x, y, rot); return [p.x, p.y]; };
     return axis === 'y' ? (x, y) => [x, y + warpDX(x, y)]
                         : (x, y) => [x + warpDX(y, x), y];
@@ -1876,6 +1930,119 @@ function drawHexGrid(c, spacing, size, maxDist, rot, warpOn) {
             const hcy = row*rowH + (Math.abs(col)%2===1 ? rowH/2 : 0);
             c.beginPath(); emitPath(c, hexPts(col*spacing*0.75, hcy, R), true, wf); c.stroke();
         }
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Disc arm styles (from the Moiré Disc Explorer)
+//  Arms run from a hub radius out to the disc rim. Each layer can add
+//  extra arms (N + layer × extra) and alternate layers are mirrored, which
+//  is what makes counter-rotating discs throw lobes. The same "doubling
+//  back" curve is also a warp, so any pattern can reverse partway out.
+// ════════════════════════════════════════════════════════════════════
+const DISC_STYLES = ['disc-flow', 'disc-vortex', 'disc-double', 'disc-reverse2', 'disc-reverse'];
+const isDiscStyle = s => DISC_STYLES.includes(s);
+
+// Rim radius in canvas px: the printable disc in lightbox mode, else the cutout
+function discFramePx() {
+    if (params.lightbox) { const g = params.lbDrive === 'coaxial' ? coaxCalc() : lbCalcGear(); return g.patternR_mm * g.S; }
+    return Math.min(canvas.width, canvas.height) / 2 * 0.85;
+}
+const layerSide = li => (params.armMirror && li % 2 ? -1 : 1);
+
+// Arm centreline offset (radians) at u = 0 (hub) … 1 (rim): one reversal
+function reverseTheta(u, side) {
+    const mid = params.armMid, sharp = params.armSharp, e = params.armEntry;
+    const d2r = Math.PI / 180;
+    if (u <= mid) {
+        const t = Math.max(0, u / mid);
+        const f = sharp * (1 - (1 - t) ** 1.8) + (1 - sharp) * Math.sin(Math.PI / 2 * t);
+        return side * params.armSin * f * d2r;
+    }
+    const t = Math.min(1, (u - mid) / (1 - mid));
+    const sq = (1 - Math.cos(Math.PI * t)) / 2, sw = 1 - Math.cos(Math.PI / 2 * t), mg = 1 - Math.sqrt(Math.max(0, 1 - t * t));
+    const sm = e <= 0.5 ? sq + (sw - sq) * e / 0.5 : sw + (mg - sw) * (e - 0.5) / 0.5;
+    const f = sharp * (t ** 0.75) + (1 - sharp) * sm;
+    return side * (params.armSin - params.armSout * f) * d2r;
+}
+// Two reversals: in, back out, in again
+function doubleTheta(u, side) {
+    const sharp = params.armSharp, sh = t => sharp * (1 - (1 - t) ** 1.8) + (1 - sharp) * (1 - Math.cos(Math.PI * t)) / 2;
+    const m1 = Math.min(params.armMid, params.armM2 - 0.05), m2 = Math.max(params.armM2, m1 + 0.05);
+    let th;
+    if (u <= m1) th = params.armSin * sh(Math.max(0, u / m1));
+    else if (u <= m2) th = params.armSin - params.armSout * sh((u - m1) / (m2 - m1));
+    else th = params.armSin - params.armSout + params.armS3 * sh(Math.min(1, (u - m2) / (1 - m2)));
+    return side * th * Math.PI / 180;
+}
+// Smooth width through hub → kink → rim, no bulge or dip at the kink
+function smoothWidth(u, m, w0, w1, w2) {
+    u = Math.min(1, Math.max(0, u));
+    const d0 = (w1 - w0) / m, d1 = (w2 - w1) / (1 - m);
+    const mk = (d0 * d1 <= 0) ? 0 : 2 / (1 / d0 + 1 / d1);
+    const herm = (t, h, y0, y1, s0, s1) => { const t2 = t * t, t3 = t2 * t; return (2 * t3 - 3 * t2 + 1) * y0 + (t3 - 2 * t2 + t) * h * s0 + (-2 * t3 + 3 * t2) * y1 + (t3 - t2) * h * s1; };
+    const end = d => { const e = (3 * d - mk) / 2; return e * d > 0 ? e : 0; };
+    if (u <= m) return herm(u / m, m, w0, w1, end(d0), mk);
+    return herm((u - m) / (1 - m), 1 - m, w1, w2, mk, end(d1));
+}
+
+function drawDiscArms(c, spacing, size, maxDist, rot, warpOn) {
+    const style = params.shape, li = GEO.layer || 0, side = layerSide(li);
+    const N = Math.max(2, Math.round(params.armN));
+    const Nl = style === 'disc-flow' ? N : N + li * Math.round(params.armD);
+    const rim = discFramePx(), hub = rim * params.armHub, span = rim - hub;
+    const wf = warpFn(rot, warpOn, 'x');
+    c.fillStyle = c.strokeStyle;                                   // arms are filled, in the layer colour
+    const theta =
+        style === 'disc-flow'   ? (u, r) => -side * params.armTwist * Math.log(r / hub) :
+        style === 'disc-vortex' ? (u, r) => -side * params.armTwist * (N / Nl) * Math.log(r / hub) :
+        style === 'disc-double' ? u => doubleTheta(Math.min(1, Math.max(0, u)), side) :
+                                  u => reverseTheta(Math.min(1, Math.max(0, u)), side);
+    const steps = 96, u0 = -0.04, u1 = 1.04;                       // run a little past hub and rim so prints join up
+    const halfAng = params.armOpen * Math.PI / Nl;                 // angular half-width (all but Reversing arms+)
+    for (let j = 0; j < Nl; j++) {
+        const off = 2 * Math.PI * j / Nl, Lp = [], Rp = [];
+        for (let i = 0; i <= steps; i++) {
+            const u = u0 + (u1 - u0) * i / steps, r = Math.max(1, hub + u * span);
+            const th = theta(u, r) + off;
+            if (style === 'disc-reverse2') {                       // true width, offset square to the arm
+                const du = 0.004, ra = Math.max(1, hub + (u - du) * span), rb = hub + (u + du) * span;
+                const ta = theta(u - du, ra) + off, tb = theta(u + du, rb) + off;
+                let tx = rb * Math.cos(tb) - ra * Math.cos(ta), ty = rb * Math.sin(tb) - ra * Math.sin(ta);
+                const m = Math.hypot(tx, ty) || 1; tx /= m; ty /= m;
+                const hw = smoothWidth(u, params.armMid, params.armWHub, params.armWKink, params.armWRim) * (Math.PI * rim / Nl);
+                const x = r * Math.cos(th), y = r * Math.sin(th);
+                Lp.push([x - ty * hw, y + tx * hw]); Rp.push([x + ty * hw, y - tx * hw]);
+            } else {
+                Lp.push([r * Math.cos(th + halfAng), r * Math.sin(th + halfAng)]);
+                Rp.push([r * Math.cos(th - halfAng), r * Math.sin(th - halfAng)]);
+            }
+        }
+        const pts = Lp.concat(Rp.reverse());
+        const n = pts.length, smooth = pts.map((_, i) => !(i === 0 || i === steps || i === steps + 1 || i === n - 1));
+        c.beginPath(); emitPath(c, pts, true, wf, smooth); c.fill();
+    }
+}
+
+// "Doubling back" as a warp: any pattern turns by the reversing-arm curve as it goes out
+function reverseWarpFn() {
+    const li = GEO.layer || 0, side = layerSide(li), rim = discFramePx(), hub = rim * params.armHub;
+    const th = params.warpType === 'reverse-double' ? doubleTheta : reverseTheta;
+    return (x, y) => {
+        const r = Math.hypot(x, y), u = Math.min(1, Math.max(0, (r - hub) / (rim - hub)));
+        const a = th(u, side), ca = Math.cos(a), sa = Math.sin(a);
+        return [x * ca - y * sa, x * sa + y * ca];
+    };
+}
+
+function syncArmUI() {
+    const s = params.shape, rw = params.warpType === 'reverse' || params.warpType === 'reverse-double';
+    const box = document.getElementById('armControls');
+    box.classList.toggle('hidden', !(isDiscStyle(s) || rw));
+    const key = isDiscStyle(s) ? s : (params.warpType === 'reverse-double' ? 'disc-double' : 'disc-reverse');
+    box.querySelectorAll('[data-arm]').forEach(el => {
+        const on = el.dataset.arm.split(' ');
+        el.classList.toggle('hidden', !(on.includes(key) || (on.includes('shape') && isDiscStyle(s))));
+    });
 }
 
 // Isometric honeycomb tiling — hexagons always perfectly tile.
@@ -2403,6 +2570,7 @@ function buildSVGPaths(w, h, layerIdx, clipLocal) {
     const sink = new SvgSink(2);
     const prev = { clip: GEO.clip, step: GEO.step };
     GEO.clip = clipLocal || null; GEO.step = 3;
+    GEO.layer = layerIdx;
     try { drawShapeInto(sink, params.cellCount, size, maxDist, ang, warpOn); }
     finally { GEO.clip = prev.clip; GEO.step = prev.step; }
     return sink.out.join('\n    ');
@@ -2419,6 +2587,7 @@ function drawShapeInto(c, spacing, size, maxDist, angle, warpOn) {
         case 'hex-tile':    drawHexTile(c, spacing, size, maxDist, angle, warpOn);     break;
         case 'triangle':    drawTriGrid(c, spacing, size, maxDist, angle, warpOn);     break;
         case 'svg-import':  drawSvgImport(c, spacing, size, maxDist, angle, warpOn);   break;
+        default: if (isDiscStyle(params.shape)) drawDiscArms(c, spacing, size, maxDist, angle, warpOn);
     }
 }
 
@@ -2600,6 +2769,7 @@ function patternRibs(layerIdx, g) {
     c.strokeStyle = '#fff'; c.lineWidth = params.stroke; c.lineCap = 'square';
     const prevStep = GEO.step; GEO.step = Math.max(1, 0.4 / mmpp);   // sample every 0.4 mm
     const size = params.cellSize, maxDist = Math.max(canvas.width, canvas.height) * 0.82;
+    GEO.layer = layerIdx;
     try { drawShapeInto(c, params.cellCount, size, maxDist, ang, params.warpLayers[layerIdx]); }
     finally { GEO.step = prevStep; }
     const data = c.getImageData(0, 0, Spx, Spx).data;
@@ -3026,6 +3196,7 @@ function discSpec(which) {
         g.rotate(ang * Math.PI / 180);
         g.strokeStyle = '#fff'; g.lineWidth = params.stroke; g.lineCap = 'square';
         const prevStep = GEO.step; GEO.step = Math.max(1, 0.4 / mmpp);
+        GEO.layer = layerIdx;
         try { drawShapeInto(g, params.cellCount, params.cellSize, Math.max(canvas.width, canvas.height) * 0.82, ang, params.warpLayers[layerIdx]); }
         finally { GEO.step = prevStep; }
         g.restore();
@@ -3584,6 +3755,9 @@ function applyFullState(state) {
     ['lbDiameter','lbModule','lbPlanetTeeth','lbPlanetGap','lbAxleHole','lbCentreHole','lbBaseT','lbRibH','cxDiscT','cxRim']
         .forEach(id => { if (params[id] !== undefined) setSlider(id, params[id]); });
     ['lbDrive','lbDiscs','cxStyle'].forEach(id => { if (params[id]) setSelect(id, String(params[id])); });
+    ['armN','armD','armTwist','armOpen','armHub','armMid','armM2','armSin','armSout','armS3','armSharp','armEntry','armWHub','armWKink','armWRim'].forEach(id => { if (params[id] !== undefined) setSlider(id, params[id]); });
+    document.getElementById('armMirror').checked = params.armMirror !== false;
+    syncArmUI();
     syncDriveUI();
     setSelect('shape', params.shape);
     document.getElementById('svgImportUI').classList.toggle('hidden', params.shape !== 'svg-import');
