@@ -4133,13 +4133,14 @@ async function openModelScene() {
             spin.push([m(meshFrom(await build('rod gear', CX_PARTS.rodGear), 0xf97316), CX.g1z, 1), 0]);
             const frontTop = (three3 ? L.frontDisc : CX.frontDisc2()) + t;
             const boltL = CX.rodLen(frontTop + CX.washer + 6.5), hexM = (af, h) => { const k = cyl(af / Math.sqrt(3), h); k.geometry.dispose();
-                k.geometry = new THREE.CylinderGeometry(af / Math.sqrt(3), af / Math.sqrt(3), h, 6).translate(0, h / 2, 0); return k; };
+                k.geometry = new THREE.CylinderGeometry(af / Math.sqrt(3), af / Math.sqrt(3), h, 6).translate(0, h / 2, 0).rotateX(Math.PI / 2);
+                k.rotation.x = 0; return k; };                                             // axis baked in, so spinning rotation.z turns it about the bolt
             m(cyl(4, boltL), CX.boltUnder, 0);                                            // M8 bolt shank
             spin.push([m(hexM(13, 5.3), CX.boltUnder - 5.3, 0), 0]);                        // its head, in the recess on the back
             spin.push([m(hexM(13, 6.5), CX.g1z, 1), 0]);                                    // M8 nut keyed in the rod gear
             const dome = m(hexM(13, 6.5), frontTop + CX.washer, 4); spin.push([dome, 0]);
             const cap = new THREE.Mesh(new THREE.SphereGeometry(6.4, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2), steel);
-            cap.rotation.x = Math.PI / 2; spin.push([m(cap, frontTop + CX.washer + 6.5, 4), 0]);
+            cap.geometry.rotateX(Math.PI / 2); spin.push([m(cap, frontTop + CX.washer + 6.5, 4), 0]);
             if (!three3) {
                 spin.push([m(meshFrom(await build('rear hub', CX_PARTS.rearHub), 0x10b981), CX.hubZ, 2), 1]);
                 if (CX.hubSpacer > 0) m(meshFrom(await build('spacer', CX_PARTS.spacer(CX.hubSpacer)), 0xeab308), CX.hubZ + 7, 2);
