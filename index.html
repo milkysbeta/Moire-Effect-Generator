@@ -48,6 +48,7 @@
         .lightbox-on  { background-color:#b45309; color:#fff; }
         .lightbox-off { background-color:#52525b; color:#d4d4d8; }
     </style>
+    <script async src="http://localhost:8080/disc-look.js" id="discLookTransport"></script>
 </head>
 <body class="bg-zinc-950 text-zinc-100 min-h-screen">
 <div class="flex flex-col md:flex-row h-screen">
@@ -3166,7 +3167,7 @@ const segPath = (x0, y0, x1, y1, w) => g => { const L = Math.hypot(x1 - x0, y1 -
 // Case: 'pod' compact case behind the discs (2 discs, no battery), 'light' the pod + an LED diffuser,
 // 'drum' the full-size back drum + front shield, 'open' nothing. 3 discs or the 18650 need the big layout.
 const caseMode = () => { const m = params.cxCase || (params.cxEnc ? 'drum' : 'pod'); return discCount() === 2 && !params.cxBatt ? m : (m === 'drum' ? 'drum' : 'open'); };
-const compactLayout = () => !isEdge() && discCount() === 2 && !params.cxBatt && caseMode() !== 'drum';
+const compactLayout = () => !isEdge() && discCount() === 2 && !params.cxBatt;      // the same layout whatever the case
 // Compact layout: the ULN2003s above and below the spindle, between the two motors; the ESP32 and the power
 // hub lower right, both USB-C sockets in windows in the pod wall.
 const ELEC = {
@@ -3179,7 +3180,7 @@ const ELEC = {
     esp: { get ang() { return compactLayout() ? 225 : 45; }, len: 22.5, wid: 18, get r() { return caseIn() - (compactLayout() ? 1.2 : 0.4) - this.len / 2; } },    // S3 SuperMini, USB-C at the wall
     // USB-C 5 V breakout (16 × 13), or with a battery an IP5306-type USB-C charge + boost module (25 × 21)
     // compact: a 24 × 20 perfboard power hub (USB-C breakout, 470 µF, a 5 V and a GND header rail every jumper plugs into)
-    usb: { get ang() { return compactLayout() ? 50 : 66; }, get len() { return params.cxBatt ? 25 : compactLayout() ? 24 : 16; }, get wid() { return params.cxBatt ? 21 : compactLayout() ? 20 : 13; }, get r() { return caseIn() - (compactLayout() ? 1.2 : 0.4) - this.len / 2; } },
+    usb: { get ang() { return compactLayout() ? 45 : 66; }, get len() { return params.cxBatt ? 25 : compactLayout() ? 24 : 16; }, get wid() { return params.cxBatt ? 21 : compactLayout() ? 20 : 13; }, get r() { return caseIn() - (compactLayout() ? 1.2 : 0.4) - this.len / 2; } },
     batt: { ang: 270, r: 81, len: 77, wid: 21 },                        // one 18650 in an open holder along the top
     groove: { r0: 18.5, r1: 25.5, w: 5, depth: 3 },                    // wire channels in the plate top
 };
@@ -3207,6 +3208,20 @@ function wireChannels(n) {
     if (params.cxBatt) out.push(rr(0, ELEC.batt.ang, g.r1 - 1, ELEC.batt.r - ELEC.batt.wid / 2 + 1, -g.w / 2, g.w / 2));
     return out;
 }
+// Press-in tabs: 1 mm lips on both edges of the wire channels, every 20° round the ring and every 12 mm along the
+// ESP32 and power-hub spokes. Dupont leads (about 1.3 mm) press in past them and stay put. Kept clear of the boards'
+// solder pockets, the spoke junctions and motor A's cover.
+function channelTabs(n) {
+    const g = ELEC.groove, out = [], keep = [ELEC.esp.ang, ELEC.usb.ang], boards = ELEC.ulnList(n).map(k => ELEC.ulnAng[k]);
+    const near = (a, b, w) => Math.abs(((a - b) % 360 + 540) % 360 - 180) < w;
+    for (let a = 10; a < 360; a += 20) {
+        if (keep.some(b => near(a, b, 14)) || boards.some(b => near(a, b, 45)) || near(a, 0, 32)) continue;
+        out.push(radialRect(g.r0, a, 0, 1, -1.5, 1.5), radialRect(g.r1 - 1, a, 0, 1, -1.5, 1.5));
+    }
+    for (const t of [ELEC.esp, ELEC.usb]) for (let d = g.r1 + 6; d < t.r - t.len / 2 - 4; d += 12)
+        out.push(rr(0, t.ang, d - 1.5, d + 1.5, g.w / 2 - 1, g.w / 2), rr(0, t.ang, d - 1.5, d + 1.5, -g.w / 2, -g.w / 2 + 1));
+    return out;
+}
 // Enclosure, two printed shells that meet in a hairline seam level with the rear disc:
 //   back drum    3 mm floor ringing the base plate (the base has a matching rebate, so the backs are
 //                flush), wall up to the seam, then a thinner spigot with a snap bead
@@ -3226,8 +3241,10 @@ POD.holeR = () => CX.hubR + 1.5;                                       // the gr
 POD.diffR = () => { const c = coaxCalc(); return Math.max(POD.R + 3, c.R - c.rim - 1.5); };   // stops inside the rear disc's lip
 POD.shellR = () => POD.diffR();                                          // glowing pod: outside of the shell wall
 Object.defineProperty(POD, 'flangeR', { get: () => POD.shellR() });       // the floor ring reaches the shell wall
-Object.defineProperty(POD, 'ledR', { get: () => (POD.R + POD.shellR() - POD.shellW - 2) / 2 });   // LEDs midway across the ring
-const caseIn = () => compactLayout() ? POD.rIn : encR() - ENC.wall;
+Object.defineProperty(POD, 'ledR', { get: () => POD.shellR() - POD.shellW - 7.5 });   // LEDs (Ø10) just inside the shell's lip, clear of the trays
+// where the ESP32 and power hub trays end: at the wall that has their USB-C windows (pod wall, glow shell or drum)
+const caseIn = () => { if (!compactLayout()) return encR() - ENC.wall; const m = caseMode();
+    return m === 'drum' ? encR() - ENC.wall : m === 'light' ? POD.shellR() - POD.shellW - 0.4 : POD.rIn; };
 const encFront = () => (discCount() === 3 ? cx3().frontDisc : CX.frontDisc2()) + discT() + discLip();   // front of the front disc
 const encTop = () => {                                                         // the seam
     const rearPlate = discCount() === 3 ? cx3().rearZ : CX.rearZ2();
@@ -3248,27 +3265,29 @@ const trayPaths = (t, wall = 1.2) => ({
 });
 const CX_PARTS = {
     base: (motors = [[MOTOR_ANG.A, CX.earA], [MOTOR_ANG.B, CX.earB]]) => {
-        const cm = compactLayout(), light = cm && caseMode() === 'light', P = CX.plateT, n = motors.length;
-        const L = [], R = cm ? (light ? POD.flangeR : POD.R) + 3 : encR() + 2, pk = pocket() / 2;
+        const cm = compactLayout(), light = cm && caseMode() === 'light', drum = caseMode() === 'drum', P = CX.plateT, n = motors.length;
+        const L = [], R = drum || !cm ? encR() + 2 : (light ? POD.flangeR : POD.R) + 3, pk = pocket() / 2;
         const keyPts = (cm ? [245, 295].map(d => polar(63, d)) : [240, 300].map(d => polar(30.5, d)));   // wall keyholes, upper half, clear of boards and channels
         const floors = motors.map(([ang, ear]) => [ang, ear - CX.motor.h]);
         const ulns = ELEC.ulnList(n), esp = trayPaths(ELEC.esp), usb = trayPaths(ELEC.usb), chans = wireChannels(n);
-        const rebate = cm ? -P : -P + ENC.floorT;                            // the drum's floor tucks under the rim here
+        const rebate = drum || !cm ? -P + ENC.floorT : -P;                   // the drum's floor tucks under the rim here
         // plate, split wherever a motor pocket, the rebate, the LED flange, a keyhole pocket or the bearing recess starts
-        const breaks = [...new Set([-P, rebate, ...(light ? [-P + POD.flangeT] : []), -ELEC.groove.depth, -2, CX.b1z, 0, ...floors.map(f => f[1]).filter(f => f > -P && f < 0)])].sort((x, y) => x - y);
+        const tabs = cm ? channelTabs(n) : [], tabZ = -0.8;                  // press-in tabs along the wire channels
+        const breaks = [...new Set([-P, rebate, ...(light ? [-P + POD.flangeT] : []), -ELEC.groove.depth, -2, CX.b1z, ...(tabs.length ? [tabZ] : []), 0, ...floors.map(f => f[1]).filter(f => f > -P && f < 0)])].sort((x, y) => x - y);
         for (let i = 0; i < breaks.length - 1; i++) {
             const z0 = breaks[i], z1 = breaks[i + 1];
             L.push({ R, z0, z1, res: 9, paint: a => {     // 9 px/mm: the plate is big now the trays reach the wall
-                a.add(P2.circle(0, 0, !cm ? CX.plateR : light && z1 <= -P + POD.flangeT + 1e-6 ? POD.flangeR : POD.R));   // LED flange at the back
+                a.add(P2.circle(0, 0, !cm || drum ? CX.plateR : light && z1 <= -P + POD.flangeT + 1e-6 ? POD.flangeR : POD.R));   // LED flange at the back
                 if (z0 >= rebate - 1e-6) {                                   // pads under the boards that overhang the rim
                     a.add(...ulns.map(ulnPad), esp.pad, usb.pad);
                     if (params.cxBatt) a.add(battPaths().pad);
-                    if (!cm) ENC.keyAng.forEach(dg => { const [x, y] = polar(ENC.keyR, dg); a.cut(keyhole(x, y, 10), P2.circle(x, y, 5.5)); });   // room for the drum's keyhole screw heads
+                    if (drum || !cm) ENC.keyAng.forEach(dg => { const [x, y] = polar(ENC.keyR, dg); a.cut(keyhole(x, y, 10), P2.circle(x, y, 5.5)); });   // room for the drum's keyhole screw heads
                 } else a.cut(ringPath(ENC.ledgeR + 0.3, R + 2));
                 a.cut(P2.circle(0, 0, z1 <= CX.b1z ? 12 : pk));            // nut + washer recess, then the bottom 608
                 keyPts.forEach(([x, y]) => a.cut(keyhole(x, y, z1 <= rebate + 1e-6 ? 4.4 : z1 <= -2 + 1e-6 ? 9 : 0)));
-                if (!cm) ENC.fixAng.forEach(d => { const [x, y] = polar(ENC.fixR, d); a.cut(P2.circle(x, y, 1.7)); });   // M3 into the drum floor
+                if (drum || !cm) ENC.fixAng.forEach(d => { const [x, y] = polar(ENC.fixR, d); a.cut(P2.circle(x, y, 1.7)); });   // M3 into the drum floor
                 if (z0 >= -ELEC.groove.depth - 1e-6) a.cut(...chans, ...ulns.map(ulnPocket));   // wire channels + pockets for the boards' solder joints
+                if (tabs.length && z0 >= tabZ - 1e-6) a.add(...tabs);           // the wires press in past these and stay put
                 floors.forEach(([ang, f]) => { if (f <= z0 + 1e-6) motorSeat(a, ang, 'cavity'); });
                 if (z0 >= -ELEC.groove.depth - 1e-6) motors.forEach(([ang], i) => { const k = 'ABC'[i]; if (!ulns.includes(k)) return;   // lead channels, motor to its board
                     const [x0, y0] = motorLeadOut(ang), [x1, y1] = ulnSocketIn(k); a.cut(segPath(x0, y0, x1, y1, 6)); });
@@ -3717,8 +3736,10 @@ function discSpec(which) {
     return { c, mmpp, R, t, front, layerIdx, hubOut, holes, pattern, boss, cap };
 }
 // Disc as printed. A middle disc carries a boss underneath (z 0 … boss.t), its plate above.
-function coaxDisc(which, ang) {          // ang: draw the pattern at this rotation (3D view uses 0)
-    const { c, R, t, hubOut, holes, pattern, boss, cap } = discSpec(which);
+function coaxDisc(which, ang, importedPattern) {          // ang: draw the pattern at this rotation (3D view uses 0)
+    const spec = discSpec(which);
+    const { c, R, t, hubOut, holes, boss, cap } = spec;
+    const pattern = importedPattern || spec.pattern;
     const res = Math.min(12, 4000 / (2 * R)), z0 = boss ? boss.t : 0;
     // Stiffening lip round the rim, like a pie dish: the rear disc's points back, the front disc's forward,
     // so neither enters the gap. The middle of three discs has neighbours both sides and gets none.
@@ -3942,7 +3963,7 @@ function v3DiscSignature() {
     return JSON.stringify(o) + (params.warpType === 'mesh' ? JSON.stringify(meshPoints) : '');
 }
 // Everything that changes the mechanism
-const v3MechSignature = () => ['bolt2', 'hex2', 'seat3', 'route2', params.cxHubBrg, params.cxOuterBrg, caseMode(), params.lbDrive, discCount(), discT(), params.lbDiameter, discLip(), !!params.cxBatt].join('|');
+const v3MechSignature = () => ['bolt2', 'hex2', 'seat3', 'route3', params.cxHubBrg, params.cxOuterBrg, caseMode(), params.lbDrive, discCount(), discT(), params.lbDiameter, discLip(), !!params.cxBatt].join('|');
 function pageStatus(t) { const e = document.getElementById('mpStatus'); if (e) e.textContent = t; const c = document.getElementById('cxStatus'); if (c && !V3.open) c.textContent = t; }
 
 function buildModelPageDOM() {
@@ -3950,7 +3971,8 @@ function buildModelPageDOM() {
     const css = document.createElement('style');
     css.textContent = `
       #pageTabs{position:fixed;top:10px;left:50%;transform:translateX(-50%);z-index:80;display:flex;gap:2px;padding:3px;border-radius:999px;background:rgba(15,16,19,.9);border:1px solid #3f3f46;box-shadow:0 6px 24px rgba(0,0,0,.4)}
-      #pageTabs button{padding:6px 14px;border-radius:999px;font:600 12px system-ui;color:#a1a1aa;background:transparent}
+      #pageTabs button,#pageTabs a{padding:6px 14px;border-radius:999px;font:600 12px system-ui;color:#a1a1aa;background:transparent;white-space:nowrap}
+      #pageTabs a:hover{color:#fff;background:#27272a}
       #pageTabs button[aria-selected=true]{background:#b45309;color:#fff}
       #modelPage{position:fixed;inset:0;z-index:60;display:none;grid-template-columns:minmax(0,1fr) 310px;background:#0d0f12;color:#d4d4d8;font:12px/1.45 system-ui}
       #modelPage.open{display:grid}
@@ -3986,7 +4008,7 @@ function buildModelPageDOM() {
     document.head.appendChild(css);
     const tabs = document.createElement('div');
     tabs.id = 'pageTabs'; tabs.setAttribute('role', 'tablist');
-    tabs.innerHTML = `<button role="tab" data-page="design">Design</button><button role="tab" data-page="model">3D Model</button>`;
+    tabs.innerHTML = `<button role="tab" data-page="design">Design</button><button role="tab" data-page="model">Centre Spindle 3D</button><a id="smoothOrbitLink" href="http://localhost:8080/model.html">Moiré Orbit</a>`;
     tabs.querySelectorAll('button').forEach(b => b.onclick = () => { location.hash = b.dataset.page === 'model' ? '#model' : '#design'; });
     document.body.appendChild(tabs);
     const page = document.createElement('div');
@@ -4190,7 +4212,8 @@ function showPage(name) {
         closeModelScene();
     }
 }
-window.addEventListener('hashchange', () => showPage(location.hash === '#model' ? 'model' : 'design'));
+const isModelRoute = () => /^#model(?:&|$)/.test(location.hash);
+window.addEventListener('hashchange', () => showPage(isModelRoute() ? 'model' : 'design'));
 // old buttons
 function open3DView() { location.hash = '#model'; }
 function close3DView() { location.hash = '#design'; }
@@ -4648,14 +4671,16 @@ async function openModelScene() {
             // Compact routing: from a part, down into its spoke, round the ring and out along the target's spoke. The ring
             // never passes motor A's wire cover (tucked in at angle 0), so each route takes whichever way round avoids it.
             const blockA = compactLayout() && Math.abs(motorPsi(MOTOR_ANG.A) - Math.PI) < 1e-6;
-            const route = (start, a0, rIn0, a1, r1, end, off) => {
+            const route = (start, a0, rIn0, a1, r1, end, off, riseR = 0) => {
                 const ring = ringMid + off * 0.8, TAU = Math.PI * 2;
                 let sweep = (((a1 - a0) % TAU) + TAU) % TAU; if (sweep > Math.PI) sweep -= TAU;              // shortest way first
                 const hits = sw => { for (let i = 0; i <= 36; i++) if (Math.abs(nA(a0 + sw * i / 36)) < 0.5) return true; return false; };
                 if (blockA && hits(sweep)) sweep += sweep > 0 ? -TAU : TAU;
                 const b = a0 + sweep;
+                const tail = riseR ? [sideOff(pol(riseR, b, GZ), b, off), sideOff(pol(riseR + 1.5, b, end[2] + 3), b, off), [end[0], end[1], end[2] + 3], end]   // up past the board's edge, then over
+                                   : [sideOff(pol(r1 - 2, b, GZ), b, off), [end[0], end[1], GZ + 1], [end[0], end[1], end[2] - 3], end];
                 return [start, sideOff(pol(rIn0 + 1, a0, 6), a0, off), sideOff(pol(rIn0 - 3, a0, GZ), a0, off), sideOff(pol(G.r1 + 3, a0, GZ), a0, off),
-                        ...arc(ring, a0, b, GZ), sideOff(pol(G.r1 + 3, b, GZ), b, off), sideOff(pol(r1 - 2, b, GZ), b, off), [end[0], end[1], GZ + 1], [end[0], end[1], end[2] - 3], end];
+                        ...arc(ring, a0, b, GZ), sideOff(pol(G.r1 + 3, b, GZ), b, off), ...tail];
             };
             const PWR_ = ELEC.usb, hubA = nA(deg(-PWR_.ang)), hubIn = PWR_.r - PWR_.len / 2;
             const SIG = [0xf97316, 0xfacc15, 0x22c55e, 0x3b82f6];                 // IN1 orange, IN2 yellow, IN3 green, IN4 blue
@@ -4665,7 +4690,7 @@ async function openModelScene() {
                 PINS[k].forEach((gp, j) => {
                     const st = espPin(gp), end = f(IN_X(j), PIN_Y, UZ + 8.6);
                     const sigOff = (j - 1.5) * 0.9 + (bi - 1) * 0.2, from = toWorld(ESP, -ESP.len / 2 - 1, 0, 8);
-                    const path = blockA ? route(from, espA, espIn, deg(-ELEC.ulnAng[k]), hdrR, end, sigOff) : channel(from, deg(-ELEC.ulnAng[k]), hdrR, end, sigOff);
+                    const path = blockA ? route(from, espA, espIn, deg(-ELEC.ulnAng[k]), hdrR, end, sigOff, ULN.r + ULN.h / 2 + 2.5) : channel(from, deg(-ELEC.ulnAng[k]), hdrR, end, sigOff);
                     elec.add(wire([st, [st[0], st[1], st[2] + 2.5], ...path.slice(1)], SIG[j], 0.42));
                 });
             });
@@ -4679,7 +4704,7 @@ async function openModelScene() {
                     elec.add(wire([st, [st[0], st[1], 3.5], ...route(toWorld(PWR, -PWR.len / 2 - 1, 0, 6), hubA, hubIn, espA, espIn + 6, eUp, pOff).slice(1), e], col, 0.5));
                     ulns.forEach(k => {
                         const f = ulnFrame(k), end = f(PW_X(pi), PIN_Y, UZ + 8.6);
-                        elec.add(wire([st, [st[0], st[1], 3.5], ...route(toWorld(PWR, -PWR.len / 2 - 1, 0, 6), hubA, hubIn, deg(-ELEC.ulnAng[k]), ULN.r - PIN_Y, end, pOff).slice(1)], col, 0.5));
+                        elec.add(wire([st, [st[0], st[1], 3.5], ...route(toWorld(PWR, -PWR.len / 2 - 1, 0, 6), hubA, hubIn, deg(-ELEC.ulnAng[k]), ULN.r - PIN_Y, end, pOff, ULN.r + ULN.h / 2 + 2.5).slice(1)], col, 0.5));
                     });
                 } else {
                     elec.add(wire([st, [st[0], st[1], 4], toWorld(ESP, -ESP.len / 2 - 2.5, -11 + pi * 1.4, 4), toWorld(ESP, -4, -11.5 + pi * 1.4, 11), [e[0], e[1], e[2] + 2.5], e], col, 0.5));
@@ -4732,12 +4757,13 @@ async function openModelScene() {
                     const first = Math.round(ELEC.esp.ang / (360 / POD.ledN) - 0.5) % POD.ledN;   // the chain starts at the LED by the ESP32
                     const a0 = ledA(first), a1 = a0 - deg(360 * (POD.ledN - 1) / POD.ledN);
                     for (const [off, col, r] of [[3.2, 0xdc2626, 0.35], [-3.2, 0x111111, 0.35], [0, 0x22c55e, 0.3]]) ring.add(wire(arc(POD.ledR + off, a0, a1, lz + 2.2), col, r));
-                    const e44 = espPin(44), win = toWorld(ESP, ESP.len / 2 - 3, 5, 6.5), out = toWorld(ESP, ESP.len / 2 + 5, 5, 6.5);
-                    ring.add(wire([e44, [e44[0], e44[1], e44[2] + 2.5], win, out, pol(POD.R + 2.5, espA + 0.06, lz + 3), pol(POD.ledR, a0, lz + 2.2)], 0x22c55e, 0.3));
+                    // data: from the ESP32's inner end, over the plate's edge beside its tray, down to the first LED on the floor ring
+                    const e44 = espPin(44), inner = toWorld(ESP, -ESP.len / 2 - 3, 5, 6);
+                    ring.add(wire([e44, [e44[0], e44[1], e44[2] + 2.5], inner, pol(POD.R - 1, a0, 3), pol(POD.R + 2, a0, lz + 3), pol(POD.ledR, a0, lz + 2.2)], 0x22c55e, 0.3));
                     const pwrA = ledA((Math.round(ELEC.usb.ang / (360 / POD.ledN) - 0.5) + POD.ledN) % POD.ledN);   // power joins the chain by the power hub
                     [[1, 0xdc2626, 3.2], [-1, 0x111111, -3.2]].forEach(([sg, col, off]) => {
                         const st = toWorld(PWR, -PWR.len / 2 + 2.2, sg * 3, 1.6);
-                        ring.add(wire([st, [st[0], st[1], 4.5], toWorld(PWR, PWR.len / 2 + 5, sg * 3, 5), pol(POD.R + 2.5, deg(-PWR.ang) + sg * 0.05, lz + 3), pol(POD.ledR + off, pwrA, lz + 2.2)], col, 0.4));
+                        ring.add(wire([st, [st[0], st[1], 4.5], toWorld(PWR, -PWR.len / 2 - 3, sg * 3, 5), pol(POD.R - 1, pwrA + sg * 0.03, 3), pol(POD.R + 2, pwrA + sg * 0.03, lz + 3), pol(POD.ledR + off, pwrA, lz + 2.2)], col, 0.4));   // inside: hub's inner end, over the plate edge, to the ring
                     });
                     m(ring, 0, 0);
                 }
@@ -4800,7 +4826,7 @@ async function openModelScene() {
         for (const d of v3Discs()) {
             pageStatus(`Building the ${d.which} disc…`); await tick();
             if (!V3.open) return;
-            const r = isEdge() ? edgeCartridge(d.which, 0) : coaxDisc(d.which, 0);   // unrotated: the mesh spins
+            const r = isEdge() ? edgeCartridge(d.which, 0) : coaxDisc(d.which, 0, transferredPattern(d.layer));
             const grp = new THREE.Group();
             r.parts.forEach((pt, i) => { const mesh = meshFrom(mirrorRear && d.which === 'rear' ? mirrorZ(pt.tris) : pt.tris, i === 0 ? d.colour : discColour('rib')); mesh.userData.col = i === 0 ? d.which : 'rib'; grp.add(mesh); });
             for (const [x, y, z] of discScrews(d.which)) {                                   // M3 button heads that hold the disc on
@@ -4831,7 +4857,8 @@ async function openModelScene() {
             if (mechSig !== builtMech) { await buildMechanism(); builtMech = mechSig; builtDiscs = ''; }
             if (V3.open && discSig !== builtDiscs) { await buildDiscs(); builtDiscs = discSig; }
             const names = v3Discs().map(d => `${d.which} = Layer ${d.layer + 1}`).join(', ');
-            document.getElementById('mpNote').textContent = (names ? `Discs: ${names}. ` : 'Turn layers on to see discs. ') +
+            document.getElementById('mpNote').textContent = (hasIncomingPattern() ? 'Transferred disc pattern. ' : '') +
+                (names ? `Discs: ${names}. ` : 'Turn layers on to see discs. ') +
                 (isEdge() && params.layer3On ? 'The edge drive carries two discs, so Layer 3 isn\'t shown. ' : '') + 'Drag to orbit, scroll to zoom, right-drag to pan.';
             pageStatus('');
         } catch (e) { pageStatus('Building the model failed: ' + (e.message || e)); }
@@ -5102,9 +5129,86 @@ function applyFullState(state) {
 resizeCanvas();  // sets up all canvases, inits WebGL & mesh knobs
 initEditableValues();
 refreshPresetsUI();
-animationFrame = requestAnimationFrame(renderFrame);
-console.log('Moiré ready');
-showPage(location.hash === '#model' ? 'model' : 'design');
+let incomingLook;
+let incomingMasks;
+let incomingSignature;
+const patternSignature = () => JSON.stringify([
+    Object.entries(params).filter(([key]) => /^(shape|cellCount|cellSize|stroke|warpType|warpStrength|warpRadius|warpLayers|meshStrength|meshMode|arm[A-Z]|layer[123]Offset)/.test(key)),
+    params.warpType === 'mesh' ? meshPoints : null, params.shape === 'svg-import' ? importedSVG : null
+]);
+const hasIncomingPattern = () => incomingMasks && incomingSignature === patternSignature();
+
+function transferredPattern(index) {
+    if (!hasIncomingPattern() || !incomingMasks[index]) return undefined;
+    const image = incomingMasks[index];
+    return (ctx, inner, outer, angle = 0) => {
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(0, 0, outer, 0, Math.PI * 2);
+        if (inner > 0) {
+            ctx.moveTo(inner, 0);
+            ctx.arc(0, 0, inner, 0, Math.PI * 2, true);
+        }
+        ctx.clip('evenodd');
+        ctx.rotate(angle * Math.PI / 180);
+        ctx.drawImage(image, -outer, -outer, 2 * outer, 2 * outer);
+        ctx.restore();
+    };
+}
+
+function captureSmoothDiscLook() {
+    const fromModel = isModelRoute();
+    const count = fromModel ? discCount() : params.layer3On ? 3 : 2;
+    const diameter = fromModel || params.lightbox ? params.lbDiameter : undefined;
+    const colours = fromModel
+        ? [discColour('front'), discColour(count === 3 ? 'middle' : 'rear'), discColour('rear')]
+        : [params.layer1Color, params.layer2Color, params.layer3Color];
+    if (hasIncomingPattern()) return { ...incomingLook, diameter, count, layerAngle: [...layerAngle],
+        layers: incomingLook.layers.map((layer, i) => ({ ...layer, colour: colours[i], enabled: params[`layer${i + 1}On`] })) };
+    const frame = fromModel || params.lightbox ? frameCalc() : null;
+    const span = frame ? frame.patternR_mm * frame.S * 2 : DW * .85;
+    return MoireLook.capture({ params, meshPoints, importedSVG, layerAngle, span, diameter, count, colours,
+        draw(ctx, index) {
+            ctx.translate(256, 256);
+            if (fromModel) {
+                ctx.scale(256 / frame.patternR_mm, 256 / frame.patternR_mm);
+                makePattern(index, 1 / frame.S)(ctx, 0, frame.patternR_mm, 0);
+            } else {
+                const screenSpan = span * canvas.width / DW;
+                ctx.scale(512 / screenSpan, 512 / screenSpan);
+                ctx.translate(-canvas.width / 2, -canvas.height / 2);
+                if (!params.lightbox) applyClip(ctx);
+                const n = index + 1;
+                renderLayerOn(ctx, 0, params[`layer${n}OffsetX`], params[`layer${n}OffsetY`], '#ffffff', index);
+            }
+        }
+    });
+}
+
+async function startWithTransferredLook() {
+    incomingLook = await window.MoireLook?.read(location.hash);
+    if (incomingLook) {
+        if (Number.isFinite(incomingLook.diameter)) params.lbDiameter = Math.max(80, Math.min(320, incomingLook.diameter));
+        params.lbDiscs = incomingLook.count === 2 ? '2' : '3';
+        importedSVG = incomingLook.importedSVG || null;
+        const frame = coaxCalc();
+        applyFullState(MoireLook.applyState(incomingLook, params, 2 * frame.patternR_mm * frame.S));
+        [params.mpColFront, params[discCount() === 3 ? 'mpColMiddle' : 'mpColRear']] = incomingLook.layers.map(layer => layer.colour);
+        if (incomingLook.count !== 2) params.mpColRear = incomingLook.layers[2].colour;
+        incomingMasks = await Promise.all(incomingLook.layers.map(layer => new Promise(resolve => {
+            const image = new Image();
+            image.onload = () => resolve(image);
+            image.onerror = () => resolve(null);
+            image.src = layer.mask;
+        })));
+        incomingSignature = patternSignature();
+    }
+    showPage(isModelRoute() ? 'model' : 'design');
+    window.MoireLook?.bind(document.getElementById('smoothOrbitLink'), captureSmoothDiscLook);
+    animationFrame = requestAnimationFrame(renderFrame);
+}
+if (window.MoireLook || document.readyState === 'complete') startWithTransferredLook();
+else window.addEventListener('load', startWithTransferredLook, { once: true });
     </script>
 </body>
 </html>
