@@ -2976,9 +2976,11 @@ const CX = {
     // bore pushes onto the flats with its top flush with the tip (pinZ … pinZ + pinT above the ears).
     motor: { body: 28.6, h: 19.5, ears: 17.5, shaftOff: 8, boss: 0.5, shaftTip: 9.5, flats: 3.0 },
     plateT: 9, feetH: 0, plateR: 76,   // no feet: the plate (or the enclosure) sits flat on the wall
-    // base 608s at -1.9…5.1 and 6.1…13.1 (1 mm shim between inner races); the M8 bolt's head + a washer
-    // under the bottom one sit inside the plate's back recess, flush with the wall
-    b1z: -1.9, baseSpacer: 1, bossTop: 13.1, headH: 5.5,     // headH: recess for an M8 hex head (ISO 4017, 5.3 mm)
+    // base 608s at -0.6…6.4 and 7.4…14.4 (1 mm shim between inner races); an ordinary M8 nut + washer under
+    // the bottom one sit inside the plate's back recess, flush with the wall. The bolt is a countersunk M8
+    // from the front, its head flush in the front hub, so the front is flat.
+    b1z: -0.6, baseSpacer: 1, bossTop: 14.4, nutBack: 6.8,   // nutBack: recess for an ordinary M8 nut (6.5 mm)
+    csk: { d: 16.4, depth: 4.0 },        // M8 countersunk head (DIN 7991 / ISO 10642: Ø16, 90°)
     meshGap: 0.15,                        // extra centre distance on every mesh: printed teeth never bind
     g1T: 8, hubL: 10, hubR: 18, g2T: 5, pinT: 5,   // 2-disc rear hub: two 688s back to back (10 mm); 5 mm gears are plenty for a 28BYJ
     gap: 1.0,                             // air between neighbouring discs
@@ -2987,10 +2989,9 @@ const CX = {
     // slim centres: inserts on a 32 mm circle (2.9 mm wall to the 608 pocket, 2 mm outside),
     // front hub Ø24 flange + 14 mm hex boss (2.8 mm wall round the rod)
     insertPCD: 28, insertD: 4.0, frontFlangeR: 9, frontHexAF: 14,
-    // 2-disc builds: every disc has the same centre, a 25 mm hex hole that presses onto a hex boss
-    // (rear hub top or front hub), so any disc fits either place. A printed cap under the dome nut
-    // clamps the front one.
-    discHexAF: 25, discFit: 0.1, capT: 1.6, capR: 18,
+    // Every disc, 2- or 3-disc build, has the same centre: a 25 mm hex hole that presses onto a hex boss,
+    // with a collar under it so the disc stops 1 mm clear of its neighbour. Any disc fits any place.
+    discHexAF: 25, discFit: 0.1, collarR: 13, sleeveOD: 11,
 };
 CX.C = (CX.Np + CX.Ng) * CX.m / 2 + CX.meshGap;    // motor shaft distance from the rod
 CX.g1z = CX.bossTop + CX.washer;                   // rod gear sits on a washer on the top base bearing
@@ -2998,12 +2999,14 @@ CX.hubZ = CX.g1z + CX.g1T + 1;                     // a 1 mm boss on the rod gea
 CX.pinZ = CX.motor.shaftTip - CX.pinT - 0.3;        // pinion bottom above the ear plane (top 0.3 under the shaft tip)
 CX.earA = CX.g1z + (CX.g1T - CX.pinT) / 2 - CX.pinZ;     // pinion A centred on the rod gear
 CX.earB = CX.hubZ + (CX.g2T - CX.pinT) / 2 - CX.pinZ;    // pinion B level with G2
-CX.frontZ = CX.hubZ + CX.hubL + CX.washer;         // front hub bottom
+CX.frontZ = CX.hubZ + CX.hubL;                     // front hub bottom: its foot sits on the top 688's inner race
 CX.hubSpacer = CX.hubL - 2 * CX.b688.w;            // between the rear hub's two 688 inner races
-CX.boltUnder = CX.b1z - CX.washer;                   // underside of the bolt head (on its washer)
-CX.nutBottom = CX.boltUnder - CX.headH;              // back of the head recess: flush with the plate's back
-// shortest stock bolt (5 mm steps) that reaches `top` (= front washer top + 6.5 mm thread for the dome nut)
-CX.rodLen = top => { const need = top - CX.boltUnder; for (let l = 30; l <= 150; l += l < 100 ? 5 : 10) if (l >= need) return l; return Math.ceil(need / 10) * 10; };
+CX.nutTop = CX.b1z - CX.washer;                      // back nut's face (on its washer)
+CX.nutBottom = CX.nutTop - CX.nutBack;               // back of the recess: flush with the plate's back
+// countersunk bolt, head flush with the front face at `top`: cut so its tip stops 0.5 mm inside the wall plane
+CX.boltCut = top => Math.floor(top - CX.nutBottom - 0.5);
+CX.boltBuy = top => { const c = CX.boltCut(top); for (let l = 30; l <= 150; l += l < 100 ? 5 : 10) if (l >= c) return l; return Math.ceil(c / 10) * 10; };
+CX.rodLen = CX.boltBuy;
 // 2 discs: rear disc on its carrier boss, front disc 1 mm above it; the front hub flange fills the space below
 const discT = () => Math.max(1, +params.cxDiscT || 2);
 const discLip = () => Math.max(0, +(params.cxLip ?? 3));
@@ -3172,7 +3175,7 @@ POD.diffR = () => { const c = coaxCalc(); return Math.max(POD.R + 3, c.R - c.rim
 const caseIn = () => compactLayout() ? POD.rIn : encR() - ENC.wall;
 const encFront = () => (discCount() === 3 ? cx3().frontDisc : CX.frontDisc2()) + discT() + discLip();   // front of the front disc
 const encTop = () => {                                                         // the seam
-    const rearPlate = discCount() === 3 ? cx3().rearZ + CX.carrierT : CX.rearZ2();
+    const rearPlate = discCount() === 3 ? cx3().rearZ : CX.rearZ2();
     return rearPlate - discLip() - 1.5;
 };
 // Keyhole: head goes in the big hole, then the part drops onto the screw shank in the slot
@@ -3266,14 +3269,19 @@ const CX_PARTS = {
             a.cut(P2.circle(0, 0, z < bw || z > H - bw ? pk : 5.5));
         });
     },
-    // front hub: flange on the washer, then the hex boss its disc presses onto (2 discs: 0.3 mm short, so the cap clamps the disc)
-    frontHub: (flT = discCount() === 3 ? CX.flangeT3 : CX.flangeT2()) => {
-        const three = discCount() === 3, af = three ? CX.frontHexAF : CX.discHexAF, h = three ? discT() : discT() - 0.3;
-        return buildPart([
-            { R: 18, z0: 0, z1: flT, paint: a => { a.add(P2.circle(0, 0, CX.frontFlangeR)); a.cut(P2.circle(0, 0, CX.rod / 2)); } },
-            { R: 18, z0: flT, z1: flT + h, paint: a => { a.add(P2.hex(af)); a.cut(P2.circle(0, 0, CX.rod / 2)); } },
-        ]); },
-    discCap: () => buildPart([{ R: CX.capR + 1, z0: 0, z1: CX.capT, paint: a => { a.add(P2.circle(0, 0, CX.capR)); a.cut(P2.circle(0, 0, CX.rod / 2)); } }]),
+    // Front hub: a small foot on the bearing (2 discs: the top 688's inner race; 3 discs: the sleeve, inside the
+    // riser), a flange, a collar the front disc stops on, then the hex boss it presses onto. The countersunk bolt
+    // head sits flush in its front face. Print it front face down.
+    frontHub: () => {
+        const three = discCount() === 3, t = discT(), foot = three ? 1.4 : 0.6, footR = three ? 6.5 : 5;
+        const hexZ = three ? foot + 1 : t + 1, H = hexZ + t, colZ = hexZ - 0.7;     // collar 0.3 mm above what's below it
+        const cone = z => Math.max(CX.rod / 2, CX.csk.d / 2 - (H - z));
+        const slices = Array.from({ length: 17 }, (_, i) => Math.max(0, H - CX.csk.depth + i * CX.csk.depth / 16));
+        return zStack(16, [0, foot, colZ, hexZ, H, ...slices], (a, z) => {
+            a.add(z < foot ? P2.circle(0, 0, footR) : z < colZ ? P2.circle(0, 0, CX.frontFlangeR) : z < hexZ ? P2.circle(0, 0, CX.collarR) : P2.hex(CX.discHexAF));
+            a.cut(P2.circle(0, 0, cone(z)));
+        }, 20);
+    },
     // pod lid, or the LED diffuser: a plate with a spigot that presses into the pod wall; the diffuser carries on
     // out to the disc rims and has a skirt back towards the wall (3 mm short of it, so a little glow spills out)
     podLid: (diffuser = false) => {
@@ -3324,40 +3332,38 @@ const CX_PARTS = {
 };
 
 // ── Three-disc layout ─────────────────────────────────────────────
-// Front disc (L1) on the rod, middle disc (L2) on a hub that rides on the rod
+// Front disc (L1) on the bolt, middle disc (L2) on a hub that rides on the bolt
 // (608s inside), rear disc (L3) on an outer hub that rides on the middle hub's
 // Ø30 journal (two 6806 bearings, 30×42×7). Motor C on a third seat.
-//   rod gear      21.6 … 30.6       (motor A, 0°)
-//   middle hub    38.7 … 77.7       G2 teeth at the bottom (motor B, 180°),
-//                                   shoulder at 46.7 … 47.7, journal Ø30, solid cap on top with 3 M3 inserts
-//   outer hub     47.7 … 77.7       G3 teeth at the bottom (motor C, 90°)
-//   rear disc     77.7 … +t         bolted to the outer hub (4× M3, PCD 52)
-//   middle disc   boss under the plate sits on the middle hub's cap and clamps the
-//                 upper 6806 inner race; plate starts 2.5 mm above the rear disc
-//   sleeve        carries the rod clamp from the middle hub's top 608 up to the front hub
+//   middle hub    G2 teeth (motor B), shoulder, Ø30 journal, solid cap with a hex socket on top
+//   outer hub     G3 teeth (motor C), two 6806s; a bolted outer cap carries the rear disc's hex boss
+//   riser         keys into the middle hub's socket, passes up through the outer cap and carries the
+//                 middle disc's collar + hex boss; the front hub's collar stops it 0.3 mm above
+//   sleeve        carries the bolt's clamp from the middle hub's top 608 up to the front hub
+// Every disc has the same 25 mm hex centre as the 2-disc build.
 const discCount = () => (params.lbDrive !== 'edge' && +params.lbDiscs === 3 ? 3 : 2);
 function cx3() {
     const t = discT();
-    const L = { journalR: 14.95, shoulderR: 17, capT: 6, hub2L: 14, hub2R: 30,   // hub2L 14: two 6806s back to back, no spacer
-                p6806: 42 + CX.fit, bossR: 18.5, capInsR: 11, insPCD: 52, recessR: 12.8 };   // bossR: on the 6806 inner race (r15…16.8), clear of the outer (r19.3+)
-    L.hub1L = CX.g2T + 1 + L.hub2L;             // teeth + shoulder, then the outer hub's length
+    const L = { journalR: 14.95, shoulderR: 17, capT: 6, hub2L: 14.5, hub2R: 30, outerCapT: 3.5, keyAF: 18, keyH: 4,
+                p6806: 42 + CX.fit, insPCD: 52, riserR: 9.1, riserBore: 7.1 };   // hub2L: two 6806s back to back, the top one 0.5 below the rim
+    L.hub1L = CX.g2T + 1 + 14;                  // teeth + shoulder + journal: its cap top sits 0.5 below the outer hub's rim
     L.hub1Z = CX.hubZ;
     L.hub2Z = CX.hubZ + CX.g2T + 1;             // outer hub sits on the shoulder
     L.hub1Top = L.hub1Z + L.hub1L;
-    L.rearZ = L.hub2Z + L.hub2L;                // == hub1Top
-    L.midSpacer = L.hub1L - 7 - L.capT - 7;     // between the middle hub's 608 inner races
-    L.outerSpacer = L.hub2L - 14;               // between the 6806 inner races
-    L.rearTop = L.rearZ + CX.carrierT + t;      // rear disc on its carrier
-    L.bossT = L.rearTop + CX.gap - L.rearZ;     // middle disc boss: up to 1 mm above the rear disc
-    L.midPlateZ = L.rearZ + L.bossT;
+    L.outerTop = L.hub2Z + L.hub2L;             // = hub1Top + 0.5
+    L.rearZ = L.outerTop + L.outerCapT;         // rear disc bottom, on the outer cap
+    L.rearTop = L.rearZ + t;
+    L.midPlateZ = L.rearTop + CX.gap;           // middle disc bottom, on the riser's collar
     L.midTop = L.midPlateZ + t;
-    L.frontDisc = L.midTop + CX.gap;            // front disc bottom
-    L.frontZ = L.frontDisc - CX.flangeT3;       // front hub flange sinks into a recess in the middle disc
-    L.recessFloor = L.frontZ - 0.3;             // (local to the middle disc: see discSpec)
+    L.frontDisc = L.midTop + CX.gap;            // front disc bottom, on the front hub's collar
+    L.frontZ = L.midTop - 1.4;                  // front hub foot reaches 1.4 mm down into the riser
+    L.riserZ = L.hub1Top - L.keyH;
+    L.midSpacer = L.hub1L - 7 - L.capT - 7;     // between the middle hub's 608 inner races
+    L.outerSpacer = 0;                          // the 6806s sit back to back
     L.sleeveZ = L.hub1Top - L.capT;             // top 608's inner race
     L.sleeveL = +(L.frontZ - L.sleeveZ).toFixed(1);
     L.earC = L.hub2Z + (CX.g2T - CX.pinT) / 2 - CX.pinZ;
-    L.rodL = CX.rodLen(L.frontDisc + t + 1.6 + 6.5);
+    L.rodL = CX.boltBuy(L.frontDisc + t);
     return L;
 }
 const MOTOR_ANG = { A: 0, B: Math.PI, C: Math.PI / 2 };   // seat angles on the base (canvas frame)
@@ -3366,31 +3372,64 @@ Object.assign(CX_PARTS, {
     base3: () => CX_PARTS.base([[MOTOR_ANG.A, CX.earA], [MOTOR_ANG.B, CX.earB], [MOTOR_ANG.C, cx3().earC]]),
     midHub: () => {
         const L = cx3(), R = (CX.Ng + 2) * CX.m / 2 + 1, gear = P2.poly(involuteGear(CX.Ng, CX.m, 0)), pk = pocket() / 2;
-        const ins = a => [90, 210, 330].forEach(d => { const r = d * Math.PI / 180; a.cut(P2.circle(L.capInsR * Math.cos(r), L.capInsR * Math.sin(r), CX.insertD / 2)); });
         const top = L.hub1L, cap0 = top - L.capT;
-        return zStack(R, [0, CX.g2T, CX.g2T + 1, 7, cap0 - 7, cap0, cap0 + 1, top], (a, z) => {
+        return zStack(R, [0, GEAR.foot, CX.g2T, CX.g2T + 1, 7, cap0 - 7, cap0, top - L.keyH, top], (a, z) => {
             a.add(z < CX.g2T ? gear : z < CX.g2T + 1 ? P2.circle(0, 0, L.shoulderR) : P2.circle(0, 0, L.journalR));
-            if (z > cap0) { a.cut(P2.circle(0, 0, 6.5)); if (z > cap0 + 1) ins(a); }
+            if (z < GEAR.foot) gearFoot(a, gear);
+            if (z < CX.g2T) gearWindows(a, L.shoulderR + 1.5, GEAR.rimIn());
+            if (z > cap0) a.cut(z > top - L.keyH ? P2.hex(L.keyAF + 0.3) : P2.circle(0, 0, 6.5));   // the riser keys into this socket
             else a.cut(P2.circle(0, 0, z < 7 || z > cap0 - 7 ? pk : pk + 0.2));   // loose middle: the top 608 slides through
         });
     },
     outerHub: () => {
         const L = cx3(), R = (CX.Ng + 2) * CX.m / 2 + 1, gear = P2.poly(involuteGear(CX.Ng, CX.m, 0)), pk = L.p6806 / 2, H = L.hub2L;
         const ins = a => [45, 135, 225, 315].forEach(d => { const r = d * Math.PI / 180; a.cut(P2.circle(L.insPCD / 2 * Math.cos(r), L.insPCD / 2 * Math.sin(r), CX.insertD / 2)); });
-        return zStack(R, [0, CX.g2T, 7, H - 7, H - 6, H], (a, z) => {
+        return zStack(R, [0, GEAR.foot, CX.g2T, H - 6, H - 0.5, H], (a, z) => {
             a.add(z < CX.g2T ? gear : P2.circle(0, 0, L.hub2R));
-            a.cut(P2.circle(0, 0, z < 7 || z > H - 7 ? pk : 18));
+            if (z < GEAR.foot) gearFoot(a, gear);
+            a.cut(P2.circle(0, 0, z > H - 0.5 ? 19.5 : pk));                       // both 6806s press in from the bottom up to this lip
             if (z > H - 6) ins(a);
         });
     },
+    // outer cap: bolts onto the outer hub (4× M3 into its inserts, heads in counterbores) and carries the rear disc's hex boss
+    outerCap: () => {
+        const L = cx3(), t = discT(), T = L.outerCapT, hole = L.riserR + 0.8;
+        const pts = [45, 135, 225, 315].map(d => polar(L.insPCD / 2, d));
+        return zStack(L.hub2R + 1, [0, T - 1.9, T, T + t - 0.4, T + t], (a, z) => {
+            if (z < T) { a.add(P2.circle(0, 0, L.hub2R)); a.cut(P2.circle(0, 0, hole)); pts.forEach(([x, y]) => a.cut(P2.circle(x, y, z > T - 1.9 ? 3.1 : 1.7))); }
+            else { a.add(P2.hex(z > T + t - 0.4 ? CX.discHexAF - 0.6 : CX.discHexAF)); a.cut(P2.circle(0, 0, hole)); }
+        });
+    },
+    // riser: hex key in the middle hub's socket, a column up through the outer cap, then the middle disc's collar + hex boss.
+    // Print it hex end down.
+    riser: () => {
+        const L = cx3(), t = discT(), k = L.keyH, colZ = L.rearTop + 0.3 - L.riserZ, hexZ = L.midPlateZ - L.riserZ, top = L.midTop - 0.3 - L.riserZ;
+        return zStack(16, [0, k, colZ, hexZ, top - 0.4, top], (a, z) => {
+            a.add(z < k ? P2.hex(L.keyAF) : z < colZ ? P2.circle(0, 0, L.riserR) : z < hexZ ? P2.circle(0, 0, CX.collarR) : P2.hex(z > top - 0.4 ? CX.discHexAF - 0.6 : CX.discHexAF));
+            a.cut(P2.circle(0, 0, L.riserBore));
+        }, 20);
+    },
 });
+
+// Too-thin checks for the centre spindle, shown on the 3D page and the build sheet
+function thinWarnings() {
+    if (isEdge()) return [];
+    const w = [], t = discT(), c = coaxCalc(), three = discCount() === 3, line = (params.stroke || 0) / c.S;
+    if (t < 1.6) w.push(`Discs ${t.toFixed(1)} mm thick flex and warp at Ø${c.D}: 2 mm is the sweet spot.`);
+    if (t < (three ? 2 : 1.8)) w.push('The front hub is too shallow for the countersunk head: it will stand proud of the front. Use 2 mm discs.');
+    if (c.rim < 3) w.push(`A ${c.rim} mm rim is fragile: 3 mm or more.`);
+    if (line && line < 0.9) w.push(`Pattern lines are ${line.toFixed(2)} mm: under 0.9 mm (two nozzle widths) they print weak. Thicken the stroke or use fewer lines.`);
+    if (CX.discHubOut() - CX.discHexAF / Math.sqrt(3) < 2) w.push('Less than 2 mm of disc round the hex hole.');
+    if (c.D > 240) w.push(`Ø${c.D} mm discs need a bed over ${Math.ceil(c.D + 10)} mm.`);
+    return w;
+}
 
 // Parts list for the current disc count: [file name, builder, how many]
 function coaxPartList() {
     const cmode = caseMode();
     const enc = cmode === 'drum' ? [['enclosure-back.stl', CX_PARTS.enclosure, 1], ['enclosure-front-shield.stl', CX_PARTS.shield, 1]]
               : cmode === 'pod' ? [['pod-lid.stl', () => CX_PARTS.podLid(false), 1]] : cmode === 'light' ? [['diffuser.stl', () => CX_PARTS.podLid(true), 1]] : [];
-    if (discCount() === 2) return enc.concat([['disc-cap.stl', CX_PARTS.discCap, 1],
+    if (discCount() === 2) return enc.concat([
         ['base.stl', () => CX_PARTS.base(), 1], ['rod-gear.stl', CX_PARTS.rodGear, 1], ['rear-hub.stl', CX_PARTS.rearHub, 1],
         ['front-hub.stl', CX_PARTS.frontHub, 1], ['pinion.stl', CX_PARTS.pinion, 2],
         [`spacer-${CX.baseSpacer}mm.stl`, CX_PARTS.spacer(CX.baseSpacer), 1], [`spacer-${CX.hubSpacer}mm.stl`, CX_PARTS.spacer(CX.hubSpacer), 1],
@@ -3398,9 +3437,10 @@ function coaxPartList() {
     const L = cx3();
     return enc.concat([
         ['base-3disc.stl', CX_PARTS.base3, 1], ['rod-gear.stl', CX_PARTS.rodGear, 1], ['middle-hub.stl', CX_PARTS.midHub, 1],
-        ['outer-hub.stl', CX_PARTS.outerHub, 1], ['front-hub.stl', CX_PARTS.frontHub, 1], ['pinion.stl', CX_PARTS.pinion, 3],
+        ['outer-hub.stl', CX_PARTS.outerHub, 1], ['outer-cap.stl', CX_PARTS.outerCap, 1], ['riser.stl', CX_PARTS.riser, 1],
+        ['front-hub.stl', CX_PARTS.frontHub, 1], ['pinion.stl', CX_PARTS.pinion, 3],
         [`spacer-${CX.baseSpacer}mm.stl`, CX_PARTS.spacer(CX.baseSpacer), 1], [`spacer-middle-${L.midSpacer}mm.stl`, CX_PARTS.spacer(L.midSpacer), 1],
-        [`spacer-6806-${L.outerSpacer}mm.stl`, CX_PARTS.spacer(L.outerSpacer, 34, 30.4), 1], [`sleeve-${L.sleeveL}mm.stl`, CX_PARTS.spacer(L.sleeveL), 1],
+        [`spacer-6806-${L.outerSpacer}mm.stl`, CX_PARTS.spacer(L.outerSpacer, 34, 30.4), 1], [`sleeve-${L.sleeveL}mm.stl`, CX_PARTS.spacer(L.sleeveL, CX.sleeveOD), 1],
     ]).filter(([n]) => !/-0mm\.stl$/.test(n));                // bearings that sit back to back need no spacer
 }
 
@@ -3593,29 +3633,8 @@ function discSpec(which) {
     let hubOut, holes, boss = null;
     const carrier = (r, holeR, pts) => ({ r, t: CX.carrierT, layers: [[0, CX.carrierT, a => { a.cut(P2.circle(0, 0, holeR)); pts.forEach(([x, y]) => a.cut(P2.circle(x, y, 1.7))); }]] });
     let cap = null;
-    if (!three) {                               // 2 discs: the same press-fit hex centre front and rear
-        hubOut = CX.discHubOut();
-        holes = a => a.cut(CX.discHole());
-    } else if (front) {
-        hubOut = 11.5;                          // just covers the M8 washer
-        holes = a => a.cut(P2.hex(CX.frontHexAF + 0.3));
-    } else if (which === 'middle') {
-        hubOut = L3.bossR;
-        const pts = ring(3, L3.capInsR, 90), recess = L3.frontZ - 0.3 - L3.rearZ;   // recess floor, measured from the boss bottom
-        const headFloor = recess - 1.8;                                             // M3 button heads sit below the recess floor
-        holes = a => a.cut(P2.circle(0, 0, L3.recessR));                            // the plate is open over the front hub flange
-        boss = { r: L3.bossR, t: L3.bossT, layers: [
-            [0, headFloor, a => { a.cut(P2.circle(0, 0, 6.8)); pts.forEach(([x, y]) => a.cut(P2.circle(x, y, 1.7))); }],
-            [headFloor, recess, a => { a.cut(P2.circle(0, 0, 6.8)); pts.forEach(([x, y]) => a.cut(P2.circle(x, y, 3.1))); }],
-            [recess, L3.bossT, a => a.cut(P2.circle(0, 0, L3.recessR))],
-        ] };
-    } else {
-        hubOut = 31;
-        const pts = ring(4, L3.insPCD / 2, 45);
-        const hole = L3.bossR + 0.8;                                                 // the middle disc's boss passes through
-        holes = a => { a.cut(P2.circle(0, 0, hole)); pts.forEach(([x, y]) => a.cut(P2.circle(x, y, 3.1))); };    // counterbores: heads flush in the plate
-        boss = carrier(30.5, hole, pts);
-    }
+    hubOut = CX.discHubOut();                   // every disc: the same press-fit hex centre
+    holes = a => a.cut(CX.discHole());
     const pattern = makePattern(layerIdx, mmpp);
     return { c, mmpp, R, t, front, layerIdx, hubOut, holes, pattern, boss, cap };
 }
@@ -3673,6 +3692,7 @@ function coaxBOM() {
         `MOIRÉ COAXIAL DRIVE (${three ? 'three' : 'two'} discs): build sheet`,
         '',
         `Disc diameter ${c.D} mm · gears module ${CX.m}, ${CX.Np}:${CX.Ng} (3:1) · motor shafts ${CX.C} mm from the rod`,
+        ...thinWarnings().map(x => 'CHECK: ' + x),
         `Depth from the wall to the front of the front disc: ${((three ? L.frontDisc : CX.frontDisc2()) + discT() + discLip() + CX.plateT + CX.feetH).toFixed(0)} mm · ${CX.gap} mm between discs · ${discLip()} mm rim lips`,
         '',
         'PRINT (PETG or PLA+, 0.2 mm layers, 4 walls for gears; gears and hubs teeth-down)',
@@ -3680,16 +3700,16 @@ function coaxBOM() {
         '  Gears: 0.2 mm layers, 4 walls, 40 % infill (pinions 100 %), flat side down. Mesh has 0.15 mm extra centre distance + 0.1 mm backlash per gear.',
         '  Pinions: push onto the motor shaft by hand; if one is loose, a drop of superglue on the flats.',
         `  1× disc per layer from the disc buttons (front = L1, ${three ? 'middle = L2, rear = L3' : 'rear = L2'})`,
-        three ? '  The middle disc has a boss underneath: flip it so the plate lies on the bed.' : '',
+        '  Every disc has the same 25 mm hex centre, so any disc fits any place. Front hub, riser and outer cap print hex end down.',
         '',
         'BUY',
-        `  1× M8 × ${three ? L.rodL : CX.rodLen(CX.frontDisc2() + discT() + CX.capT + 1.6 + 6.5)} hex bolt, FULLY threaded (sold as a "set screw"; or cut M8 threaded rod to length)`,
+        (() => { const top = (three ? L.frontDisc : CX.frontDisc2()) + discT(); const buy = CX.boltBuy(top), cut = CX.boltCut(top);
+            return `  1× M8 countersunk socket screw (DIN 7991), ${buy} mm` + (buy > cut ? `, cut to ${cut} mm overall (head included) with a hacksaw; file the end` : ' (no cutting needed)'); })(),
         three ? '  4× 608ZZ bearing (8×22×7)' : '  2× 608ZZ bearing (8×22×7, base) + 2× 688ZZ bearing (8×16×5, rear hub)',
         three ? '  2× 6806ZZ / 6806-2RS bearing (30×42×7)' : '',
-        `  1× ordinary M8 nut (keyed in the rod gear), ${three ? 4 : 5}× M8 washer, 1× M8 dome (acorn) nut for the front (if it bottoms out before it clamps, add a washer)`,
+        '  2× ordinary M8 nut (one keyed in the rod gear, one in the recess on the back), 2× M8 washer',
         `  ${three ? 3 : 2}× 28BYJ-48 stepper + driver (ULN2003, or TMC2209 with the bipolar mod)`,
-        three ? '  4× M3 heat-set insert + 4× M3×10 button head (rear disc to its hub)' : '',
-        three ? '  3× M3 heat-set insert + 3× M3×10 button head (middle disc to the middle hub)' : '',
+        three ? '  4× M3 heat-set insert + 4× M3×8 button head (outer cap to the outer hub)' : '',
         `  ${three ? 6 : 4}× M3×8 screws (motor ears, self-tap into the base)`,
         `  ${discCount()}× ULN2003 driver board (from the motor kits): drops into its corner cradles beside its motor, dab of hot glue`,
         '  1× ESP32-S3 SuperMini in its tray (firmware env esp32s3); its USB-C faces a window for flashing',
@@ -3703,31 +3723,30 @@ function coaxBOM() {
         '',
         'ASSEMBLE (bottom to top)',
         `  1. Press a 608 into the underside of the base, drop the ${CX.baseSpacer} mm shim in from the top, press the second 608 in.`,
-        '  2. Washer on the bolt, then the bolt up through the base from the back: head + washer sit in the recess, flush with the wall. Washer on the top bearing.',
-        '  3. Spin the M8 nut down onto that washer finger-tight plus a quarter turn (the bearings must still spin), drop the rod gear over it, nut in the hex pocket.',
+        '  2. Washer on the top base bearing, then the rod gear with an M8 nut sitting loose in its hex pocket (pocket down).',
     ];
     if (!three) lines.push(
-        CX.hubSpacer > 0 ? `  4. Press 608s into both ends of the rear hub with the ${CX.hubSpacer} mm spacer between them; slide the hub onto the rod, teeth down.`
-                         : '  4. Press a 688 into each end of the rear hub (they meet in the middle); slide the hub onto the rod, teeth down.',
-        '  5. Press the rear disc onto the hex boss on the hub top (firm push by hand: if it\'s loose, one wrap of tape on the boss; if tight, sand the hole).',
-        '  6. Washer on the hub\'s top bearing, then the front hub; press the front disc onto its hex boss; printed disc cap, M8 washer, dome nut.',
-        '     Both discs have the same hex centre, so any disc fits either place. Flip a disc over so its rim lip points away from the other disc.',
+        '  3. Press a 688 into each end of the rear hub (they meet in the middle); set it on the rod gear\'s boss, teeth down.',
+        '  4. Press the rear disc onto the hub\'s hex boss until it sits on the hub top.',
+        '  5. Front hub (foot down) on the top 688, then the countersunk bolt from the front through everything: it screws into',
+        '     the rod gear\'s nut (the motor holds the gear). Snug, not tight: the discs must still turn. Back washer + nut on the',
+        '     back, in the recess; hold the head with a 5 mm hex key and tighten. Then press the front disc onto the front hub.',
         caseMode() === 'pod' ? '     Press the pod lid into the top of the pod wall before the rear disc goes on.' : '',
         caseMode() === 'light' ? `     Glue the ${POD.ledN} LED modules round the flange at the pod\'s foot, facing forward, and chain them (DIN ← GPIO 44); press the diffuser into the pod wall before the rear disc.` : '');
     else lines.push(
-        '  4. Middle hub: heat-set its 3 cap inserts. Press one 608 in from the bottom all the way up under the cap, then the second',
-        L.midSpacer > 0 ? `     608 behind it with the ${L.midSpacer} mm spacer between.` : '     608 behind it (the two sit back to back).',
-        L.outerSpacer > 0 ? `  5. Outer hub: press a 6806 into each end with the ${L.outerSpacer} mm spacer between; heat-set 4 inserts into its top.`
-                          : '  5. Outer hub: press a 6806 into each end (they meet in the middle); heat-set 4 inserts into its top.',
-        '  6. Slide the outer hub down over the middle hub\'s journal until it rests on the shoulder above the middle hub\'s teeth.',
-        '  7. Slide this pair onto the rod, teeth down. Bolt the rear disc to the outer hub (button heads).',
-        `  8. Middle disc: its boss goes down over the sleeve hole and rests on the middle hub's cap; bolt it with 3× M3×10.`,
-        `  9. Drop the ${L.sleeveL} mm sleeve down the rod onto the top 608, then the front hub, front disc, M8 washer, dome nut.`);
+        L.midSpacer > 0 ? `  3. Middle hub: press one 608 in from the bottom up under the cap, then the second with the ${L.midSpacer} mm spacer; set it on the rod gear\'s boss, teeth down.`
+                        : '  3. Middle hub: press one 608 in from the bottom up under the cap, then the second; set it on the rod gear\'s boss, teeth down.',
+        '  4. Outer hub: press both 6806s in from the bottom (back to back); slide it down over the journal onto the shoulder.',
+        '     Heat-set its 4 inserts and bolt the outer cap on (M3×8, heads in the counterbores). Press the rear disc onto the cap\'s boss.',
+        `  5. Sleeve (${L.sleeveL} mm) down onto the top 608, the riser down through the outer cap into the middle hub\'s socket, and press the middle disc onto it.`,
+        '  6. Front hub (foot down, into the riser), then the countersunk bolt from the front: it screws into the rod gear\'s nut.',
+        '     Back washer + nut in the recess on the back, tighten (5 mm hex key on the head). Press the front disc on.');
     lines.push(
-        `  ${three ? 10 : 7}. Push a pinion onto each motor shaft (the double-D bore keys on the two flats) until its top is flush with the shaft tip.`,
+        '  Motors go in BEFORE step 2 (the discs cover their seats, and motor A holds the rod gear while you tighten the bolt):',
+        '     push a pinion onto each motor shaft (the double-D bore keys on the two flats) until its top is flush with the shaft tip.',
         '     Screw each motor\'s ears to its seat with M3×8. Seats from lowest to highest:',
         `     A (meshes the rod gear), B (${three ? 'middle hub' : 'rear hub'})${three ? ', C (outer hub)' : ''}. Each should turn by hand with a little play.`,
-        '     Finally tighten the top nut until the stack is snug: every disc must still turn freely by hand.',
+        '     Finally spin each disc by hand: all must turn freely. If one drags, back the bolt off a quarter turn.',
         '',
         'SPEEDS (from the layer settings)',
         ...sp.map(s => `  ${s.name}: ${Math.abs(s.rpm).toFixed(2)} rpm ${s.dir} → motor ${Math.abs(s.motorRpm).toFixed(2)} rpm (motor turns the opposite way)`),
@@ -3843,7 +3862,7 @@ function v3DiscSignature() {
     return JSON.stringify(o) + (params.warpType === 'mesh' ? JSON.stringify(meshPoints) : '');
 }
 // Everything that changes the mechanism
-const v3MechSignature = () => ['bolt1', 'hex1', caseMode(), params.lbDrive, discCount(), discT(), params.lbDiameter, discLip(), !!params.cxBatt].join('|');
+const v3MechSignature = () => ['bolt2', 'hex2', caseMode(), params.lbDrive, discCount(), discT(), params.lbDiameter, discLip(), !!params.cxBatt].join('|');
 function pageStatus(t) { const e = document.getElementById('mpStatus'); if (e) e.textContent = t; const c = document.getElementById('cxStatus'); if (c && !V3.open) c.textContent = t; }
 
 function buildModelPageDOM() {
@@ -4008,6 +4027,7 @@ function mpRefreshPanel() {
                                 : `<br>Electronics: ${three ? 3 : 2}× ULN2003 beside their motors, ESP32-S3 SuperMini + USB-C 5 V lower right, wires in the base channels`;
     }
     if (sp.length > 1 && sp.every(x => Math.sign(x.rpm) === Math.sign(sp[0].rpm))) html += '<br><span class="warn">All discs turn the same way. Flip one layer\'s speed to counter-rotate.</span>';
+    thinWarnings().forEach(x => { html += `<br><span class="warn">&#9888; Too thin: ${x}</span>`; });
     info.innerHTML = html;
     document.getElementById('mpCtl').innerHTML = edge ? 'Same controller and web app as the centre spindle: ESP32 + one driver per motor.' :
         `<b style="color:#e4e4e7">Phone or laptop:</b> the ESP32 serves its own app at <b style="color:#e4e4e7">moire.local</b>; add it to your home screen. Speeds, Steady / Breathe / Drift, ramp; anyone can watch, changes need the password.<br>` +
@@ -4044,7 +4064,7 @@ function close3DView() { location.hash = '#design'; }
 
 // Where the screw heads sit on a disc (disc-local mm, canvas-frame x/y, z = head underside)
 function discScrews(which) {
-    if (isEdge() || which === 'front' || discCount() === 2) return [];   // 2-disc discs press on                    // edge cartridges ride on rollers; the front disc is clamped by the nut
+    return [];                                  // discs press onto hex bosses now: no screws                    // edge cartridges ride on rollers; the front disc is clamped by the nut
     const three = discCount() === 3, ring = (n, r, d0) => Array.from({ length: n }, (_, i) => polar(r, d0 + i * 360 / n));
     if (which === 'middle') { const L = cx3(); return ring(3, L.capInsR, 90).map(([x, y]) => [x, y, L.frontZ - 0.3 - L.rearZ - 1.8]); }
     return ring(4, (three ? cx3().insPCD : CX.insertPCD) / 2, 45).map(([x, y]) => [x, y, CX.carrierT]);
@@ -4203,16 +4223,15 @@ async function openModelScene() {
             for (const z of [CX.b1z, CX.bossTop - 7]) m(cyl(11, 7), z, 0);
             spin.push([m(meshFrom(await build('rod gear', CX_PARTS.rodGear), 0xf97316), CX.g1z, 1), 0]);
             const frontTop = (three3 ? L.frontDisc : CX.frontDisc2()) + t;
-            const capT = three3 ? 0 : CX.capT, boltL = CX.rodLen(frontTop + capT + CX.washer + 6.5), hexM = (af, h) => { const k = cyl(af / Math.sqrt(3), h); k.geometry.dispose();
+            const boltTip = CX.nutBottom + 0.5, hexM = (af, h) => { const k = cyl(af / Math.sqrt(3), h); k.geometry.dispose();
                 k.geometry = new THREE.CylinderGeometry(af / Math.sqrt(3), af / Math.sqrt(3), h, 6).translate(0, h / 2, 0).rotateX(Math.PI / 2);
                 k.rotation.x = 0; return k; };                                             // axis baked in, so spinning rotation.z turns it about the bolt
-            m(cyl(4, boltL), CX.boltUnder, 0);                                            // M8 bolt shank
-            spin.push([m(hexM(13, 5.3), CX.boltUnder - 5.3, 0), 0]);                        // its head, in the recess on the back
+            m(cyl(4, frontTop - CX.csk.depth - boltTip), boltTip, 0);                      // M8 shank, cut to length
+            const head = new THREE.Mesh(new THREE.CylinderGeometry(8, 4, CX.csk.depth, 40).rotateX(Math.PI / 2).translate(0, 0, CX.csk.depth / 2), steel);
+            spin.push([m(head, frontTop - CX.csk.depth, 5.6), 0]);                         // countersunk head, flush with the front
+            const sock = new THREE.Mesh(new THREE.CylinderGeometry(2.9, 2.9, 0.1, 6).rotateX(Math.PI / 2), mat(0x18181b)); sock.position.z = CX.csk.depth + 0.01; head.add(sock);
             spin.push([m(hexM(13, 6.5), CX.g1z, 1), 0]);                                    // M8 nut keyed in the rod gear
-            if (!three3) spin.push([m(meshFrom(await build('disc cap', CX_PARTS.discCap), 0x52525b), frontTop, 5.5), 0]);   // clamps the front disc
-            const dome = m(hexM(13, 6.5), frontTop + capT + CX.washer, 5.6); spin.push([dome, 0]);
-            const cap = new THREE.Mesh(new THREE.SphereGeometry(6.4, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2), steel);
-            cap.geometry.rotateX(Math.PI / 2); spin.push([m(cap, frontTop + capT + CX.washer + 6.5, 5.6), 0]);
+            spin.push([m(hexM(13, 6.5), CX.nutBottom + 0.3, 0), 0]);                        // back nut in the recess
             if (!three3) {
                 spin.push([m(meshFrom(await build('rear hub', CX_PARTS.rearHub), 0x10b981), CX.hubZ, 2), 1]);
                 if (CX.hubSpacer > 0) m(meshFrom(await build('spacer', CX_PARTS.spacer(CX.hubSpacer)), 0xeab308), CX.hubZ + 7, 2);
@@ -4224,8 +4243,10 @@ async function openModelScene() {
                 for (const z of [L.hub1Z, L.sleeveZ - 7]) m(cyl(11, 7), z, 2);
                 spin.push([m(meshFrom(await build('outer hub', CX_PARTS.outerHub), 0x0ea5e9), L.hub2Z, 3), 2]);
                 if (L.outerSpacer > 0) m(meshFrom(await build('spacer', CX_PARTS.spacer(L.outerSpacer, 34, 30.4)), 0xeab308), L.hub2Z + 7, 3);
-                for (const z of [L.hub2Z, L.rearZ - 7]) m(cyl(21, 7), z, 3);
-                m(meshFrom(await build('sleeve', CX_PARTS.spacer(L.sleeveL)), 0xeab308), L.sleeveZ, 6);
+                for (const z of [L.hub2Z, L.hub2Z + 7]) m(cyl(21, 7), z, 3);
+                spin.push([m(meshFrom(await build('outer cap', CX_PARTS.outerCap), 0x38bdf8), L.outerTop, 3.5), 2]);
+                spin.push([m(meshFrom(await build('riser', CX_PARTS.riser), 0x34d399), L.riserZ, 4.5), 1]);
+                m(meshFrom(await build('sleeve', CX_PARTS.spacer(L.sleeveL, CX.sleeveOD)), 0xeab308), L.sleeveZ, 6);
                 spin.push([m(meshFrom(await build('front hub', () => CX_PARTS.frontHub()), 0xa855f7), L.frontZ, 7), 0]);
             }
             const pin = await build('pinions', CX_PARTS.pinion);
@@ -4476,7 +4497,7 @@ async function openModelScene() {
                 if (encGroup) encGroup.visible = shieldMesh.visible = caseMode() === 'drum';
             };
             if (caseMode() === 'drum') await V3.onEnclosure();
-            discZ = three3 ? { rear: L.rearZ, middle: L.rearZ, front: L.frontDisc } : { rear: CX.rearZ2(), front: CX.frontDisc2() };
+            discZ = three3 ? { rear: L.rearZ, middle: L.midPlateZ, front: L.frontDisc } : { rear: CX.rearZ2(), front: CX.frontDisc2() };
             discOrder = three3 ? { rear: 4, middle: 5, front: 8 } : { rear: 3, front: 5 }; mirrorRear = false;
             backZ = three3 ? L.rearZ - 6 : CX.rearZ2() - discLip() - 0.8; backOrder = (three3 ? 4 : 3) - 0.5;
             back = new THREE.Mesh(new THREE.RingGeometry(three3 ? 31.5 : CX.hubR + 1, Math.min(coaxCalc().R * 1.12, encR() - ENC.wall - 0.6), 128), backMat);
