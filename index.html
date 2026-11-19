@@ -4326,18 +4326,39 @@ async function openModelScene() {
     const partInfo = l => PART_INFO[l] || PART_INFO[Object.keys(PART_INFO).find(k => l.startsWith(k)) || ''] || '';
     const tip = document.createElement('div'); tip.id = 'mpTip'; stage.appendChild(tip);
     const ray = new THREE.Raycaster(), ptr = new THREE.Vector2();
-    // highlight = a soft glow on the part's own surfaces (temporary material copies), so it keeps the part's exact
-    // shape and turns with it; the originals go back when the pointer leaves
-    let hoverObj = null, pending = null, lit = [];
-    const glowCol = new THREE.Color(0xffffff);
-    const unlight = () => { for (const [o, orig, copy] of lit) { o.material = orig; (Array.isArray(copy) ? copy : [copy]).forEach(c => c.dispose()); } lit = []; };
-    const light = obj => obj.traverse(o => {
-        if (!o.isMesh || !o.material) return;
-        const orig = o.material, glow = m => { const c = m.clone(); if (c.emissive) { c.emissive = glowCol.clone(); c.emissiveIntensity = (m.emissiveIntensity || 0) + 0.13; } return c; };
-        const copy = Array.isArray(orig) ? orig.map(glow) : glow(orig);
-        o.material = copy; lit.push([o, orig, copy]);
-    });
-    const hideTip = () => { tip.style.display = 'none'; unlight(); hoverObj = null; };
+    // highlight = the part brightens in its own colour (a gentle glow on its own surfaces, so it keeps its exact
+    // shape and turns with it), easing in and out rather than flicking; originals go back once it has faded out
+    let hoverObj = null, pending = null;
+    const glows = new Map(), WHITE = new THREE.Color(0xffffff);
+    const glowOn = obj => {
+        let g = glows.get(obj);
+        if (!g) {
+            g = { t: 0, target: 1, parts: [] };
+            obj.traverse(o => {
+                if (!o.isMesh || !o.material) return;
+                const orig = o.material, one = m => { const c = m.clone(); c.userData.base = m.emissiveIntensity || 0;
+                    if (c.emissive) c.emissive = (m.color ? m.color.clone() : WHITE.clone()).lerp(WHITE, 0.18);   // its own colour, a touch lifted
+                    return c; };
+                const copy = Array.isArray(orig) ? orig.map(one) : one(orig);
+                o.material = copy; g.parts.push([o, orig, copy]);
+            });
+            glows.set(obj, g);
+        }
+        g.target = 1;
+    };
+    const glowOff = obj => { const g = obj && glows.get(obj); if (g) g.target = 0; };
+    V3.hoverTick = () => {                                              // every frame: ease each glow towards its target
+        for (const [obj, g] of glows) {
+            g.t += (g.target - g.t) * 0.16;
+            if (g.target === 0 && g.t < 0.01) {
+                for (const [o, orig, copy] of g.parts) { o.material = orig; (Array.isArray(copy) ? copy : [copy]).forEach(c => c.dispose()); }
+                glows.delete(obj); continue;
+            }
+            const k = g.t * g.t * (3 - 2 * g.t);                         // smoothstep
+            for (const [, , copy] of g.parts) for (const c of Array.isArray(copy) ? copy : [copy]) if (c.emissive) c.emissiveIntensity = c.userData.base + 0.45 * k;
+        }
+    };
+    const hideTip = () => { tip.style.display = 'none'; glowOff(hoverObj); hoverObj = null; };
     const shown = o => { for (let q = o; q; q = q.parent) if (!q.visible) return false; return true; };
     const labelled = o => { for (let q = o; q; q = q.parent) if (q.userData && q.userData.label) return q; return null; };
     const hoverAt = (x, y) => {
@@ -4350,7 +4371,7 @@ async function openModelScene() {
         const obj = labelled(hit.object), name = obj.userData.label;
         if (obj !== hoverObj) {
             hideTip(); hoverObj = obj;
-            light(obj);
+            glowOn(obj);
             const n = name[0].toUpperCase() + name.slice(1), d = partInfo(name);
             tip.innerHTML = `<b></b><span></span>`; tip.firstChild.textContent = n; tip.lastChild.textContent = d;
         }
@@ -4364,7 +4385,7 @@ async function openModelScene() {
     });
     renderer.domElement.addEventListener('pointerleave', hideTip);
     document.getElementById('mpLabels').onchange = e => { if (!e.target.checked) hideTip(); };
-    V3.hoverTick = null;
+
 
     const geomFrom = tris => {
         const a = new Float32Array(tris.length * 9); let i = 0;
