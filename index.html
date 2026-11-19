@@ -4096,11 +4096,12 @@ function discScrews(which) {
 async function openModelScene() {
     V3.open = true; V3.explode = V3.explodeTarget = 0;
     const stage = document.getElementById('mpStage');
-    let THREE, OrbitControls;
+    let THREE, OrbitControls, RoomEnvironment;
     try {
         pageStatus('Loading three.js…');
         THREE = await import('three');
         ({ OrbitControls } = await import('three/addons/controls/OrbitControls.js'));
+        ({ RoomEnvironment } = await import('three/addons/environments/RoomEnvironment.js'));
         await loadEarcut();
     } catch (e) { pageStatus("Couldn't load three.js (needs internet the first time)."); V3.open = false; return; }
     if (!V3.open) return;
@@ -4110,6 +4111,8 @@ async function openModelScene() {
     stage.prepend(renderer.domElement);
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x0d0f12);
+    // a soft studio room for the metal parts to reflect (metals look black with nothing to reflect)
+    const pmrem = new THREE.PMREMGenerator(renderer), envTex = pmrem.fromScene(new RoomEnvironment(renderer), 0.04).texture; pmrem.dispose();
     scene.add(new THREE.HemisphereLight(0xffffff, 0x223344, 1.0));
     const sun = new THREE.DirectionalLight(0xffffff, 1.8); sun.position.set(160, -220, 320); scene.add(sun);
     const fill = new THREE.DirectionalLight(0xffffff, 0.5); fill.position.set(-200, 150, 100); scene.add(fill);
@@ -4144,9 +4147,10 @@ async function openModelScene() {
         'pod lid': 'Presses into the top of the pod wall.', 'diffuser': 'Translucent plate lit from behind by the LED ring: the glowing backdrop.',
         'enclosure (back)': 'Full-size back drum.', 'front shield': 'Clicks onto the back drum; its bezel hides the disc rims.',
         '608ZZ bearing': '8 × 22 × 7 mm (a skateboard bearing).', '688ZZ bearing': '8 × 16 × 5 mm.', '6806 bearing': '30 × 42 × 7 mm, thin section.',
-        'M8 countersunk bolt': 'The spindle. Countersunk socket screw from the front, head flush; cut to length.',
+        'M8 countersunk bolt': 'The spindle: an M8 countersunk socket screw (DIN 7991) from the front. The front hub has the 90° seat printed in, so the head sits flush. Cut to length.',
         'M8 nut (rod gear)': 'Keyed in the rod gear\'s hex pocket; the bolt screws into it.',
         'M8 nut (back)': 'Ordinary M8 nut + washer in the recess on the back: holds the base bearings.',
+        'M8 washer': 'Plain M8 washer: sits on a bearing\'s inner race so nothing rubs its shield.',
         'Motor': '28BYJ-48 5 V stepper with gearbox. A = front disc, B = next, C = rear (3 discs).',
         'ULN2003 board': 'Driver from the motor kit. IN1-4 from the ESP32, motor lead into its white socket.',
         'ESP32-S3 SuperMini': 'Runs the web app and the motors. Its USB-C faces a window for flashing.',
@@ -4248,6 +4252,46 @@ async function openModelScene() {
     };
     // where a motor's 5-wire lead leaves its cover (motor-local), for wire routing
     const MOTOR_LEAD = (j) => [CX.motor.shaftOff + 17.6, (j - 2) * 1.3, -15.5];
+    // ── hardware: ball bearings, nuts, washers, the countersunk bolt. All built along +z from z = 0. ──
+    const shieldMat = new THREE.MeshStandardMaterial({ color: 0x9aa1aa, metalness: 0.85, roughness: 0.38, side: THREE.DoubleSide });
+    const sealMat = new THREE.MeshStandardMaterial({ color: 0x1f2937, metalness: 0.1, roughness: 0.7, side: THREE.DoubleSide });
+    const darkSteel = new THREE.MeshStandardMaterial({ color: 0x5b616b, metalness: 0.75, roughness: 0.4, side: THREE.DoubleSide });
+    for (const mm of [steel, steelMat, brightMat, goldMat, shieldMat, darkSteel]) { mm.envMap = envTex; mm.envMapIntensity = 0.3; mm.needsUpdate = true; }
+    const latheZ = (pts, matl, seg = 64) => { const gm = new THREE.LatheGeometry(pts.map(([r, z]) => new THREE.Vector2(r, z)), seg); gm.rotateX(Math.PI / 2); return new THREE.Mesh(gm, matl); };
+    // ring cross-section with 0.3 mm chamfers on all four corners
+    const ringProf = (r0, r1, w, c = 0.3) => [[r0 + c, 0], [r1 - c, 0], [r1, c], [r1, w - c], [r1 - c, w], [r0 + c, w], [r0, w - c], [r0, c], [r0 + c, 0]];
+    // ZZ = metal shields, 2RS = rubber seals; outer race, inner race, then a shield recessed 0.25 mm each side
+    const bearingModel = (od, id, w, rubber = false) => {
+        const g = new THREE.Group(), ro = od / 2, ri = id / 2, t = Math.max(0.8, (ro - ri) * 0.2);
+        g.add(latheZ(ringProf(ro - t, ro, w), brightMat), latheZ(ringProf(ri, ri + t, w), brightMat));
+        for (const z of [0.25, w - 0.25]) {
+            const sh = new THREE.Mesh(new THREE.RingGeometry(ri + t - 0.05, ro - t + 0.05, 64), rubber ? sealMat : shieldMat); sh.position.z = z; g.add(sh);
+            if (!rubber) { const lip = new THREE.Mesh(new THREE.RingGeometry(ri + t + 0.4, ri + t + 0.7, 64), darkSteel); lip.position.z = z + (z < 1 ? -0.01 : 0.01); g.add(lip); }
+        }
+        return g;
+    };
+    const hexShape = (af, holeR) => { const sh = new THREE.Shape(), R = af / Math.sqrt(3);
+        for (let i = 0; i < 6; i++) { const a = Math.PI / 6 + i * Math.PI / 3; i ? sh.lineTo(R * Math.cos(a), R * Math.sin(a)) : sh.moveTo(R * Math.cos(a), R * Math.sin(a)); }
+        sh.closePath(); if (holeR) sh.holes.push(new THREE.Path().absarc(0, 0, holeR, 0, Math.PI * 2, true)); return sh; };
+    // M8 nut: hex with a bore, chamfered corners (a cone trims them like the real thing)
+    const nutModel = (af = 13, h = 6.5) => {
+        const g = new THREE.Group();
+        const body = new THREE.Mesh(new THREE.ExtrudeGeometry(hexShape(af, 4.1), { depth: h - 0.8, bevelEnabled: true, bevelThickness: 0.4, bevelSize: 0.35, bevelSegments: 2, curveSegments: 24 }), brightMat);
+        body.position.z = 0.4; g.add(body);
+        g.add(latheZ([[3.4, 0.4], [3.4, h - 0.4]], darkSteel, 24));                       // thread inside the bore
+        return g;
+    };
+    const washerModel = (od = 16, id = 8.4, t = 1.6) => latheZ(ringProf(id / 2, od / 2, t, 0.15), shieldMat);
+    // countersunk socket screw (DIN 7991): 90° head flush at z = len, hex socket, thread with 1.25 mm pitch to the tip at z = 0
+    const cskBoltModel = (len, headD = 16, k = 4) => {
+        const g = new THREE.Group(), pts = [[0, 0], [3.2, 0], [4, 0.8]], shank = len - k;
+        for (let z = 0.8 + 0.625; z < shank - 0.4; z += 0.625) pts.push([(Math.round((z - 0.8) / 0.625) % 2) ? 3.35 : 4, z]);   // thread crests and roots
+        pts.push([4, shank], [headD / 2, len - 0.3], [headD / 2 - 0.2, len], [2.9, len]);
+        g.add(latheZ(pts, brightMat, 40));
+        const sock = new THREE.Mesh(new THREE.ExtrudeGeometry(hexShape(5), { depth: 3, bevelEnabled: false }), new THREE.MeshStandardMaterial({ color: 0x15171a, roughness: 0.8, side: THREE.DoubleSide }));
+        sock.position.z = len - 3 + 0.02; g.add(sock);                                    // 5 mm hex key socket
+        return g;
+    };
     // USB-C receptacle: stadium shell 8.94 × 3.26 × 7.35 with the tongue inside; opening towards +x, bottom at z 0
     const usbC = () => {
         const g = new THREE.Group(), W = 8.94, H = 3.26, L = 7.35;
@@ -4310,30 +4354,29 @@ async function openModelScene() {
             const three3 = discCount() === 3, L = three3 ? cx3() : null, t = discT();
             m(meshFrom(await build('base', three3 ? CX_PARTS.base3 : () => CX_PARTS.base()), 0x3f4652), 0, 0);
             m(meshFrom(await build('spacers', CX_PARTS.spacer(CX.baseSpacer)), 0xeab308), CX.b1z + 7, 0);
-            for (const z of [CX.b1z, CX.bossTop - 7]) m(lab(cyl(11, 7), '608ZZ bearing'), z, 0);
+            for (const z of [CX.b1z, CX.bossTop - 7]) m(lab(bearingModel(22, 8, 7), '608ZZ bearing'), z, 0);
+            m(lab(washerModel(), 'M8 washer'), CX.bossTop, 1);                                // under the rod gear's nut
+            m(lab(washerModel(), 'M8 washer'), CX.nutTop, 0);                                 // under the back nut
             spin.push([m(meshFrom(await build('rod gear', CX_PARTS.rodGear), 0xf97316), CX.g1z, 1), 0]);
             const frontTop = (three3 ? L.frontDisc : CX.frontDisc2()) + t;
             const boltTip = CX.nutBottom + 0.5, hexM = (af, h) => { const k = cyl(af / Math.sqrt(3), h); k.geometry.dispose();
                 k.geometry = new THREE.CylinderGeometry(af / Math.sqrt(3), af / Math.sqrt(3), h, 6).translate(0, h / 2, 0).rotateX(Math.PI / 2);
                 k.rotation.x = 0; return k; };                                             // axis baked in, so spinning rotation.z turns it about the bolt
-            m(lab(cyl(4, frontTop - CX.csk.depth - boltTip), 'M8 countersunk bolt'), boltTip, 0);   // M8 shank, cut to length
-            const head = new THREE.Mesh(new THREE.CylinderGeometry(8, 4, CX.csk.depth, 40).rotateX(Math.PI / 2).translate(0, 0, CX.csk.depth / 2), steel);
-            spin.push([m(lab(head, 'M8 countersunk bolt'), frontTop - CX.csk.depth, 5.6), 0]);                         // countersunk head, flush with the front
-            const sock = new THREE.Mesh(new THREE.CylinderGeometry(2.9, 2.9, 0.1, 6).rotateX(Math.PI / 2), mat(0x18181b)); sock.position.z = CX.csk.depth + 0.01; head.add(sock);
-            spin.push([m(lab(hexM(13, 6.5), 'M8 nut (rod gear)'), CX.g1z, 1), 0]);           // M8 nut keyed in the rod gear
-            spin.push([m(lab(hexM(13, 6.5), 'M8 nut (back)'), CX.nutBottom + 0.3, 0), 0]);    // back nut in the recess
+            spin.push([m(lab(cskBoltModel(frontTop - boltTip), 'M8 countersunk bolt'), boltTip, 5.6), 0]);   // tip in the back recess, head flush with the front
+            spin.push([m(lab(nutModel(), 'M8 nut (rod gear)'), CX.g1z, 1), 0]);             // keyed in the rod gear
+            spin.push([m(lab(nutModel(), 'M8 nut (back)'), CX.nutBottom + 0.3, 0), 0]);      // in the recess on the back
             if (!three3) {
                 spin.push([m(meshFrom(await build('rear hub', CX_PARTS.rearHub), 0x10b981), CX.hubZ, 2), 1]);
                 if (CX.hubSpacer > 0) m(meshFrom(await build('spacer', CX_PARTS.spacer(CX.hubSpacer)), 0xeab308), CX.hubZ + 7, 2);
-                for (const z of [CX.hubZ, CX.hubZ + CX.hubL - CX.b688.w]) m(lab(cyl(8, CX.b688.w), '688ZZ bearing'), z, 2);
+                for (const z of [CX.hubZ, CX.hubZ + CX.hubL - CX.b688.w]) m(lab(bearingModel(16, 8, CX.b688.w), '688ZZ bearing'), z, 2);
                 spin.push([m(meshFrom(await build('front hub', () => CX_PARTS.frontHub()), 0xa855f7), CX.frontZ, 4), 0]);
             } else {
                 spin.push([m(meshFrom(await build('middle hub', CX_PARTS.midHub), 0x10b981), L.hub1Z, 2), 1]);
                 if (L.midSpacer > 0) m(meshFrom(await build('spacer', CX_PARTS.spacer(L.midSpacer)), 0xeab308), L.hub1Z + 7, 2);
-                for (const z of [L.hub1Z, L.sleeveZ - 7]) m(lab(cyl(11, 7), '608ZZ bearing'), z, 2);
+                for (const z of [L.hub1Z, L.sleeveZ - 7]) m(lab(bearingModel(22, 8, 7), '608ZZ bearing'), z, 2);
                 spin.push([m(meshFrom(await build('outer hub', CX_PARTS.outerHub), 0x0ea5e9), L.hub2Z, 3), 2]);
                 if (L.outerSpacer > 0) m(meshFrom(await build('spacer', CX_PARTS.spacer(L.outerSpacer, 34, 30.4)), 0xeab308), L.hub2Z + 7, 3);
-                for (const z of [L.hub2Z, L.hub2Z + 7]) m(lab(cyl(21, 7), '6806 bearing'), z, 3);
+                for (const z of [L.hub2Z, L.hub2Z + 7]) m(lab(bearingModel(42, 30, 7, true), '6806 bearing'), z, 3);
                 spin.push([m(meshFrom(await build('outer cap', CX_PARTS.outerCap), 0x38bdf8), L.outerTop, 3.5), 2]);
                 spin.push([m(meshFrom(await build('riser', CX_PARTS.riser), 0x34d399), L.riserZ, 4.5), 1]);
                 m(meshFrom(await build('sleeve', CX_PARTS.spacer(L.sleeveL, CX.sleeveOD)), 0xeab308), L.sleeveZ, 6);
