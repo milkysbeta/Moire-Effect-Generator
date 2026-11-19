@@ -75,7 +75,26 @@ You don't need the buck converter. Everything runs on **5 V**:
 
 ### Compact pod layout (2 discs, the default case)
 
-The ULN2003 boards sit **above and below** the spindle, between the two motors. The ESP32-S3 sits upper right and the USB-C breakout lower right, both with their sockets in windows in the pod wall. The wiring is the same as above. The panel button goes through the pod wall just right of the ESP32.
+```
+                 ULN2003 A (top)  <- motor A's lead, along its moulded channel
+                        |
+  motor B ---.     [ spindle ]     .--- motor A (cover turned up, towards board A)
+  (cover turned 50° down,          |
+   towards board B)                ESP32-S3 (lower right, USB-C in a wall window)
+                        |          power hub (lower right, USB-C in a wall window)
+                 ULN2003 B (bottom) <- motor B's lead
+```
+
+* **Motors:** each motor is turned about its own shaft so its wire cover, and the lead coming out of it, points at its own driver board. A moulded channel runs from each cover straight to that board's white socket. Motor B can only swing 50°: further, and its can would touch the rod gear.
+* **Signal wires (IN1-4):** from the ESP32 they drop into its spoke channel, go round the ring by the centre boss, and come out along each board's spoke.
+* **Power hub:** a 30 × 20 mm perfboard in the tray next to the ESP32, holding:
+  * the USB-C breakout at the wall end;
+  * the 470 µF across 5 V / GND;
+  * two 6-pin male header rails, 5 V (red) and GND (black).
+
+  Every power jumper plugs into a rail: ESP32 5V/GND, each ULN2003's + and −, and the LED ring. That's star wiring with no splices. If you'd rather not solder the rails, two 5-port lever connectors (5 V and GND) do the same job, but they don't fit in the tray.
+* **No power conversion:** everything runs on 5 V. The ESP32 makes its own 3.3 V, and the WS2812B data line is happy at 3.3 V. A buck converter is only needed if you change to a 12 V supply.
+* **Panel button:** goes through the pod wall just above the ESP32.
 
 ### Backlight (Pod + backlight case)
 
