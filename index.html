@@ -4325,8 +4325,18 @@ async function openModelScene() {
     const partInfo = l => PART_INFO[l] || PART_INFO[Object.keys(PART_INFO).find(k => l.startsWith(k)) || ''] || '';
     const tip = document.createElement('div'); tip.id = 'mpTip'; stage.appendChild(tip);
     const ray = new THREE.Raycaster(), ptr = new THREE.Vector2();
-    let hoverBox = null, hoverObj = null, pending = null;
-    const hideTip = () => { tip.style.display = 'none'; if (hoverBox) { scene.remove(hoverBox); hoverBox.geometry.dispose(); hoverBox = null; } hoverObj = null; };
+    // highlight = a soft glow on the part's own surfaces (temporary material copies), so it keeps the part's exact
+    // shape and turns with it; the originals go back when the pointer leaves
+    let hoverObj = null, pending = null, lit = [];
+    const glowCol = new THREE.Color(0xffffff);
+    const unlight = () => { for (const [o, orig, copy] of lit) { o.material = orig; (Array.isArray(copy) ? copy : [copy]).forEach(c => c.dispose()); } lit = []; };
+    const light = obj => obj.traverse(o => {
+        if (!o.isMesh || !o.material) return;
+        const orig = o.material, glow = m => { const c = m.clone(); if (c.emissive) { c.emissive = glowCol.clone(); c.emissiveIntensity = (m.emissiveIntensity || 0) + 0.13; } return c; };
+        const copy = Array.isArray(orig) ? orig.map(glow) : glow(orig);
+        o.material = copy; lit.push([o, orig, copy]);
+    });
+    const hideTip = () => { tip.style.display = 'none'; unlight(); hoverObj = null; };
     const shown = o => { for (let q = o; q; q = q.parent) if (!q.visible) return false; return true; };
     const labelled = o => { for (let q = o; q; q = q.parent) if (q.userData && q.userData.label) return q; return null; };
     const hoverAt = (x, y) => {
@@ -4339,7 +4349,7 @@ async function openModelScene() {
         const obj = labelled(hit.object), name = obj.userData.label;
         if (obj !== hoverObj) {
             hideTip(); hoverObj = obj;
-            hoverBox = new THREE.BoxHelper(obj, 0xfbbf24); scene.add(hoverBox);
+            light(obj);
             const n = name[0].toUpperCase() + name.slice(1), d = partInfo(name);
             tip.innerHTML = `<b></b><span></span>`; tip.firstChild.textContent = n; tip.lastChild.textContent = d;
         }
@@ -4353,7 +4363,7 @@ async function openModelScene() {
     });
     renderer.domElement.addEventListener('pointerleave', hideTip);
     document.getElementById('mpLabels').onchange = e => { if (!e.target.checked) hideTip(); };
-    V3.hoverTick = () => { if (hoverBox && hoverObj) hoverBox.setFromObject(hoverObj); };
+    V3.hoverTick = null;
 
     const geomFrom = tris => {
         const a = new Float32Array(tris.length * 9); let i = 0;
