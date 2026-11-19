@@ -3976,41 +3976,58 @@ function buildModelPageDOM() {
     if (document.getElementById('modelPage')) return;
     const css = document.createElement('style');
     css.textContent = `
-      #pageTabs{position:fixed;top:10px;left:50%;transform:translateX(-50%);z-index:80;display:flex;gap:2px;padding:3px;border-radius:999px;background:rgba(15,16,19,.9);border:1px solid #3f3f46;box-shadow:0 6px 24px rgba(0,0,0,.4)}
-      #pageTabs button,#pageTabs a{padding:6px 14px;border-radius:999px;font:600 12px system-ui;color:#a1a1aa;background:transparent;white-space:nowrap}
-      #pageTabs a:hover{color:#fff;background:#27272a}
-      #pageTabs button[aria-selected=true]{background:#b45309;color:#fff}
-      #modelPage{position:fixed;inset:0;z-index:60;display:none;grid-template-columns:minmax(0,1fr) 310px;background:#0d0f12;color:#d4d4d8;font:12px/1.45 system-ui}
+      :root{--mp-bg:#0c0d0f;--mp-panel:#0f1012;--mp-line:#1d1e22;--mp-line2:#2a2b30;--mp-text:#c9cacd;--mp-dim:#7d7f86;--mp-faint:#55575d;--mp-hi:#f2f2f3;--mp-warn:#d4a24c}
+      #pageTabs{position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:80;display:flex;gap:0;padding:2px;border-radius:6px;background:rgba(12,13,15,.86);border:1px solid var(--mp-line2);backdrop-filter:blur(8px)}
+      #pageTabs button,#pageTabs a{padding:5px 14px;border-radius:4px;font:500 11.5px/1.2 Inter,system-ui,sans-serif;letter-spacing:.02em;color:var(--mp-dim);background:transparent;white-space:nowrap;border:0;cursor:pointer}
+      #pageTabs button:hover,#pageTabs a:hover{color:var(--mp-hi)}
+      #pageTabs button[aria-selected=true]{background:var(--mp-hi);color:#0c0d0f}
+      #modelPage{position:fixed;inset:0;z-index:60;display:none;grid-template-columns:minmax(0,1fr) 300px;background:var(--mp-bg);color:var(--mp-text);font:12px/1.5 Inter,system-ui,sans-serif}
       #modelPage.open{display:grid}
-      #mpPanel{overflow-y:auto;border-left:1px solid #27272a;padding:56px 14px 14px;background:#111215}
-      #mpPanel h3{font:600 11px system-ui;letter-spacing:.1em;text-transform:uppercase;color:#a1a1aa;margin:14px 0 6px}
-      #mpPanel h3:first-child{margin-top:0}
-      #mpPanel select,#mpPanel button.btn{width:100%;padding:7px 9px;border-radius:8px;background:#27272a;border:1px solid #3f3f46;color:#e4e4e7}
-      #mpPanel button.btn:hover{background:#3f3f46}
-      #mpPanel button.btn.primary{background:#b45309;border-color:#d97706;color:#fff}
-      #mpPanel .r{display:flex;justify-content:space-between;align-items:center;margin:8px 0 3px}
-      #mpPanel output{font:500 12px ui-monospace,Consolas,monospace;color:#fbbf24}
-      #mpPanel input[type=range]{width:100%;accent-color:#f59e0b}
+      #mpPanel{overflow-y:auto;border-left:1px solid var(--mp-line);padding:56px 18px 20px;background:var(--mp-panel);scrollbar-width:thin;scrollbar-color:var(--mp-line2) transparent}
+      #mpPanel h3{font:500 10px/1 Inter,system-ui,sans-serif;letter-spacing:.16em;text-transform:uppercase;color:var(--mp-faint);margin:20px 0 10px;padding-top:16px;border-top:1px solid var(--mp-line)}
+      #mpPanel h3:first-of-type{margin-top:0;padding-top:0;border-top:0}
+      #mpPanel .r{display:flex;justify-content:space-between;align-items:baseline;margin:12px 0 4px;color:var(--mp-dim)}
+      #mpPanel output{font:500 11.5px Inter,system-ui,sans-serif;font-variant-numeric:tabular-nums;color:var(--mp-hi)}
+      #mpPanel select,#mpPanel button.btn{width:100%;padding:6px 9px;border-radius:4px;background:transparent;border:1px solid var(--mp-line2);color:var(--mp-text);font:12px Inter,system-ui,sans-serif;cursor:pointer;transition:border-color .15s,color .15s}
+      #mpPanel select{appearance:none;-webkit-appearance:none;padding-right:24px;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%237d7f86' stroke-width='1.2'/%3E%3C/svg%3E") no-repeat right 9px center}
+      #mpPanel select option{background:#121315;color:var(--mp-text)}
+      #mpPanel select:hover,#mpPanel button.btn:hover{border-color:#3d3e44;color:var(--mp-hi)}
+      #mpPanel button.btn.primary{background:var(--mp-hi);border-color:var(--mp-hi);color:#0c0d0f;font-weight:500}
+      #mpPanel button.btn.primary:hover{background:#fff}
+      #mpPanel button.btn[aria-pressed=true]{border-color:var(--mp-hi);color:var(--mp-hi)}
+      #mpPanel button.btn:disabled{opacity:.35;cursor:not-allowed}
       #mpPanel .grid2{display:grid;grid-template-columns:1fr 1fr;gap:6px}
-      #mpPanel .chk{display:flex;gap:8px;align-items:center;margin:5px 0}
-      #mpPanel .seg{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:4px;background:#18181b;border:1px solid #3f3f46;border-radius:9px;padding:3px}
-      #mpPanel .seg button{padding:7px 4px;border:0;border-radius:6px;background:transparent;color:#a1a1aa;font:500 12px system-ui;cursor:pointer}
-      #mpPanel .seg button:hover{color:#e4e4e7;background:#27272a}
-      #mpPanel .seg button[aria-pressed=true]{background:#b45309;color:#fff}
-      #mpPanel .seg button:disabled{opacity:.35;cursor:not-allowed}
-      #mpPanel .seg4 button{font-size:11.5px}
-      #mpInfo{background:#18181b;border-radius:8px;padding:8px 10px;color:#a1a1aa;line-height:1.6}
-      #mpInfo b{color:#e4e4e7;font-weight:600}
-      #mpInfo .warn{color:#f59e0b}
+      #mpPanel .chk{display:flex;gap:9px;align-items:center;margin:7px 0;color:var(--mp-text);cursor:pointer}
+      #mpPanel input[type=checkbox]{appearance:none;-webkit-appearance:none;width:13px;height:13px;margin:0;border:1px solid #45464c;border-radius:3px;background:transparent;display:grid;place-content:center;cursor:pointer;flex:none}
+      #mpPanel input[type=checkbox]:checked{background:var(--mp-hi);border-color:var(--mp-hi)}
+      #mpPanel input[type=checkbox]:checked::after{content:"";width:6px;height:3px;border:solid #0c0d0f;border-width:0 0 1.5px 1.5px;transform:translateY(-1px) rotate(-45deg)}
+      #mpPanel input[type=checkbox]:disabled{opacity:.35}
+      #mpPanel input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:16px;background:transparent;margin:0;cursor:pointer}
+      #mpPanel input[type=range]::-webkit-slider-runnable-track{height:1px;background:var(--mp-line2)}
+      #mpPanel input[type=range]::-moz-range-track{height:1px;background:var(--mp-line2)}
+      #mpPanel input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:11px;height:11px;border-radius:50%;background:var(--mp-hi);margin-top:-5px;border:0}
+      #mpPanel input[type=range]::-moz-range-thumb{width:11px;height:11px;border-radius:50%;background:var(--mp-hi);border:0}
+      #mpPanel input[type=range]:disabled{opacity:.35}
+      #mpPanel .seg{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:0;border:1px solid var(--mp-line2);border-radius:4px;overflow:hidden}
+      #mpPanel .seg button{padding:6px 2px;border:0;border-left:1px solid var(--mp-line2);border-radius:0;background:transparent;color:var(--mp-dim);font:500 11.5px/1.25 Inter,system-ui,sans-serif;cursor:pointer;transition:color .15s,background .15s}
+      #mpPanel .seg button:first-child{border-left:0}
+      #mpPanel .seg button:hover{color:var(--mp-hi)}
+      #mpPanel .seg button[aria-pressed=true]{background:var(--mp-hi);color:#0c0d0f}
+      #mpPanel .seg button:disabled{opacity:.3;cursor:not-allowed}
+      #mpPanel .seg4 button{font-size:11px}
+      #mpInfo,#mpCtl{border-left:1px solid var(--mp-line2);padding:1px 0 1px 11px;color:var(--mp-dim);line-height:1.65}
+      #mpInfo b,#mpCtl b{color:var(--mp-hi);font-weight:500}
+      #mpInfo .warn,#mpCtl .warn{color:var(--mp-warn)}
+      #mpStatus{color:var(--mp-dim)}
       #mpStage{position:relative;min-width:0}
-      #mpPanel .cols{display:grid;grid-template-columns:repeat(auto-fill,minmax(80px,1fr));gap:6px}
-      #mpPanel .cols label{display:flex;flex-direction:column;gap:3px;color:#a1a1aa}
-      #mpPanel input[type=color]{width:100%;height:30px;padding:2px;border-radius:7px;background:#27272a;border:1px solid #3f3f46;cursor:pointer}
-      #mpPanel button.btn[aria-pressed=true]{background:#78350f;border-color:#d97706;color:#fde68a}
-      #mpPanel button.btn:disabled{opacity:.45;cursor:not-allowed}
-      #mpTip{position:absolute;pointer-events:none;max-width:260px;padding:7px 10px;border-radius:8px;background:rgba(10,11,13,.92);border:1px solid #3f3f46;color:#d4d4d8;font:12px/1.45 system-ui;box-shadow:0 6px 18px rgba(0,0,0,.4);display:none;z-index:5}
-      #mpTip b{display:block;color:#fbbf24;font-size:12.5px;margin-bottom:2px}
-      #mpNote{position:absolute;left:12px;bottom:10px;padding:6px 9px;border-radius:7px;background:rgba(6,7,8,.7);color:#9ca3af;pointer-events:none}`;
+      #mpPanel .cols{display:grid;grid-template-columns:repeat(auto-fill,minmax(78px,1fr));gap:8px}
+      #mpPanel .cols label{display:flex;flex-direction:column;gap:4px;color:var(--mp-dim)}
+      #mpPanel input[type=color]{width:100%;height:22px;padding:0;border-radius:3px;background:transparent;border:1px solid var(--mp-line2);cursor:pointer}
+      #mpPanel input[type=color]::-webkit-color-swatch-wrapper{padding:2px}
+      #mpPanel input[type=color]::-webkit-color-swatch{border:0;border-radius:2px}
+      #mpTip{position:absolute;pointer-events:none;max-width:260px;padding:8px 11px;border-radius:4px;background:rgba(12,13,15,.94);border:1px solid var(--mp-line2);color:var(--mp-text);font:12px/1.5 Inter,system-ui,sans-serif;display:none;z-index:5}
+      #mpTip b{display:block;color:var(--mp-hi);font-weight:500;margin-bottom:2px}
+      #mpNote{position:absolute;left:14px;bottom:12px;padding:0;background:none;color:var(--mp-faint);font-size:11px;pointer-events:none}`;
     document.head.appendChild(css);
     const tabs = document.createElement('div');
     tabs.id = 'pageTabs'; tabs.setAttribute('role', 'tablist');
@@ -4046,7 +4063,7 @@ function buildModelPageDOM() {
         <h3>Case</h3>
         <select id="mpCase" hidden><option value="open">No case</option><option value="pod">Pod</option><option value="light">Pod + light</option><option value="drum">Full drum</option></select>
         <div class="seg seg4" id="mpCaseSeg"><button data-v="open">No case</button><button data-v="pod">Pod</button><button data-v="light">Pod + light</button><button data-v="drum">Full drum</button></div>
-        <label class="chk" id="mpLightRow"><input type="color" id="mpLightCol" style="width:34px;height:22px;padding:0;border:0;background:none"> Backlight colour</label>
+        <label class="chk" id="mpLightRow"><input type="color" id="mpLightCol" style="width:34px;flex:none"> Backlight colour</label>
         <h3>Show</h3>
         <label class="chk"><input type="checkbox" id="mpShowDiscs" checked> Discs</label>
         <label class="chk"><input type="checkbox" id="mpMech" checked> Mechanism + electronics</label>
@@ -4063,7 +4080,7 @@ function buildModelPageDOM() {
         <h3>Build</h3>
         <div id="mpInfo"></div>
         <h3>Control</h3>
-        <div id="mpCtl" style="background:#18181b;border-radius:8px;padding:8px 10px;color:#a1a1aa;line-height:1.6"></div>
+        <div id="mpCtl"></div>
         <h3>Export</h3>
         <button class="btn primary" id="mpParts">&#x2B07; Parts + build sheet (zip)</button>
         <div class="grid2" id="mpDiscBtns" style="margin-top:6px"></div>
@@ -4190,16 +4207,16 @@ function mpRefreshPanel() {
     thinWarnings().forEach(x => { html += `<br><span class="warn">&#9888; Too thin: ${x}</span>`; });
     info.innerHTML = html;
     document.getElementById('mpCtl').innerHTML = edge ? 'Same controller and web app as the centre spindle: ESP32 + one driver per motor.' :
-        `<b style="color:#e4e4e7">Phone or laptop:</b> the ESP32 serves its own app at <b style="color:#e4e4e7">moire.local</b>; add it to your home screen. Speeds, Steady / Breathe / Drift, ramp; anyone can watch, changes need the password.<br>` +
-        `<b style="color:#e4e4e7">This app:</b> Design page → Send speeds pushes the layer speeds.<br>` +
-        (caseMode() !== 'open' ? `<b style="color:#e4e4e7">Button</b> (side of the case): tap = pause / play, hold = next motion mode.<br>` : '') +
-        (caseMode() === 'light' ? `<b style="color:#e4e4e7">Backlight:</b> ${POD.ledN}× WS2812B, DIN ← GPIO 44 (RX pin) through 330 Ω, 5V / GND from the breakout. Colour, brightness and Glow / Breathe / Follow in the app.<br>` : '') +
-        `<b style="color:#e4e4e7">Wiring (ESP32-S3 SuperMini, firmware env esp32s3):</b><br>` +
+        `<b>Phone or laptop:</b> the ESP32 serves its own app at <b>moire.local</b>; add it to your home screen. Speeds, Steady / Breathe / Drift, ramp; anyone can watch, changes need the password.<br>` +
+        `<b>This app:</b> Design page → Send speeds pushes the layer speeds.<br>` +
+        (caseMode() !== 'open' ? `<b>Button</b> (side of the case): tap = pause / play, hold = next motion mode.<br>` : '') +
+        (caseMode() === 'light' ? `<b>Backlight:</b> ${POD.ledN}× WS2812B, DIN ← GPIO 44 (RX pin) through 330 Ω, 5V / GND from the breakout. Colour, brightness and Glow / Breathe / Follow in the app.<br>` : '') +
+        `<b>Wiring (ESP32-S3 SuperMini, firmware env esp32s3):</b><br>` +
         `Motor A board IN1-4 ← GPIO 1, 2, 3, 4<br>Motor B board IN1-4 ← GPIO 5, 6, 7, 8<br>` + (discCount() === 3 ? `Motor C board IN1-4 ← GPIO 9, 10, 11, 12<br>` : '') +
         `Button ← GPIO 13 + GND · motor leads plug straight into their board<br>` +
         (params.cxBatt
-          ? `<b style="color:#e4e4e7">Power (battery):</b> one 18650 in the top holder → IP5306-type USB-C charge + 5 V boost module (B+ / B−) → ESP32 5V + every board's +. Charges from the same USB-C. Roughly 3-4 h on a 3000 mAh cell with 2 discs turning; slow discs and coils-off when stopped stretch it.`
-          : `<b style="color:#e4e4e7">Power:</b> 5 V 2 A USB-C charger → USB-C breakout (470 µF across it) → ESP32 5V + every board's +, all GNDs joined. ~0.9 A peak with 3 motors; no buck converter needed.`);
+          ? `<b>Power (battery):</b> one 18650 in the top holder → IP5306-type USB-C charge + 5 V boost module (B+ / B−) → ESP32 5V + every board's +. Charges from the same USB-C. Roughly 3-4 h on a 3000 mAh cell with 2 discs turning; slow discs and coils-off when stopped stretch it.`
+          : `<b>Power:</b> 5 V 2 A USB-C charger → USB-C breakout (470 µF across it) → ESP32 5V + every board's +, all GNDs joined. ~0.9 A peak with 3 motors; no buck converter needed.`);
 }
 
 function showPage(name) {
