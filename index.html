@@ -4849,8 +4849,12 @@ async function openModelScene() {
             if (caseMode() === 'drum') await V3.onEnclosure();
             discZ = three3 ? { rear: L.rearZ, middle: L.midPlateZ, front: L.frontDisc } : { rear: CX.rearZ2(), front: CX.frontDisc2() };
             discOrder = three3 ? { rear: 4, middle: 5, front: 8 } : { rear: 3, front: 5 }; mirrorRear = false;
-            backZ = three3 ? L.rearZ - 6 : CX.rearZ2() - discLip() - 0.8; backOrder = (three3 ? 4 : 3) - 0.5;
-            back = new THREE.Mesh(new THREE.RingGeometry(three3 ? 31.5 : CX.hubR + 1, Math.min(coaxCalc().R * 1.12, encR() - ENC.wall - 0.6), 128), backMat);
+            // 2 discs: the backdrop glow sits above the green gear's teeth (and above a pod lid, if there is one) and
+            // stops inside the rear disc's lip, so it never slices through the cogs
+            const lidTop = compactLayout() && caseMode() === 'pod' ? POD.top() + POD.lidT : -Infinity;
+            backZ = three3 ? L.rearZ - 6 : Math.min(CX.rearZ2() - 0.2, Math.max(CX.hubZ + CX.g2T + 0.6, lidTop + 0.4)); backOrder = (three3 ? 4 : 3) - 0.5;
+            const c2 = coaxCalc(), backOut = three3 ? Math.min(c2.R * 1.12, encR() - ENC.wall - 0.6) : discLip() > 0 ? c2.R - c2.rim - 0.5 : c2.R;
+            back = new THREE.Mesh(new THREE.RingGeometry(three3 ? 31.5 : CX.hubR + 1, backOut, 128), backMat);
         }
         back.visible = document.getElementById('mpBack').checked && !(caseMode() === 'light' && !isEdge()); root.add(back);   // the diffuser is the backdrop
         document.getElementById('mpMech').onchange = e => { mech.visible = e.target.checked; };
