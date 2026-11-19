@@ -3211,13 +3211,17 @@ const ENC = { wall: 2.4, floorT: 3, ledgeR: 72, fixR: 74, fixAng: [20, 160, 240,
               shell: 2, spigot: 6, bezelT: 2, btnZ: 12, btnD: 7 };
 const encR = () => Math.max(98, params.lbDiameter / 2 + 1.5 + ENC.shell);     // outside radius of both shells
 // Compact pod: the base plate grows a 2 mm wall up to just under the rear disc; a press-in lid closes it,
-// or a translucent diffuser (Ø up to the disc rims) lit by a ring of WS2812B modules on a flange round the
-// pod's foot, facing forward, 40 mm behind the diffuser.
+// Glowing pod ('light'): no inner wall at all, so nothing blocks the light. A translucent shell (lid = diffuser,
+// out to just inside the disc lips, with a short wall at its edge) presses onto a thin floor ring at the back;
+// 16 WS2812B on that ring face the lid ~40 mm away and light the whole chamber. The gears show as soft shadows.
 const POD = { rIn: 75.5, wall: 2, get R() { return this.rIn + this.wall; }, lidT: 1.2, spigot: 4, fit: 0.1,
-              ledN: 16, ledR: 84, flangeR: 90, flangeT: 2, btnAng: 330, btnZ: 12, wallGap: 3 };
+              ledN: 16, flangeT: 2, btnAng: 330, btnZ: 12, wallGap: 3, shellW: 1.6, lipH: 1.5 };
 POD.top = () => CX.rearZ2() - 1.2 - POD.lidT;                          // wall top = underside of the lid / diffuser
 POD.holeR = () => CX.hubR + 1.5;                                       // the green hub turns in this hole
 POD.diffR = () => { const c = coaxCalc(); return Math.max(POD.R + 3, c.R - c.rim - 1.5); };   // stops inside the rear disc's lip
+POD.shellR = () => POD.diffR();                                          // glowing pod: outside of the shell wall
+Object.defineProperty(POD, 'flangeR', { get: () => POD.shellR() });       // the floor ring reaches the shell wall
+Object.defineProperty(POD, 'ledR', { get: () => (POD.R + POD.shellR() - POD.shellW - 2) / 2 });   // LEDs midway across the ring
 const caseIn = () => compactLayout() ? POD.rIn : encR() - ENC.wall;
 const encFront = () => (discCount() === 3 ? cx3().frontDisc : CX.frontDisc2()) + discT() + discLip();   // front of the front disc
 const encTop = () => {                                                         // the seam
@@ -3279,7 +3283,11 @@ const CX_PARTS = {
             L.push({ R, z0: Math.max(0, floor), z1: ear - 10, paint: a => motorSeat(a, ang, 'body', ear - 10) });
             L.push({ R, z0: ear - 10, z1: ear, paint: a => motorSeat(a, ang, 'top', ear) });
         }
-        if (cm && caseMode() !== 'open') {            // pod wall: USB-C windows at the foot, the panel button hole, lid on top
+        if (light) {                                  // lip on the floor ring: the glow shell's wall drops over it
+            const r1 = POD.shellR() - POD.shellW - 0.2;
+            L.push({ R, z0: -P + POD.flangeT, z1: -P + POD.flangeT + POD.lipH, res: 9, paint: a => a.add(ringPath(r1 - 1.2, r1)) });
+        }
+        if (cm && caseMode() === 'pod') {             // pod wall: USB-C windows at the foot, the panel button hole, lid on top
             const top = POD.top(), bR = ENC.btnD / 2, bS = 14, bB = Array.from({ length: bS + 1 }, (_, i) => POD.btnZ - bR + i * ENC.btnD / bS);
             const ports = [ELEC.esp, ELEC.usb].map(t => radialRect(0, t.ang, POD.rIn - 1, POD.R + 1, -7, 7));
             const b = [...new Set([0, 9, ...bB, top].map(z => +z.toFixed(3)))].sort((x, y) => x - y);
@@ -3335,14 +3343,27 @@ const CX_PARTS = {
     },
     // pod lid, or the LED diffuser: a plate with a spigot that presses into the pod wall; the diffuser carries on
     // out to the disc rims and has a skirt back towards the wall (3 mm short of it, so a little glow spills out)
-    podLid: (diffuser = false) => {
-        const sp = -POD.spigot, rO = POD.rIn - POD.fit, rI = rO - 1.6, hole = POD.holeR(), outer = diffuser ? POD.diffR() : POD.R;
-        const skirtB = -CX.plateT + POD.wallGap - POD.top();
-        return zStack(outer + 1, diffuser ? [skirtB, sp, 0, POD.lidT] : [sp, 0, POD.lidT], (a, z) => {
-            if (z > 0) { a.add(P2.circle(0, 0, outer)); a.cut(P2.circle(0, 0, hole)); return; }
-            if (z > sp) a.add(ringPath(rI, rO));
-            if (diffuser) a.add(ringPath(outer - 1.2, outer));
-        }, diffuser ? 10 : 12);
+    podLid: (glow = false) => {
+        const hole = POD.holeR();
+        if (!glow) {                                  // plain pod lid: a plate with a spigot that presses into the pod wall
+            const sp = -POD.spigot, rO = POD.rIn - POD.fit, rI = rO - 1.6;
+            return zStack(POD.R + 1, [sp, 0, POD.lidT], (a, z) => {
+                if (z > 0) { a.add(P2.circle(0, 0, POD.R)); a.cut(P2.circle(0, 0, hole)); return; }
+                a.add(ringPath(rI, rO));
+            }, 12);
+        }
+        // glow shell (print in translucent PETG, lid face down): lid, then a wall down to the floor ring, with windows
+        // for the two USB-C sockets and a hole for the panel button
+        const Ro = POD.shellR(), Ri = Ro - POD.shellW, top = POD.top(), zB = -CX.plateT + POD.flangeT - top, winTop = 10 - top;
+        const ports = [ELEC.esp, ELEC.usb].map(t => radialRect(0, t.ang, Ri - 1, Ro + 1, -7, 7));
+        const bR = ENC.btnD / 2, bz = POD.btnZ - top, bB = Array.from({ length: 15 }, (_, i) => bz - bR + i * ENC.btnD / 14);
+        return zStack(Ro + 1, [zB, winTop, ...bB, 0, POD.lidT], (a, z) => {
+            if (z > 0) { a.add(P2.circle(0, 0, Ro)); a.cut(P2.circle(0, 0, hole)); return; }
+            a.add(ringPath(Ri, Ro));
+            if (z < winTop) a.cut(...ports);
+            const dz = Math.abs(z - bz);
+            if (dz < bR) { const w = Math.sqrt(bR * bR - dz * dz); a.cut(radialRect(0, POD.btnAng, Ri - 1, Ro + 1, -w, w)); }
+        }, 10);
     },
     // 28BYJ-48 shaft: Ø5 with flats 3 mm apart. Bore 5.2 / 3.15 is a firm push fit once printed (holes print ~0.1 small);
     // a Ø6 lead-in on the motor side starts it straight. Print solid (100 % infill), teeth up.
@@ -3479,7 +3500,7 @@ function thinWarnings() {
 function coaxPartList() {
     const cmode = caseMode();
     const enc = cmode === 'drum' ? [['enclosure-back.stl', CX_PARTS.enclosure, 1], ['enclosure-front-shield.stl', CX_PARTS.shield, 1]]
-              : cmode === 'pod' ? [['pod-lid.stl', () => CX_PARTS.podLid(false), 1]] : cmode === 'light' ? [['diffuser.stl', () => CX_PARTS.podLid(true), 1]] : [];
+              : cmode === 'pod' ? [['pod-lid.stl', () => CX_PARTS.podLid(false), 1]] : cmode === 'light' ? [['glow-shell-translucent.stl', () => CX_PARTS.podLid(true), 1]] : [];
     if (discCount() === 2) return enc.concat([
         ['base.stl', () => CX_PARTS.base(), 1], ['rod-gear.stl', CX_PARTS.rodGear, 1], ['rear-hub.stl', CX_PARTS.rearHub, 1],
         ['front-hub.stl', CX_PARTS.frontHub, 1], ['pinion.stl', CX_PARTS.pinion, 2],
@@ -3773,7 +3794,7 @@ function coaxBOM() {
         caseMode() === 'drum' ? `  Enclosure: 4× M3×8 (base into the back), 2× wall screws for the keyholes (head under 9 mm), 1× 7 mm panel push button (momentary)`
           : caseMode() === 'open' ? '  Wall: 2× pan-head screws for the base keyholes (head under 9 mm)'
           : '  Pod: 2× pan-head wall screws for the base keyholes (head under 9 mm), 1× 7 mm panel push button (momentary) in the pod wall',
-        caseMode() === 'light' ? `  Backlight: ${POD.ledN}× WS2812B 5050 modules (round PCB), ~70 cm of thin 3-core wire, 1× 330 Ω resistor in the data line. Print the diffuser in natural or white PETG/PLA: 1.2 mm lets a soft glow through` : '',
+        caseMode() === 'light' ? `  Glowing pod: ${POD.ledN}× WS2812B 5050 modules (round PCB), ~80 cm of thin 3-core wire, 1× 330 Ω resistor in the data line. Print the glow shell in translucent (natural) PETG, lid face down, 2 walls; 1.2 mm lets a soft, even glow through` : '',
         '',
         'ASSEMBLE (bottom to top)',
         `  1. Press a 608 into the underside of the base, drop the ${CX.baseSpacer} mm shim in from the top, press the second 608 in.`,
@@ -3786,7 +3807,7 @@ function coaxBOM() {
         '     the rod gear\'s nut (the motor holds the gear). Snug, not tight: the discs must still turn. Back washer + nut on the',
         '     back, in the recess; hold the head with a 5 mm hex key and tighten. Then press the front disc onto the front hub.',
         caseMode() === 'pod' ? '     Press the pod lid into the top of the pod wall before the rear disc goes on.' : '',
-        caseMode() === 'light' ? `     Glue the ${POD.ledN} LED modules round the flange at the pod\'s foot, facing forward, and chain them (DIN ← GPIO 44); press the diffuser into the pod wall before the rear disc.` : '');
+        caseMode() === 'light' ? `     Glue the ${POD.ledN} LED modules round the floor ring, facing forward, and chain them (DIN ← GPIO 44). Fit the panel button in the glow shell, then drop the shell over the lip on the floor ring before the rear disc.` : '');
     else lines.push(
         L.midSpacer > 0 ? `  3. Middle hub: press one 608 in from the bottom up under the cap, then the second with the ${L.midSpacer} mm spacer; set it on the rod gear\'s boss, teeth down.`
                         : '  3. Middle hub: press one 608 in from the bottom up under the cap, then the second; set it on the rod gear\'s boss, teeth down.',
@@ -4119,8 +4140,8 @@ function mpRefreshPanel() {
         html = `Disc Ø <b>${params.lbDiameter} mm</b> · ${compactLayout() ? 'pod' : 'base'} Ø <b>${(compactLayout() ? POD.R : CX.plateR) * 2} mm</b><br>Gears ${CX.Np}:${CX.Ng} (3:1) · depth from wall <b>${depth.toFixed(0)} mm</b><br>` +
             sp.map(s => `${s.name}: <b>${Math.abs(s.rpm).toFixed(2)} rpm</b> → motor ${Math.abs(s.motorRpm).toFixed(1)} rpm`).join('<br>');
         if (compactLayout() && caseMode() !== 'open') {
-            html += `<br>Pod <b>${(POD.R * 2).toFixed(0)} mm</b> across × <b>${(POD.top() + POD.lidT + CX.plateT).toFixed(0)} mm</b> deep; hangs on 2 keyholes` +
-                (caseMode() === 'light' ? `<br>Backlight: diffuser Ø <b>${(POD.diffR() * 2).toFixed(0)} mm</b>, ${POD.ledN} WS2812B on a Ø${POD.flangeR * 2} flange, ~40 mm behind it` : '');
+            html += (caseMode() === 'pod' ? `<br>Pod <b>${(POD.R * 2).toFixed(0)} mm</b> across × <b>${(POD.top() + POD.lidT + CX.plateT).toFixed(0)} mm</b> deep; hangs on 2 keyholes` : '') +
+                (caseMode() === 'light' ? `<br>Glowing pod: translucent shell Ø <b>${(POD.shellR() * 2).toFixed(0)} mm</b>, no inner wall; ${POD.ledN} WS2812B on the floor ring ${(POD.top() + CX.plateT - POD.flangeT).toFixed(0)} mm behind its face` : '');
             const c = coaxCalc();
             if (discLip() > 0 && c.R - c.rim < POD.R + 1) html += `<br><span class="warn">The rear disc's lip hits the pod: use a bigger disc or turn the lip off.</span>`;
         }
@@ -4228,7 +4249,7 @@ async function openModelScene() {
         'riser': 'Keyed into the middle hub; the middle disc presses onto its hex boss.',
         'sleeve': 'Carries the bolt\'s clamp from the middle hub\'s top bearing up to the front hub.',
         'pinions': '15 teeth, push-fit on a motor shaft: 3 motor turns per disc turn.',
-        'pod lid': 'Presses into the top of the pod wall.', 'diffuser': 'Translucent plate lit from behind by the LED ring: the glowing backdrop.',
+        'pod lid': 'Presses into the top of the pod wall.', 'glow shell': 'Translucent PETG lid + edge wall: the whole back glows, lit by 16 LEDs on the floor ring; the gears show as soft shadows.',
         'enclosure (back)': 'Full-size back drum.', 'front shield': 'Clicks onto the back drum; its bezel hides the disc rims.',
         '608ZZ bearing': '8 × 22 × 7 mm (a skateboard bearing).', '688ZZ bearing': '8 × 16 × 5 mm.', '6806 bearing': '30 × 42 × 7 mm, thin section.',
         'M8 countersunk bolt': 'The spindle: an M8 countersunk socket screw (DIN 7991) from the front. The front hub has the 90° seat printed in, so the head sits flush. Cut to length.',
@@ -4662,7 +4683,7 @@ async function openModelScene() {
             // compact pod: press-in lid or LED diffuser, WS2812B ring on the flange round its foot, panel button in the wall
             const cmode = caseMode(); V3.diffMesh = null; V3.ledMats = [];
             if (!three3 && (cmode === 'pod' || cmode === 'light')) {
-                const lit = cmode === 'light', lid = meshFrom(await build(lit ? 'diffuser' : 'pod lid', () => CX_PARTS.podLid(lit)), 0x2a2f37);
+                const lit = cmode === 'light', lid = meshFrom(await build(lit ? 'glow shell' : 'pod lid', () => CX_PARTS.podLid(lit)), 0x2a2f37);
                 if (lit) {
                     lid.material = new THREE.MeshStandardMaterial({ color: 0xf4f1ea, emissive: new THREE.Color(params.cxLightCol || '#ffb36b'), emissiveIntensity: 0.55, roughness: 0.9, transparent: true, opacity: 0.9, side: THREE.DoubleSide });
                     V3.diffMesh = lid;
@@ -4690,13 +4711,14 @@ async function openModelScene() {
                 }
                 m(lid, POD.top(), 2.5);
                 // 7 mm panel button through the pod wall, wired to GPIO 13 + GND
-                const Ro = POD.R, bz = POD.btnZ, ba = -POD.btnAng * Math.PI / 180, bw = new THREE.Group(), btn = new THREE.Group();
+                const Ro = lit ? POD.shellR() : POD.R, bz = POD.btnZ, ba = -POD.btnAng * Math.PI / 180, bw = new THREE.Group(), btn = new THREE.Group();
                 btn.rotation.z = ba + Math.PI / 2;
                 const part = (r, h, y, m3, seg = 32) => { const c = new THREE.Mesh(new THREE.CylinderGeometry(r, r, h, seg), m3); c.position.y = y; btn.add(c); };
-                part(5, 2, -(Ro - POD.wall - 1), silver, 6); part(3.4, 12, -(Ro - POD.wall - 7), mat(0x1f1f1f), 20);
+                const wl = lit ? POD.shellW : POD.wall;
+                part(5, 2, -(Ro - wl - 1), silver, 6); part(3.4, 12, -(Ro - wl - 7), mat(0x1f1f1f), 20);
                 part(4.6, 1.6, -(Ro + 0.8), silver); part(2.8, 1.8, -(Ro + 2.2), mat(0xf59e0b));
                 lab(btn, 'Panel button'); btn.position.z = bz; bw.add(btn);
-                const bIn = pol(Ro - POD.wall - 13, ba, bz);
+                const bIn = pol(Ro - wl - 13, ba, bz);
                 for (const [name, col, dz] of [['13', 0xf5f5f4, 1], ['GND', 0x111111, -1]]) {
                     const e = espPin(name);
                     bw.add(wire([[bIn[0], bIn[1], bz + dz], pol(Ro - 17, ba, bz + 2), [e[0], e[1], 13.5], e], col, 0.42));
