@@ -610,7 +610,7 @@ const params = {
     // Lightbox
     armN: 12, armD: 2, armTwist: 1, armOpen: 0.45, armHub: 0.15, armMid: 0.55, armM2: 0.78, armSin: 30, armSout: 30, armS3: 32, armSharp: 0.6, armEntry: 0.5, armWHub: 0.25, armWKink: 0.45, armWRim: 0.6, armMirror: true,
     lightbox: false, lbDiameter: 200, lbModule: 2, lbPlanetTeeth: 18,
-    lbPlanetGap: 0.2, lbCentreHole: 8, lbAxleHole: 5, lbBaseT: 1.6, lbRibH: 0.6, lbDrive: 'planet', lbDiscs: '2', cxStyle: 'openwork', cxDiscT: 2, cxRim: 4, cxLip: 3, cxEnc: false, cxCase: 'pod', cxLightCol: '#ffb36b', cxBatt: false,
+    lbPlanetGap: 0.2, lbCentreHole: 8, lbAxleHole: 5, lbBaseT: 1.6, lbRibH: 0.6, lbDrive: 'planet', lbDiscs: '2', cxStyle: 'openwork', cxDiscT: 2, cxRim: 4, cxLip: 3, cxEnc: false, cxCase: 'pod', cxLightCol: '#ffb36b', cxBatt: false, cxHubBrg: '608', cxOuterBrg: 'printed',
     mpColFront: '#15171a', mpColMiddle: '#b98a4a', mpColRear: '#ece9e2', mpColRib: '#111111',
 };
 
@@ -2982,7 +2982,7 @@ const CX = {
     b1z: -0.6, baseSpacer: 1, bossTop: 14.4, nutBack: 6.8,   // nutBack: recess for an ordinary M8 nut (6.5 mm)
     csk: { d: 16.4, depth: 4.0 },        // M8 countersunk head (DIN 7991 / ISO 10642: Ø16, 90°)
     meshGap: 0.15,                        // extra centre distance on every mesh: printed teeth never bind
-    g1T: 8, hubL: 10, hubR: 18, g2T: 5, pinT: 5,   // 2-disc rear hub: two 688s back to back (10 mm); 5 mm gears are plenty for a 28BYJ
+    g1T: 8, hubR: 15.5, g2T: 5, pinT: 5,   // 2-disc rear hub: two 608s (14 mm) or two 688s (10 mm) back to back; 5 mm gears are plenty for a 28BYJ
     gap: 1.0,                             // air between neighbouring discs
     carrierT: 2,                          // boss under a bolted disc, so its screw heads sit flush in the plate
     flangeT3: 2.9,                        // front hub flange on 3-disc builds
@@ -2999,8 +2999,11 @@ CX.hubZ = CX.g1z + CX.g1T + 1;                     // a 1 mm boss on the rod gea
 CX.pinZ = CX.motor.shaftTip - CX.pinT - 0.3;        // pinion bottom above the ear plane (top 0.3 under the shaft tip)
 CX.earA = CX.g1z + (CX.g1T - CX.pinT) / 2 - CX.pinZ;     // pinion A centred on the rod gear
 CX.earB = CX.hubZ + (CX.g2T - CX.pinT) / 2 - CX.pinZ;    // pinion B level with G2
-CX.frontZ = CX.hubZ + CX.hubL;                     // front hub bottom: its foot sits on the top 688's inner race
-CX.hubSpacer = CX.hubL - 2 * CX.b688.w;            // between the rear hub's two 688 inner races
+// rear hub bearings: skateboard 608s (easy to find) or 688s (4 mm slimmer stack)
+Object.defineProperty(CX, 'hubBrg', { get: () => params.cxHubBrg === '688' ? { od: 16, w: 5, name: '688ZZ', size: '8×16×5' } : { od: 22, w: 7, name: '608ZZ', size: '8×22×7' } });
+Object.defineProperty(CX, 'hubL', { get: () => 2 * CX.hubBrg.w });
+Object.defineProperty(CX, 'frontZ', { get: () => CX.hubZ + CX.hubL });   // front hub bottom: its foot sits on the top bearing's inner race
+CX.hubSpacer = 0;                                    // the rear hub's two bearings sit back to back
 CX.nutTop = CX.b1z - CX.washer;                      // back nut's face (on its washer)
 CX.nutBottom = CX.nutTop - CX.nutBack;               // back of the recess: flush with the plate's back
 // countersunk bolt, head flush with the front face at `top`: cut so its tip stops 0.5 mm inside the wall plane
@@ -3056,6 +3059,29 @@ const gearWindows = (a, rIn, rOut, n = 5, spoke = 6, fil = 1.5) => {      // n r
     }
     g.restore();
 };
+// ── Print-in-place ball bearing, after Jerryie's "Print in place BALL bearings" on MakerWorld ──
+// Two races with a round groove and a ring of balls printed in place between them. Each ball stands on a thin
+// tab down to the bed: snip the tabs after printing, then spin it a few times (a drop of silicone grease helps).
+// Built in 0.2 mm slices, the way the printer lays it down. Print flat, 0.2 mm layers, 2 walls, 15 % infill,
+// flow 0.95, clean bed, nozzle not too close. Parametric: bore, OD, width; PIP.clear is the ball-to-groove gap.
+const PIP = { clear: 0.3, layer: 0.2, tabR: 0.5, chamfer: 0.3 };
+function pipBearing(id, od, w) {
+    const ri = id / 2, ro = od / 2, sec = ro - ri, rp = (ri + ro) / 2, zc = w / 2;
+    const rb = Math.min(w * 0.36, sec * 0.36), rg = rb + PIP.clear, lip = rb * 0.55;       // ball radius, groove radius, race lip
+    const n = Math.max(5, Math.floor(2 * Math.PI * rp / (2 * rb + 1.0)));                   // balls, ~1 mm apart
+    const zs = []; for (let z = 0; z < w - 1e-6; z += PIP.layer) zs.push(+z.toFixed(3)); zs.push(w);
+    return zStack(ro + 1, zs, (a, z) => {
+        const dz = z - zc, g = Math.abs(dz) < rg ? Math.sqrt(rg * rg - dz * dz) : 0;
+        const edge = z < PIP.layer * 2 || z > w - PIP.layer * 2 ? PIP.chamfer : 0;           // chamfer the faces: no elephant foot in the pocket
+        a.add(ringPath(ri + edge, rp - Math.max(lip, g)), ringPath(rp + Math.max(lip, g), ro - edge));
+        const b = Math.abs(dz) < rb ? Math.sqrt(rb * rb - dz * dz) : 0;
+        for (let k = 0; k < n; k++) {
+            const t = k * 2 * Math.PI / n, x = rp * Math.cos(t), y = rp * Math.sin(t);
+            if (b > PIP.tabR) a.add(P2.circle(x, y, b));
+            else if (dz < 0) a.add(P2.circle(x, y, PIP.tabR));                               // tab under the ball
+        }
+    }, 20);
+}
 const GEAR = { rimIn: () => CX.Ng * CX.m / 2 - 1.25 * CX.m - 3,  // 3 mm solid rim under the 45T roots
                foot: 0.45 };                                     // relieved height on the bed side
 function profile2D(R, paint, res = 20) {
@@ -3278,7 +3304,7 @@ const CX_PARTS = {
         ]);
     },
     rearHub: () => {     // G2 teeth + two 688s + the hex boss the rear disc presses onto
-        const R = (CX.Ng + 2) * CX.m / 2 + 1, gear = P2.poly(involuteGear(CX.Ng, CX.m, 0)), pk = (CX.b688.od + CX.fit) / 2, H = CX.hubL, bw = CX.b688.w, t = discT();
+        const R = (CX.Ng + 2) * CX.m / 2 + 1, gear = P2.poly(involuteGear(CX.Ng, CX.m, 0)), pk = (CX.hubBrg.od + CX.fit) / 2, H = CX.hubL, bw = CX.hubBrg.w, t = discT();
         return zStack(R, [0, GEAR.foot, CX.g2T, bw, H - bw, H, H + t - 0.4, H + t], (a, z) => {
             if (z > H) {                                                    // disc boss, 0.3 mm lead-in at the top; the front hub's flange passes up inside
                 a.add(P2.hex(z > H + t - 0.4 ? CX.discHexAF - 0.6 : CX.discHexAF)); a.cut(P2.circle(0, 0, CX.frontFlangeR + 0.8)); return;
@@ -3289,6 +3315,8 @@ const CX_PARTS = {
             a.cut(P2.circle(0, 0, z < bw || z > H - bw ? pk : 5.5));
         });
     },
+    // print-in-place ball bearing (any size): see pipBearing()
+    pipBearing: (id, od, w) => () => pipBearing(id, od, w),
     // Front hub: a small foot on the bearing (2 discs: the top 688's inner race; 3 discs: the sleeve, inside the
     // riser), a flange, a collar the front disc stops on, then the hex boss it presses onto. The countersunk bolt
     // head sits flush in its front face. Print it front face down.
@@ -3458,6 +3486,7 @@ function coaxPartList() {
     return enc.concat([
         ['base-3disc.stl', CX_PARTS.base3, 1], ['rod-gear.stl', CX_PARTS.rodGear, 1], ['middle-hub.stl', CX_PARTS.midHub, 1],
         ['outer-hub.stl', CX_PARTS.outerHub, 1], ['outer-cap.stl', CX_PARTS.outerCap, 1], ['riser.stl', CX_PARTS.riser, 1],
+        ...(params.cxOuterBrg === 'steel' ? [] : [['bearing-30x42x7-print-in-place.stl', CX_PARTS.pipBearing(30, 42, 7), 2]]),
         ['front-hub.stl', CX_PARTS.frontHub, 1], ['pinion.stl', CX_PARTS.pinion, 3],
         [`spacer-${CX.baseSpacer}mm.stl`, CX_PARTS.spacer(CX.baseSpacer), 1], [`spacer-middle-${L.midSpacer}mm.stl`, CX_PARTS.spacer(L.midSpacer), 1],
         [`spacer-6806-${L.outerSpacer}mm.stl`, CX_PARTS.spacer(L.outerSpacer, 34, 30.4), 1], [`sleeve-${L.sleeveL}mm.stl`, CX_PARTS.spacer(L.sleeveL, CX.sleeveOD), 1],
@@ -3725,8 +3754,9 @@ function coaxBOM() {
         'BUY',
         (() => { const top = (three ? L.frontDisc : CX.frontDisc2()) + discT(); const buy = CX.boltBuy(top), cut = CX.boltCut(top);
             return `  1× M8 countersunk socket screw (DIN 7991), ${buy} mm` + (buy > cut ? `, cut to ${cut} mm overall (head included) with a hacksaw; file the end` : ' (no cutting needed)'); })(),
-        three ? '  4× 608ZZ bearing (8×22×7)' : '  2× 608ZZ bearing (8×22×7, base) + 2× 688ZZ bearing (8×16×5, rear hub)',
-        three ? '  2× 6806ZZ / 6806-2RS bearing (30×42×7)' : '',
+        three ? '  4× 608ZZ skateboard bearing (8×22×7)' : CX.hubBrg.name === '608ZZ' ? '  4× 608ZZ skateboard bearing (8×22×7): 2 in the base, 2 in the rear hub' : '  2× 608ZZ skateboard bearing (8×22×7, base) + 2× 688ZZ bearing (8×16×5, rear hub)',
+        three && params.cxOuterBrg !== 'steel' ? '  Printed bearings: 0.2 mm layers, 2 walls, 15 % infill, flow 0.95, clean bed. Snip the tabs under the balls, spin until smooth, a drop of silicone grease.' : '',
+        three ? (params.cxOuterBrg === 'steel' ? '  2× 6806ZZ / 6806-2RS bearing (30×42×7)' : '  (outer hub bearings: 2× printed, in the parts list)') : '',
         '  2× ordinary M8 nut (one keyed in the rod gear, one in the recess on the back), 2× M8 washer',
         `  ${three ? 3 : 2}× 28BYJ-48 stepper + driver (ULN2003, or TMC2209 with the bipolar mod)`,
         three ? '  4× M3 heat-set insert + 4× M3×8 button head (outer cap to the outer hub)' : '',
@@ -3747,9 +3777,9 @@ function coaxBOM() {
         '  2. Washer on the top base bearing, then the rod gear with an M8 nut sitting loose in its hex pocket (pocket down).',
     ];
     if (!three) lines.push(
-        '  3. Press a 688 into each end of the rear hub (they meet in the middle); set it on the rod gear\'s boss, teeth down.',
+        `  3. Press a ${CX.hubBrg.name.slice(0, 3)} into each end of the rear hub (they meet in the middle); set it on the rod gear\'s boss, teeth down.`,
         '  4. Press the rear disc onto the hub\'s hex boss until it sits on the hub top.',
-        '  5. Front hub (foot down) on the top 688, then the countersunk bolt from the front through everything: it screws into',
+        `  5. Front hub (foot down) on the top ${CX.hubBrg.name.slice(0, 3)},`+' then the countersunk bolt from the front through everything: it screws into',
         '     the rod gear\'s nut (the motor holds the gear). Snug, not tight: the discs must still turn. Back washer + nut on the',
         '     back, in the recess; hold the head with a 5 mm hex key and tighten. Then press the front disc onto the front hub.',
         caseMode() === 'pod' ? '     Press the pod lid into the top of the pod wall before the rear disc goes on.' : '',
@@ -3757,7 +3787,7 @@ function coaxBOM() {
     else lines.push(
         L.midSpacer > 0 ? `  3. Middle hub: press one 608 in from the bottom up under the cap, then the second with the ${L.midSpacer} mm spacer; set it on the rod gear\'s boss, teeth down.`
                         : '  3. Middle hub: press one 608 in from the bottom up under the cap, then the second; set it on the rod gear\'s boss, teeth down.',
-        '  4. Outer hub: press both 6806s in from the bottom (back to back); slide it down over the journal onto the shoulder.',
+        `  4. Outer hub: press both ${params.cxOuterBrg === 'steel' ? '6806s' : 'printed bearings (tabs snipped, spinning freely)'} in from the bottom (back to back); slide it down over the journal onto the shoulder.`,
         '     Heat-set its 4 inserts and bolt the outer cap on (M3×8, heads in the counterbores). Press the rear disc onto the cap\'s boss.',
         `  5. Sleeve (${L.sleeveL} mm) down onto the top 608, the riser down through the outer cap into the middle hub\'s socket, and press the middle disc onto it.`,
         '  6. Front hub (foot down, into the riser), then the countersunk bolt from the front: it screws into the rod gear\'s nut.',
@@ -3883,7 +3913,7 @@ function v3DiscSignature() {
     return JSON.stringify(o) + (params.warpType === 'mesh' ? JSON.stringify(meshPoints) : '');
 }
 // Everything that changes the mechanism
-const v3MechSignature = () => ['bolt2', 'hex2', 'seat2', caseMode(), params.lbDrive, discCount(), discT(), params.lbDiameter, discLip(), !!params.cxBatt].join('|');
+const v3MechSignature = () => ['bolt2', 'hex2', 'seat2', params.cxHubBrg, params.cxOuterBrg, caseMode(), params.lbDrive, discCount(), discT(), params.lbDiameter, discLip(), !!params.cxBatt].join('|');
 function pageStatus(t) { const e = document.getElementById('mpStatus'); if (e) e.textContent = t; const c = document.getElementById('cxStatus'); if (c && !V3.open) c.textContent = t; }
 
 function buildModelPageDOM() {
@@ -3941,6 +3971,8 @@ function buildModelPageDOM() {
         <input id="mpLip" type="range" min="0" max="8" step="0.5">
         <div class="r"><span>Disc style</span></div>
         <select id="mpStyle"><option value="openwork">Openwork, one colour (light through)</option><option value="twocolour">Solid base + black pattern (3MF)</option></select>
+        <div class="r"><span>Hub bearings</span></div>
+        <select id="mpBrg" aria-label="Hub bearings"></select>
         <label class="chk"><input type="checkbox" id="mpBatt"> 18650 battery inside (USB-C charging)</label>
         <div class="r"><span>Colours</span></div>
         <div class="cols" id="mpCols"></div>
@@ -3976,6 +4008,7 @@ function buildModelPageDOM() {
     document.getElementById('mpLip').oninput = e => { params.cxLip = +e.target.value; sync(); };
     document.getElementById('mpStyle').onchange = e => { params.cxStyle = e.target.value; sync(); };
     document.getElementById('mpBatt').onchange = e => { params.cxBatt = e.target.checked; mpRefreshPanel(); };
+    document.getElementById('mpBrg').onchange = e => { if (discCount() === 3) params.cxOuterBrg = e.target.value; else params.cxHubBrg = e.target.value; mpRefreshPanel(); };
     document.getElementById('mpCase').onchange = e => { params.cxCase = e.target.value; params.cxEnc = e.target.value === 'drum'; mpRefreshPanel(); V3.onEnclosure && V3.onEnclosure(); };
     document.getElementById('mpLightCol').oninput = e => { params.cxLightCol = e.target.value; V3.recolour && V3.recolour(); };
     document.getElementById('mpCut').onclick = () => { V3.cut = !V3.cut; mpRefreshPanel(); V3.onCut && V3.onCut(); };
@@ -3998,6 +4031,11 @@ function mpRefreshPanel() {
     document.getElementById('mpExplode').textContent = V3.explodeTarget > 0.5 ? 'Assembled view' : 'Exploded view';
     document.getElementById('mpPlay').textContent = paused ? 'Play' : 'Pause';
     const bt = document.getElementById('mpBatt'); bt.checked = !!params.cxBatt; bt.disabled = edge;
+    const bs = document.getElementById('mpBrg'), bOpts = discCount() === 3
+        ? [['printed', 'Outer hub: printed 30×42×7 (print-in-place)'], ['steel', 'Outer hub: steel 6806']]
+        : [['608', 'Rear hub: 608 skateboard bearings'], ['688', 'Rear hub: 688s (4 mm slimmer)']];
+    if (bs.dataset.key !== bOpts.map(o => o[0]).join()) { bs.dataset.key = bOpts.map(o => o[0]).join(); bs.innerHTML = bOpts.map(([v, l]) => `<option value="${v}">${l}</option>`).join(''); }
+    bs.value = discCount() === 3 ? (params.cxOuterBrg || 'printed') : (params.cxHubBrg || '608'); bs.disabled = edge;
     const cs = document.getElementById('mpCase'), small = discCount() === 2 && !params.cxBatt;
     cs.disabled = edge; if (document.activeElement !== cs) cs.value = caseMode();
     [...cs.options].forEach(o => { o.disabled = (o.value === 'pod' || o.value === 'light') && !small; });
@@ -4136,7 +4174,8 @@ async function openModelScene() {
         'base': 'Holds the two base bearings, the motors and the boards, with wire channels moulded in. Hangs on 2 keyholes; in pod mode its wall is the case.',
         'spacers': 'Shim between the two base bearings.', 'spacer': 'Spacer between two bearings\' inner races.',
         'rod gear': '45 teeth, keyed to an M8 nut on the bolt. Motor A turns it, and with it the bolt and the front disc.',
-        'rear hub': 'Green hub, 45 teeth, two 688 bearings on the bolt. Motor B turns it; the rear disc presses onto its hex boss.',
+        'rear hub': 'Green hub, 45 teeth, two bearings on the bolt (608 skateboard or 688). Motor B turns it; the rear disc presses onto its hex boss.',
+        'Printed bearing': 'Print-in-place ball bearing, 30 × 42 × 7, in place of a 6806. Snip the tabs under the balls after printing.',
         'front hub': 'Turns with the bolt. The front disc presses onto its hex boss; the bolt head sits flush in its face.',
         'middle hub': '45 teeth, two 608s on the bolt; motor B. The riser keys into its top.',
         'outer hub': '45 teeth, two 6806 bearings on the middle hub\'s journal; motor C. The outer cap bolts on top.',
@@ -4368,7 +4407,7 @@ async function openModelScene() {
             if (!three3) {
                 spin.push([m(meshFrom(await build('rear hub', CX_PARTS.rearHub), 0x10b981), CX.hubZ, 2), 1]);
                 if (CX.hubSpacer > 0) m(meshFrom(await build('spacer', CX_PARTS.spacer(CX.hubSpacer)), 0xeab308), CX.hubZ + 7, 2);
-                for (const z of [CX.hubZ, CX.hubZ + CX.hubL - CX.b688.w]) m(lab(bearingModel(16, 8, CX.b688.w), '688ZZ bearing'), z, 2);
+                for (const z of [CX.hubZ, CX.hubZ + CX.hubL - CX.hubBrg.w]) m(lab(bearingModel(CX.hubBrg.od, 8, CX.hubBrg.w), CX.hubBrg.name + ' bearing'), z, 2);
                 spin.push([m(meshFrom(await build('front hub', () => CX_PARTS.frontHub()), 0xa855f7), CX.frontZ, 4), 0]);
             } else {
                 spin.push([m(meshFrom(await build('middle hub', CX_PARTS.midHub), 0x10b981), L.hub1Z, 2), 1]);
@@ -4376,7 +4415,8 @@ async function openModelScene() {
                 for (const z of [L.hub1Z, L.sleeveZ - 7]) m(lab(bearingModel(22, 8, 7), '608ZZ bearing'), z, 2);
                 spin.push([m(meshFrom(await build('outer hub', CX_PARTS.outerHub), 0x0ea5e9), L.hub2Z, 3), 2]);
                 if (L.outerSpacer > 0) m(meshFrom(await build('spacer', CX_PARTS.spacer(L.outerSpacer, 34, 30.4)), 0xeab308), L.hub2Z + 7, 3);
-                for (const z of [L.hub2Z, L.hub2Z + 7]) m(lab(bearingModel(42, 30, 7, true), '6806 bearing'), z, 3);
+                if (params.cxOuterBrg === 'steel') for (const z of [L.hub2Z, L.hub2Z + 7]) m(lab(bearingModel(42, 30, 7, true), '6806 bearing'), z, 3);
+                else { const pb = await build('printed bearing', CX_PARTS.pipBearing(30, 42, 7)); for (const z of [L.hub2Z, L.hub2Z + 7]) m(lab(meshFrom(pb, 0xe7e5e4), 'Printed bearing'), z, 3); }
                 spin.push([m(meshFrom(await build('outer cap', CX_PARTS.outerCap), 0x38bdf8), L.outerTop, 3.5), 2]);
                 spin.push([m(meshFrom(await build('riser', CX_PARTS.riser), 0x34d399), L.riserZ, 4.5), 1]);
                 m(meshFrom(await build('sleeve', CX_PARTS.spacer(L.sleeveL, CX.sleeveOD)), 0xeab308), L.sleeveZ, 6);
