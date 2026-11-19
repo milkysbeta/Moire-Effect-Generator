@@ -3203,6 +3203,7 @@ function wireChannels(n) {
     const g = ELEC.groove, out = [ringPath(g.r0, g.r1)];
     for (const k of ELEC.ulnList(n)) out.push(rr(0, ELEC.ulnAng[k], g.r1 - 1, ELEC.uln.flip ? ELEC.uln.r + ELEC.uln.h / 2 + 3 : ELEC.uln.r - ELEC.uln.h / 2 + 1, -g.w / 2, g.w / 2));
     out.push(rr(0, ELEC.esp.ang, g.r1 - 1, ELEC.esp.r - ELEC.esp.len / 2 + 2, -g.w / 2, g.w / 2));
+    if (compactLayout()) out.push(rr(0, ELEC.usb.ang, g.r1 - 1, ELEC.usb.r - ELEC.usb.len / 2 + 2, -g.w / 2, g.w / 2));   // power hub's spoke
     if (params.cxBatt) out.push(rr(0, ELEC.batt.ang, g.r1 - 1, ELEC.batt.r - ELEC.batt.wid / 2 + 1, -g.w / 2, g.w / 2));
     return out;
 }
@@ -3941,7 +3942,7 @@ function v3DiscSignature() {
     return JSON.stringify(o) + (params.warpType === 'mesh' ? JSON.stringify(meshPoints) : '');
 }
 // Everything that changes the mechanism
-const v3MechSignature = () => ['bolt2', 'hex2', 'seat3', params.cxHubBrg, params.cxOuterBrg, caseMode(), params.lbDrive, discCount(), discT(), params.lbDiameter, discLip(), !!params.cxBatt].join('|');
+const v3MechSignature = () => ['bolt2', 'hex2', 'seat3', 'route2', params.cxHubBrg, params.cxOuterBrg, caseMode(), params.lbDrive, discCount(), discT(), params.lbDiameter, discLip(), !!params.cxBatt].join('|');
 function pageStatus(t) { const e = document.getElementById('mpStatus'); if (e) e.textContent = t; const c = document.getElementById('cxStatus'); if (c && !V3.open) c.textContent = t; }
 
 function buildModelPageDOM() {
@@ -4219,6 +4220,7 @@ async function openModelScene() {
     stage.prepend(renderer.domElement);
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x0d0f12);
+    V3.scene = scene;                                // for checks from the console
     // a soft studio room for the metal parts to reflect (metals look black with nothing to reflect)
     const pmrem = new THREE.PMREMGenerator(renderer), envTex = pmrem.fromScene(new RoomEnvironment(renderer), 0.04).texture; pmrem.dispose();
     scene.add(new THREE.HemisphereLight(0xffffff, 0x223344, 1.0));
@@ -4643,25 +4645,49 @@ async function openModelScene() {
                 return [start, sideOff(pol(espIn + 1, espA, 6), espA, off), sideOff(pol(espIn - 3, espA, GZ), espA, off), sideOff(pol(G.r1 + 3, espA, GZ), espA, off),
                         ...arc(ring, espA, ccw ? b : nA(a1), GZ), sideOff(pol(G.r1 + 3, b, GZ), b, off), sideOff(pol(r1 - 2, b, GZ), b, off), [end[0], end[1], GZ + 1], [end[0], end[1], end[2] - 3], end];
             };
+            // Compact routing: from a part, down into its spoke, round the ring and out along the target's spoke. The ring
+            // never passes motor A's wire cover (tucked in at angle 0), so each route takes whichever way round avoids it.
+            const blockA = compactLayout() && Math.abs(motorPsi(MOTOR_ANG.A) - Math.PI) < 1e-6;
+            const route = (start, a0, rIn0, a1, r1, end, off) => {
+                const ring = ringMid + off * 0.8, TAU = Math.PI * 2;
+                let sweep = (((a1 - a0) % TAU) + TAU) % TAU; if (sweep > Math.PI) sweep -= TAU;              // shortest way first
+                const hits = sw => { for (let i = 0; i <= 36; i++) if (Math.abs(nA(a0 + sw * i / 36)) < 0.5) return true; return false; };
+                if (blockA && hits(sweep)) sweep += sweep > 0 ? -TAU : TAU;
+                const b = a0 + sweep;
+                return [start, sideOff(pol(rIn0 + 1, a0, 6), a0, off), sideOff(pol(rIn0 - 3, a0, GZ), a0, off), sideOff(pol(G.r1 + 3, a0, GZ), a0, off),
+                        ...arc(ring, a0, b, GZ), sideOff(pol(G.r1 + 3, b, GZ), b, off), sideOff(pol(r1 - 2, b, GZ), b, off), [end[0], end[1], GZ + 1], [end[0], end[1], end[2] - 3], end];
+            };
+            const PWR_ = ELEC.usb, hubA = nA(deg(-PWR_.ang)), hubIn = PWR_.r - PWR_.len / 2;
             const SIG = [0xf97316, 0xfacc15, 0x22c55e, 0x3b82f6];                 // IN1 orange, IN2 yellow, IN3 green, IN4 blue
             const PINS = { A: [1, 2, 3, 4], B: [5, 6, 7, 8], C: [9, 10, 11, 12] };
             ulns.forEach((k, bi) => {
                 const f = ulnFrame(k), hdrR = ULN.r + (ULN.flip ? -PIN_Y : PIN_Y);
                 PINS[k].forEach((gp, j) => {
                     const st = espPin(gp), end = f(IN_X(j), PIN_Y, UZ + 8.6);
-                    elec.add(wire([st, [st[0], st[1], st[2] + 2.5], ...channel(toWorld(ESP, -ESP.len / 2 - 1, 0, 8), deg(-ELEC.ulnAng[k]), hdrR, end, (j - 1.5) * 0.9 + (bi - 1) * 0.2).slice(1)], SIG[j], 0.42));
+                    const sigOff = (j - 1.5) * 0.9 + (bi - 1) * 0.2, from = toWorld(ESP, -ESP.len / 2 - 1, 0, 8);
+                    const path = blockA ? route(from, espA, espIn, deg(-ELEC.ulnAng[k]), hdrR, end, sigOff) : channel(from, deg(-ELEC.ulnAng[k]), hdrR, end, sigOff);
+                    elec.add(wire([st, [st[0], st[1], st[2] + 2.5], ...path.slice(1)], SIG[j], 0.42));
                 });
             });
             // power: module/breakout → ESP32 5V/GND (short hop), → each board's + / − (through the channels)
             let railPin = [0, 0];                                                     // next free pin on each hub rail
             const pwrPad = s => !batt && compactLayout() ? toWorld(PWR, -PWR.len / 2 + 1.6 + (s > 0 ? 0 : 2.54), -6.35 + 2.54 * railPin[s > 0 ? 0 : 1]++, 9.7) : toWorld(PWR, -PWR.len / 2 + 2.2, s * 3, 1.6);
             [['5V', 1, 0xdc2626, 0], ['GND', -1, 0x111111, 1]].forEach(([name, sgn, col, pi]) => {
-                const st = pwrPad(sgn), e = espPin(name);
-                elec.add(wire([st, [st[0], st[1], 4], toWorld(ESP, -ESP.len / 2 - 2.5, -11 + pi * 1.4, 4), toWorld(ESP, -4, -11.5 + pi * 1.4, 11), [e[0], e[1], e[2] + 2.5], e], col, 0.5));
-                ulns.forEach(k => {
-                    const f = ulnFrame(k), end = f(PW_X(pi), PIN_Y, UZ + 8.6);
-                    elec.add(wire([st, [st[0], st[1], 3.5], ...channel(toWorld(ESP, -ESP.len / 2 - 1, -4, 6), deg(-ELEC.ulnAng[k]), ULN.r + (ULN.flip ? -PIN_Y : PIN_Y), end, 2.6 + pi * 0.9).slice(1)], col, 0.5));
-                });
+                const st = pwrPad(sgn), e = espPin(name), pOff = 2.6 + pi * 0.9;
+                if (blockA) {                                                            // compact: hub spoke → ring → ESP spoke / each board's spoke
+                    const eUp = [e[0], e[1], e[2] + 2.5];
+                    elec.add(wire([st, [st[0], st[1], 3.5], ...route(toWorld(PWR, -PWR.len / 2 - 1, 0, 6), hubA, hubIn, espA, espIn + 6, eUp, pOff).slice(1), e], col, 0.5));
+                    ulns.forEach(k => {
+                        const f = ulnFrame(k), end = f(PW_X(pi), PIN_Y, UZ + 8.6);
+                        elec.add(wire([st, [st[0], st[1], 3.5], ...route(toWorld(PWR, -PWR.len / 2 - 1, 0, 6), hubA, hubIn, deg(-ELEC.ulnAng[k]), ULN.r - PIN_Y, end, pOff).slice(1)], col, 0.5));
+                    });
+                } else {
+                    elec.add(wire([st, [st[0], st[1], 4], toWorld(ESP, -ESP.len / 2 - 2.5, -11 + pi * 1.4, 4), toWorld(ESP, -4, -11.5 + pi * 1.4, 11), [e[0], e[1], e[2] + 2.5], e], col, 0.5));
+                    ulns.forEach(k => {
+                        const f = ulnFrame(k), end = f(PW_X(pi), PIN_Y, UZ + 8.6);
+                        elec.add(wire([st, [st[0], st[1], 3.5], ...channel(toWorld(ESP, -ESP.len / 2 - 1, -4, 6), deg(-ELEC.ulnAng[k]), ULN.r + (ULN.flip ? -PIN_Y : PIN_Y), end, pOff).slice(1)], col, 0.5));
+                    });
+                }
                 if (batt) {                                                             // cell → module B+ / B−
                     const B = ELEC.batt, fb = frame(B.r, B.ang), be = fb(sgn * (B.len / 2 - 2), 0, 3);
                     const bp = toWorld(PWR, -PWR.len / 2 + 2, sgn * 7.5, 1.6);
