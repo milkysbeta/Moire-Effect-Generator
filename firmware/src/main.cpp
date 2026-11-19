@@ -24,6 +24,11 @@
 // Edit lock: anyone on the network can watch the status, but once an admin password
 // is set (Setup on the web page) every change needs it. Forgot it? Hold the BOOT
 // button for 5 seconds while the drive is running: the password is cleared.
+//
+// Backlight (S3 env): a ring of WS2812B modules behind the diffuser, DIN on PIN_RING (GPIO 44, the RX pin)
+// through 330 ohm. Glow, Breathe (with the breathe period) or Follow (a soft bright patch that turns with
+// the front disc). Brightness is squared and capped, so it stays moody and well inside a 2 A charger.
+// Panel button: double-tap = backlight on / off.
 
 #include <Arduino.h>
 #include <WiFi.h>
@@ -33,6 +38,9 @@
 #include <ArduinoOTA.h>
 #include <Update.h>
 #include "web_ui.h"
+#ifdef PIN_RING
+#include <Adafruit_NeoPixel.h>
+#endif
 
 #if !defined(DRIVER_ULN2003) && !defined(DRIVER_TMC2209)
 #define DRIVER_ULN2003
@@ -70,6 +78,20 @@ struct Settings {
     float ratio = 3.0f;                    // motor turns per disc turn: 3 centre spindle (15:45), ~13 edge drive
     uint8_t version = 3;
 } S;
+enum LightMode : uint8_t { GLOW = 0, LBREATHE = 1, FOLLOW = 2 };
+struct Light {
+    bool on = true;
+    float bri = 0.35f;                     // 0..1 (squared on the way out)
+    float hue = 28.0f;                     // degrees; 28 = warm amber
+    float sat = 0.8f;
+    uint8_t mode = GLOW;
+    uint8_t version = 1;
+} LT;
+#ifdef PIN_RING
+constexpr int RING_N = RING_LEDS;
+#else
+constexpr int RING_N = 0;
+#endif
 float maxDiscRpm() { return MAX_MOTOR_RPM / S.ratio; }
 String wifiSsid, wifiPass, adminPass;   // adminPass empty = not set yet, editing open
 #if defined(CONFIG_IDF_TARGET_ESP32C3) || defined(CONFIG_IDF_TARGET_ESP32C6)
@@ -214,6 +236,8 @@ void loadSettings() {
     wifiSsid = prefs.getString("ssid", "");
     wifiPass = prefs.getString("pass", "");
     adminPass = prefs.getString("admin", "");
+    Light lt;
+    if (prefs.getBytesLength("lt") == sizeof(Light)) { prefs.getBytes("lt", &lt, sizeof(Light)); if (lt.version == 1) LT = lt; }
     prefs.end();
     S.discs = constrain(S.discs, 2, 3);
 }
@@ -221,6 +245,7 @@ void saveSoon() { saveAt = millis() + 2000; }   // debounce flash writes while s
 void saveNow() {
     prefs.begin("moire", false);
     prefs.putBytes("s3", &S, sizeof(Settings));
+    prefs.putBytes("lt", &LT, sizeof(Light));
     prefs.end();
     saveAt = 0;
 }
@@ -253,15 +278,17 @@ void motionTick() {
 const char* modeName(uint8_t m) { return m == BREATHE ? "breathe" : m == DRIFT ? "drift" : "steady"; }
 const char* tf(bool b) { return b ? "true" : "false"; }
 String stateJson() {
-    char b[800];
+    char b[1000];
     snprintf(b, sizeof b,
         "{\"l\":[%.3f,%.3f,%.3f],\"cur\":[%.3f,%.3f,%.3f],\"inv\":[%s,%s,%s],\"ok\":[%s,%s,%s],"
         "\"discs\":%d,\"motors\":%d,\"mode\":\"%s\",\"period\":%.1f,\"depth\":%.2f,\"drift\":%.2f,\"accel\":%.2f,"
-        "\"current\":%u,\"running\":%s,\"driver\":\"%s\",\"maxDiscRpm\":%.2f,\"ratio\":%.2f,\"ap\":%s,\"locked\":%s,\"ip\":\"%s\"}",
+        "\"current\":%u,\"running\":%s,\"driver\":\"%s\",\"maxDiscRpm\":%.2f,\"ratio\":%.2f,\"ap\":%s,\"locked\":%s,\"ip\":\"%s\","
+        "\"ring\":%d,\"lon\":%s,\"lbri\":%.2f,\"lhue\":%.0f,\"lsat\":%.2f,\"lmode\":\"%s\"}",
         S.l[0], S.l[1], S.l[2], cur[0], cur[1], cur[2], tf(S.inv[0]), tf(S.inv[1]), tf(S.inv[2]), tf(ok[0]), tf(ok[1]), tf(ok[2]),
         activeDiscs(), MOTORS, modeName(S.mode), S.period, S.depth, S.drift, S.accel,
         S.current, tf(S.running), DRIVER_NAME, maxDiscRpm(), S.ratio,
-        tf(apMode), tf(adminPass.length() > 0), (apMode ? WiFi.softAPIP() : WiFi.localIP()).toString().c_str());
+        tf(apMode), tf(adminPass.length() > 0), (apMode ? WiFi.softAPIP() : WiFi.localIP()).toString().c_str(),
+        RING_N, tf(LT.on), LT.bri, LT.hue, LT.sat, LT.mode == LBREATHE ? "breathe" : LT.mode == FOLLOW ? "follow" : "glow");
     return b;
 }
 void cors() { server.sendHeader("Access-Control-Allow-Origin", "*"); server.sendHeader("Cache-Control", "no-store"); }
@@ -310,7 +337,12 @@ void checkPanelButton() {
     if (now != down && millis() - lastEdge > 30) {            // 30 ms debounce
         lastEdge = millis(); down = now;
         if (down) { since = millis(); held = false; }
-        else if (!held) { S.running = !S.running; saveSoon(); }
+        else if (!held) {
+            static uint32_t lastTap = 0;
+            if (RING_N && millis() - lastTap < 400) { S.running = !S.running; LT.on = !LT.on; lastTap = 0; }   // double-tap: undo the pause, flip the light
+            else { S.running = !S.running; lastTap = millis(); }
+            saveSoon();
+        }
     }
     if (down && !held && millis() - since > 1000) {
         held = true; S.mode = (S.mode + 1) % 3; saveSoon();
@@ -328,6 +360,42 @@ void statusLed() {
     else neopixelWrite(PIN_RGB, 20, 10, 0);
 #endif
 }
+// ── Backlight ring ───────────────────────────────────────────────
+#ifdef PIN_RING
+Adafruit_NeoPixel ring(RING_LEDS, PIN_RING, NEO_GRB + NEO_KHZ800);
+void hsv(float h, float s, float v, uint8_t& r, uint8_t& g, uint8_t& b) {
+    h = fmodf(fmodf(h, 360) + 360, 360) / 60; int i = (int)h; float f = h - i, p = v * (1 - s), q = v * (1 - s * f), t = v * (1 - s * (1 - f));
+    float R, G, B;
+    switch (i) { case 0: R = v; G = t; B = p; break; case 1: R = q; G = v; B = p; break; case 2: R = p; G = v; B = t; break;
+                 case 3: R = p; G = q; B = v; break; case 4: R = t; G = p; B = v; break; default: R = v; G = p; B = q; }
+    r = R * 255; g = G * 255; b = B * 255;
+}
+void ringTick() {
+    static uint32_t last = 0;
+    static float phase = 0, fade = 0;
+    uint32_t now = millis();
+    if (now - last < 40) return;
+    float dt = (now - last) / 1000.0f; last = now;
+    if (dt > 1) dt = 0.04f;
+    phase += cur[0] * 6.0f * dt;                                   // degrees: follows the front disc
+    fade += constrain((LT.on ? 1.0f : 0.0f) - fade, -dt / 1.5f, dt / 1.5f);   // 1.5 s fade on / off
+    float base = LT.bri * fade, t = now / 1000.0f;
+    if (LT.mode == LBREATHE) base *= 0.55f + 0.45f * sinf(2 * PI * t / max(5.0f, S.period));
+    for (int i = 0; i < RING_LEDS; i++) {
+        float h = LT.hue, v = base;
+        if (LT.mode == FOLLOW) {
+            float a = (i * 360.0f / RING_LEDS - phase) * PI / 180;
+            v *= 0.35f + 0.65f * (0.5f + 0.5f * cosf(a)); h += 14 * sinf(a);
+        }
+        v = min(v * v, 0.6f);                                         // perceptual, and never past ~60 % (about 0.6 A for 16)
+        uint8_t r, g, b; hsv(h, LT.sat, v, r, g, b);
+        ring.setPixelColor(i, r, g, b);
+    }
+    ring.show();
+}
+#else
+void ringTick() {}
+#endif
 // POST /update?key=… with the firmware .bin as the body (multipart form from the web page)
 void handleUpdateDone() {
     bool ok = !Update.hasError();
@@ -381,6 +449,11 @@ void handleSet() {
     }
     float c = S.current;
     if (argF("current", c, 50, 400)) { S.current = (uint16_t)c; motorsSetCurrent(S.current); ch = true; }
+    ch |= argB("lon", LT.on);
+    ch |= argF("lbri", LT.bri, 0, 1);
+    ch |= argF("lhue", LT.hue, 0, 360);
+    ch |= argF("lsat", LT.sat, 0, 1);
+    if (server.hasArg("lmode")) { String m = server.arg("lmode"); LT.mode = m == "breathe" ? LBREATHE : m == "follow" ? FOLLOW : GLOW; ch = true; }
     if (ch) saveSoon();
     cors(); server.send(200, "application/json", stateJson());
 }
@@ -422,6 +495,9 @@ void setup() {
     delay(300);
     loadSettings();
     motorsBegin();
+#ifdef PIN_RING
+    ring.begin(); ring.clear(); ring.show();
+#endif
     startWifi();
     server.on("/", [] { server.send_P(200, "text/html", WEB_UI); });
     server.on("/api/state", [] { cors(); server.send(200, "application/json", stateJson()); });
@@ -461,4 +537,5 @@ void loop() {
     checkPanelButton();
     ArduinoOTA.handle();
     statusLed();
+    ringTick();
 }

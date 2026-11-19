@@ -73,6 +73,24 @@ You don't need the buck converter. Everything runs on **5 V**:
 * **Flashing while powered:** if your S3 SuperMini has a diode between its USB-C and its 5V pin (most do; a small SOD-123 part next to the socket), you can leave the power plugged in. If unsure, unplug the power before plugging in the computer, or skip the cable and update over Wi-Fi.
 * The buck converter is only needed if you move to a 12 V supply (TMC2209 option below).
 
+### Compact pod layout (2 discs, the default case)
+
+The ULN2003 boards sit **above and below** the spindle, between the two motors. The ESP32-S3 sits upper right and the USB-C breakout lower right, both with their sockets in windows in the pod wall. The wiring is the same as above. The panel button goes through the pod wall just right of the ESP32.
+
+### Backlight (Pod + backlight case)
+
+```
+16× WS2812B modules glued round the flange at the pod's foot, facing forward, chained DOUT → DIN
+  DIN of the first (the one by the ESP32) ← 330 Ω ← GPIO 44 (the S3's RX pin)
+  5V / GND of the ring                    ← the USB-C breakout (through its window), not the S3
+```
+
+* **The app:** a Backlight card appears, with Glow / Breathe / Follow (a soft bright patch that turns with the front disc), brightness, colour and richness. The default is warm amber at 35 %.
+* **Panel button:** double-tap turns the light on or off.
+* **Power:** brightness is squared and capped at 60 %, so 16 LEDs never draw more than about 0.6 A, and a 2 A charger covers motors + light.
+* **Data voltage:** the 3.3 V data line drives a WS2812B at 5 V fine when the first LED is this close. If yours flicker, power the first module through a 1N4148 diode (its 5 V drops to ~4.4 V) or add a 74AHCT125 level shifter.
+* **LED count:** set `RING_LEDS` in `platformio.ini` if you use more or fewer LEDs. Set `PIN_RING` if you wire another pin.
+
 ## Wiring: ULN2003 on a C3 SuperMini (2 discs)
 
 Motor A IN1-4 ← GPIO 0, 1, 3, 4 · Motor B IN1-4 ← GPIO 5, 6, 7, 10 · button ← GPIO 20. Power exactly as above. GPIO 2, 8 and 9 are the C3's boot pins, so they're left free.

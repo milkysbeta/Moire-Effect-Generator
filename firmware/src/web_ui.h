@@ -47,6 +47,12 @@ details summary{cursor:pointer;color:var(--muted);font-size:13px}
   <div class="row" data-for="drift"><label for="drift">Drift amount</label><input type="range" id="drift" min="0" max="1" step="0.01"><output id="driftO"></output></div>
   <div class="row"><label for="accel">Ramp</label><input type="range" id="accel" min="0.02" max="2" step="0.01"><output id="accelO"></output></div>
 </div>
+<div class="card" id="lightCard" hidden>
+  <div class="row"><label>Backlight</label><div class="seg" id="lmode"><button data-v="glow">Glow</button><button data-v="breathe">Breathe</button><button data-v="follow">Follow</button></div><button class="btn" id="lon">Off</button></div>
+  <div class="row"><label for="lbri">Brightness</label><input type="range" id="lbri" min="0" max="1" step="0.01"><output id="lbriO"></output></div>
+  <div class="row"><label for="lhue">Colour</label><input type="range" id="lhue" min="0" max="360" step="1" style="background:linear-gradient(90deg,#f00,#ff0,#0f0,#0ff,#00f,#f0f,#f00);border-radius:6px;height:8px"><output id="lhueO"></output></div>
+  <div class="row"><label for="lsat">Richness</label><input type="range" id="lsat" min="0" max="1" step="0.01"><output id="lsatO"></output></div>
+</div>
 <details class="card"><summary>Setup</summary>
   <form id="pw" class="bar"><input type="password" name="new" placeholder="New admin password (4+ characters)" autocomplete="new-password"><button class="btn">Set password</button><button class="btn" type="button" id="pwOff">Remove lock</button></form>
   <p id="pwMsg">Watching stays open to anyone on your Wi-Fi; changes need the password. Forgot it? Hold the board's BOOT button for 5 seconds.</p>
@@ -62,7 +68,7 @@ details summary{cursor:pointer;color:var(--muted);font-size:13px}
 </main>
 <script>
 const $=id=>document.getElementById(id);let st=null,timer=null;
-const fmt={period:v=>v+' s',depth:v=>Math.round(v*100)+'%',drift:v=>Math.round(v*100)+'%',accel:v=>(+v).toFixed(2)+'/s',current:v=>v+' mA'};
+const fmt={period:v=>v+' s',depth:v=>Math.round(v*100)+'%',drift:v=>Math.round(v*100)+'%',accel:v=>(+v).toFixed(2)+'/s',current:v=>v+' mA',lbri:v=>Math.round(v*100)+'%',lhue:v=>Math.round(v)+'°',lsat:v=>Math.round(v*100)+'%'};
 const names=n=>n===3?['Front (L1)','Middle (L2)','Rear (L3)']:['Front (L1)','Rear (L2)'];
 let key='';try{key=localStorage.getItem('moireKey')||''}catch(e){}
 const withKey=q=>q+(key?'&key='+encodeURIComponent(key):'');
@@ -88,6 +94,8 @@ function render(all){
   $('invs').innerHTML=nm.map((x,i)=>`<label><input type="checkbox" data-i="${i}" ${st.inv[i]?'checked':''}> ${x}</label>`).join('');
   $('invs').querySelectorAll('input').forEach(c=>c.onchange=e=>api('inv'+(+c.dataset.i+1)+'='+(e.target.checked?1:0)));
   $('curRow').hidden=st.driver!=='TMC2209';
+  $('lightCard').hidden=!st.ring;$('lon').textContent=st.lon?'Turn off':'Turn on';
+  document.querySelectorAll('#lmode button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.v===st.lmode));
   $('drv').textContent='Driver: '+st.driver+' ('+st.motors+' motors) · max '+st.maxDiscRpm.toFixed(2)+' disc rpm · gears '+st.ratio+':1 · '+(st.ap?'access point ':'')+st.ip;
   const w=[];for(let i=0;i<n;i++)if(!st.ok[i])w.push(nm[i]+' driver not answering');
   const live=st.l.slice(0,n).filter(v=>v);if(live.length>1&&live.every(v=>Math.sign(v)===Math.sign(live[0])))w.push('all discs turn the same way, so there is no counter-rotation');
@@ -97,6 +105,8 @@ for(let i=0;i<3;i++)$('l'+i).addEventListener('input',e=>{$('o'+i).textContent=(
 for(const k in fmt)$(k).addEventListener('input',e=>{$(k+'O').textContent=fmt[k](e.target.value);send(k+'='+e.target.value)});
 document.querySelectorAll('#mode button').forEach(b=>b.onclick=()=>api('mode='+b.dataset.v));
 document.querySelectorAll('#discs button').forEach(b=>b.onclick=()=>api('discs='+b.dataset.v));
+document.querySelectorAll('#lmode button').forEach(b=>b.onclick=()=>api('lmode='+b.dataset.v));
+$('lon').onclick=()=>api('lon='+(st.lon?0:1));
 $('run').onclick=()=>api('run='+(st.running?0:1));
 $('flip').onclick=()=>api(st.l.map((v,i)=>'l'+(i+1)+'='+(-v)).join('&'));
 $('zero').onclick=()=>api('l1=0&l2=0&l3=0');
