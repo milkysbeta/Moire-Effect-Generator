@@ -472,8 +472,8 @@
                             <option value="2">2 discs: front L1, rear L2</option>
                             <option value="3">3 discs: front L1, middle L2, rear L3</option>
                         </select>
-                        <div class="row"><span>Disc style</span></div>
-                        <select id="cxStyle" class="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm mb-1">
+                        <div class="row" hidden><span>Disc style</span></div>
+                        <select id="cxStyle" hidden class="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm mb-1">
                             <option value="openwork">Openwork, one colour (light through)</option>
                             <option value="twocolour">Solid base + black pattern (3MF)</option>
                         </select>
@@ -613,7 +613,7 @@ const params = {
     armN: 12, armD: 2, armTwist: 1, armOpen: 0.45, armHub: 0.15, armMid: 0.55, armM2: 0.78, armSin: 30, armSout: 30, armS3: 32, armSharp: 0.6, armEntry: 0.5, armWHub: 0.25, armWKink: 0.45, armWRim: 0.6, armMirror: true,
     lightbox: false, lbDiameter: 200, lbModule: 2, lbPlanetTeeth: 18,
     lbPlanetGap: 0.2, lbCentreHole: 8, lbAxleHole: 5, lbBaseT: 1.6, lbRibH: 0.6, lbDrive: 'planet', lbDiscs: '2', cxStyle: 'openwork', cxDiscT: 2, cxRim: 4, cxLip: 3, cxEnc: false, cxCase: 'open', cxLightCol: '#ffb36b', cxBatt: false, cxHubBrg: '608', cxOuterBrg: 'steel',
-    mpColFront: '#15171a', mpColMiddle: '#b98a4a', mpColRear: '#ece9e2', mpColRib: '#111111',
+    mpColFront: '#000000', mpColMiddle: '#404040', mpColRear: '', mpColRib: '#111111',   // L1 black, L2 #404040, L3 #606060
 };
 
 // ════════════════════════════════════════════════════════════════════
@@ -3961,8 +3961,8 @@ function v3Discs() {
     if (three ? params.layer3On : params.layer2On) out.push({ which: 'rear', layer: three ? 2 : 1, colour: discColour('rear') });
     return out;
 }
-const DISC_COL = { front: ['mpColFront', '#15171a'], middle: ['mpColMiddle', '#b98a4a'], rear: ['mpColRear', '#ece9e2'], rib: ['mpColRib', '#111111'] };
-const discColour = w => { const [k, d] = DISC_COL[w]; return /^#[0-9a-f]{6}$/i.test(params[k] || '') ? params[k] : d; };
+const DISC_COL = { front: ['mpColFront', '#000000'], middle: ['mpColMiddle', '#404040'], rear: ['mpColRear', null], rib: ['mpColRib', '#111111'] };
+const discColour = w => { const [k, d] = DISC_COL[w]; return /^#[0-9a-f]{6}$/i.test(params[k] || '') ? params[k] : d || (discCount() === 3 ? '#606060' : '#404040'); };
 // Everything that changes a disc's shape (not its spin or colour)
 function v3DiscSignature() {
     const skip = /Speed$|^lb(Module|Planet|Axle|BaseT)|^mpCol|^cx(Enc|Case|LightCol)$/;
@@ -4051,11 +4051,7 @@ function buildModelPageDOM() {
         <input id="mpT" type="range" min="1.2" max="4" step="0.2">
         <div class="r"><span>Rim stiffening lip</span><output id="mpLipO"></output></div>
         <input id="mpLip" type="range" min="0" max="8" step="0.5">
-        <div class="r"><span>Disc style</span></div>
-        <select id="mpStyle"><option value="openwork">Openwork, one colour (light through)</option><option value="twocolour">Solid base + black pattern (3MF)</option></select>
-        <div class="r"><span>Hub bearings</span></div>
-        <select id="mpBrg" aria-label="Hub bearings"></select>
-        <label class="chk"><input type="checkbox" id="mpBatt"> 18650 battery inside (USB-C charging)</label>
+        <select id="mpStyle" hidden><option value="openwork">Openwork</option><option value="twocolour">Two colour</option></select>
         <div class="r"><span>Colours</span></div>
         <div class="cols" id="mpCols"></div>
         <h3>View</h3>
@@ -4079,6 +4075,10 @@ function buildModelPageDOM() {
           <div id="mpCutAngRow"><div class="r"><span>Angle</span><output id="mpCutAngO"></output></div>
           <input id="mpCutAng" type="range" min="0" max="180" step="1" value="0"></div>
         </div>
+        <h3>Hardware</h3>
+        <div class="r"><span>Hub bearings</span></div>
+        <select id="mpBrg" aria-label="Hub bearings"></select>
+        <label class="chk"><input type="checkbox" id="mpBatt"> 18650 battery inside (USB-C charging)</label>
         <h3>Build</h3>
         <div id="mpInfo"></div>
         <h3>Control</h3>
@@ -4227,6 +4227,7 @@ function showPage(name) {
     const page = document.getElementById('modelPage');
     if (name === 'model') {
         if (params.lbDrive !== 'coaxial') { params.lbDrive = 'coaxial'; }          // the edge drive is a separate project now
+        params.cxStyle = 'openwork';                                              // discs are light-through only
         if (!V3.caseSet) { params.cxCase = 'open'; params.cxEnc = false; V3.caseSet = true; }   // open on 'No case'; pick one from the Case row
         if (!params.lightbox) toggleLightbox();                          // the Design canvas frames the disc too
         syncDriveUI();
