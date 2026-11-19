@@ -610,7 +610,7 @@ const params = {
     // Lightbox
     armN: 12, armD: 2, armTwist: 1, armOpen: 0.45, armHub: 0.15, armMid: 0.55, armM2: 0.78, armSin: 30, armSout: 30, armS3: 32, armSharp: 0.6, armEntry: 0.5, armWHub: 0.25, armWKink: 0.45, armWRim: 0.6, armMirror: true,
     lightbox: false, lbDiameter: 200, lbModule: 2, lbPlanetTeeth: 18,
-    lbPlanetGap: 0.2, lbCentreHole: 8, lbAxleHole: 5, lbBaseT: 1.6, lbRibH: 0.6, lbDrive: 'planet', lbDiscs: '2', cxStyle: 'openwork', cxDiscT: 2, cxRim: 4, cxLip: 3, cxEnc: false, cxCase: 'pod', cxLightCol: '#ffb36b', cxBatt: false, cxHubBrg: '608', cxOuterBrg: 'printed',
+    lbPlanetGap: 0.2, lbCentreHole: 8, lbAxleHole: 5, lbBaseT: 1.6, lbRibH: 0.6, lbDrive: 'planet', lbDiscs: '2', cxStyle: 'openwork', cxDiscT: 2, cxRim: 4, cxLip: 3, cxEnc: false, cxCase: 'open', cxLightCol: '#ffb36b', cxBatt: false, cxHubBrg: '608', cxOuterBrg: 'steel',
     mpColFront: '#15171a', mpColMiddle: '#b98a4a', mpColRear: '#ece9e2', mpColRib: '#111111',
 };
 
@@ -3001,8 +3001,10 @@ CX.earA = CX.g1z + (CX.g1T - CX.pinT) / 2 - CX.pinZ;     // pinion A centred on 
 CX.earB = CX.hubZ + (CX.g2T - CX.pinT) / 2 - CX.pinZ;    // pinion B level with G2
 // rear hub bearings: skateboard 608s (easy to find) or 688s (4 mm slimmer stack)
 Object.defineProperty(CX, 'hubBrg', { get: () => params.cxHubBrg === '688' ? { od: 16, w: 5, name: '688ZZ', size: '8×16×5' } : { od: 22, w: 7, name: '608ZZ', size: '8×22×7' } });
-Object.defineProperty(CX, 'hubL', { get: () => 2 * CX.hubBrg.w });
-Object.defineProperty(CX, 'frontZ', { get: () => CX.hubZ + CX.hubL });   // front hub bottom: its foot sits on the top bearing's inner race
+// one bearing (least friction), pressed in from below up to a 0.8 mm web; the hex boss for the rear disc sits on the web
+CX.hubWeb = 0.8;
+Object.defineProperty(CX, 'hubL', { get: () => CX.hubBrg.w + CX.hubWeb });
+Object.defineProperty(CX, 'frontZ', { get: () => CX.hubZ + CX.hubBrg.w });   // front hub bottom: its foot reaches through the web onto the bearing's inner race
 CX.hubSpacer = 0;                                    // the rear hub's two bearings sit back to back
 CX.nutTop = CX.b1z - CX.washer;                      // back nut's face (on its washer)
 CX.nutBottom = CX.nutTop - CX.nutBack;               // back of the recess: flush with the plate's back
@@ -3303,16 +3305,17 @@ const CX_PARTS = {
             { R, z0: CX.g1T, z1: CX.g1T + 1, res: 40, paint: a => { a.add(P2.circle(0, 0, 6.5)); a.cut(P2.circle(0, 0, CX.rod / 2)); } },
         ]);
     },
-    rearHub: () => {     // G2 teeth + two 688s + the hex boss the rear disc presses onto
+    rearHub: () => {     // G2 teeth + one bearing under a top web + the hex boss the rear disc presses onto
         const R = (CX.Ng + 2) * CX.m / 2 + 1, gear = P2.poly(involuteGear(CX.Ng, CX.m, 0)), pk = (CX.hubBrg.od + CX.fit) / 2, H = CX.hubL, bw = CX.hubBrg.w, t = discT();
-        return zStack(R, [0, GEAR.foot, CX.g2T, bw, H - bw, H, H + t - 0.4, H + t], (a, z) => {
+        const webHole = CX.hubBrg.od > 20 ? 7 : 6.2;                       // clear of the inner race: the web only touches the outer race
+        return zStack(R, [0, GEAR.foot, CX.g2T, bw, H, H + t - 0.4, H + t], (a, z) => {
             if (z > H) {                                                    // disc boss, 0.3 mm lead-in at the top; the front hub's flange passes up inside
                 a.add(P2.hex(z > H + t - 0.4 ? CX.discHexAF - 0.6 : CX.discHexAF)); a.cut(P2.circle(0, 0, CX.frontFlangeR + 0.8)); return;
             }
             a.add(z < CX.g2T ? gear : P2.circle(0, 0, CX.hubR));
             if (z < GEAR.foot) gearFoot(a, gear);
             if (z < CX.g2T) gearWindows(a, CX.hubR + 1.5, GEAR.rimIn());          // 5 spokes from the bearing housing to the rim
-            a.cut(P2.circle(0, 0, z < bw || z > H - bw ? pk : 5.5));
+            a.cut(P2.circle(0, 0, z < bw ? pk : webHole));
         });
     },
     // print-in-place ball bearing (any size): see pipBearing()
@@ -3321,8 +3324,8 @@ const CX_PARTS = {
     // riser), a flange, a collar the front disc stops on, then the hex boss it presses onto. The countersunk bolt
     // head sits flush in its front face. Print it front face down.
     frontHub: () => {
-        const three = discCount() === 3, t = discT(), foot = three ? 1.4 : 0.6, footR = three ? 6.5 : 5;
-        const hexZ = three ? foot + 1 : t + 1, H = hexZ + t, colZ = hexZ - 0.7;     // collar 0.3 mm above what's below it
+        const three = discCount() === 3, t = discT(), foot = three ? 1.4 : CX.hubWeb + 0.4, footR = three ? 6.5 : 5;   // 2 discs: the foot reaches down through the hub's web
+        const hexZ = three ? foot + 1 : t + 1 + CX.hubWeb, H = hexZ + t, colZ = hexZ - 0.7;     // collar 0.3 mm above what's below it
         const cone = z => Math.max(CX.rod / 2, CX.csk.d / 2 - (H - z));
         const slices = Array.from({ length: 17 }, (_, i) => Math.max(0, H - CX.csk.depth + i * CX.csk.depth / 16));
         return zStack(16, [0, foot, colZ, hexZ, H, ...slices], (a, z) => {
@@ -3480,7 +3483,7 @@ function coaxPartList() {
     if (discCount() === 2) return enc.concat([
         ['base.stl', () => CX_PARTS.base(), 1], ['rod-gear.stl', CX_PARTS.rodGear, 1], ['rear-hub.stl', CX_PARTS.rearHub, 1],
         ['front-hub.stl', CX_PARTS.frontHub, 1], ['pinion.stl', CX_PARTS.pinion, 2],
-        [`spacer-${CX.baseSpacer}mm.stl`, CX_PARTS.spacer(CX.baseSpacer), 1], [`spacer-${CX.hubSpacer}mm.stl`, CX_PARTS.spacer(CX.hubSpacer), 1],
+        [`spacer-${CX.baseSpacer}mm.stl`, CX_PARTS.spacer(CX.baseSpacer), 1],
     ]);
     const L = cx3();
     return enc.concat([
@@ -3754,7 +3757,7 @@ function coaxBOM() {
         'BUY',
         (() => { const top = (three ? L.frontDisc : CX.frontDisc2()) + discT(); const buy = CX.boltBuy(top), cut = CX.boltCut(top);
             return `  1× M8 countersunk socket screw (DIN 7991), ${buy} mm` + (buy > cut ? `, cut to ${cut} mm overall (head included) with a hacksaw; file the end` : ' (no cutting needed)'); })(),
-        three ? '  4× 608ZZ skateboard bearing (8×22×7)' : CX.hubBrg.name === '608ZZ' ? '  4× 608ZZ skateboard bearing (8×22×7): 2 in the base, 2 in the rear hub' : '  2× 608ZZ skateboard bearing (8×22×7, base) + 2× 688ZZ bearing (8×16×5, rear hub)',
+        three ? '  4× 608ZZ skateboard bearing (8×22×7)' : CX.hubBrg.name === '608ZZ' ? '  3× 608ZZ skateboard bearing (8×22×7): 2 in the base, 1 in the rear hub' : '  2× 608ZZ skateboard bearing (8×22×7, base) + 1× 688ZZ bearing (8×16×5, rear hub)',
         three && params.cxOuterBrg !== 'steel' ? '  Printed bearings: 0.2 mm layers, 2 walls, 15 % infill, flow 0.95, clean bed. Snip the tabs under the balls, spin until smooth, a drop of silicone grease.' : '',
         three ? (params.cxOuterBrg === 'steel' ? '  2× 6806ZZ / 6806-2RS bearing (30×42×7)' : '  (outer hub bearings: 2× printed, in the parts list)') : '',
         '  2× ordinary M8 nut (one keyed in the rod gear, one in the recess on the back), 2× M8 washer',
@@ -3777,7 +3780,7 @@ function coaxBOM() {
         '  2. Washer on the top base bearing, then the rod gear with an M8 nut sitting loose in its hex pocket (pocket down).',
     ];
     if (!three) lines.push(
-        `  3. Press a ${CX.hubBrg.name.slice(0, 3)} into each end of the rear hub (they meet in the middle); set it on the rod gear\'s boss, teeth down.`,
+        `  3. Press a ${CX.hubBrg.name.slice(0, 3)} into the rear hub from underneath, up against its top web; set it on the rod gear\'s boss, teeth down.`,
         '  4. Press the rear disc onto the hub\'s hex boss until it sits on the hub top.',
         `  5. Front hub (foot down) on the top ${CX.hubBrg.name.slice(0, 3)},`+' then the countersunk bolt from the front through everything: it screws into',
         '     the rod gear\'s nut (the motor holds the gear). Snug, not tight: the discs must still turn. Back washer + nut on the',
@@ -3936,6 +3939,12 @@ function buildModelPageDOM() {
       #mpPanel input[type=range]{width:100%;accent-color:#f59e0b}
       #mpPanel .grid2{display:grid;grid-template-columns:1fr 1fr;gap:6px}
       #mpPanel .chk{display:flex;gap:8px;align-items:center;margin:5px 0}
+      #mpPanel .seg{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:4px;background:#18181b;border:1px solid #3f3f46;border-radius:9px;padding:3px}
+      #mpPanel .seg button{padding:7px 4px;border:0;border-radius:6px;background:transparent;color:#a1a1aa;font:500 12px system-ui;cursor:pointer}
+      #mpPanel .seg button:hover{color:#e4e4e7;background:#27272a}
+      #mpPanel .seg button[aria-pressed=true]{background:#b45309;color:#fff}
+      #mpPanel .seg button:disabled{opacity:.35;cursor:not-allowed}
+      #mpPanel .seg4 button{font-size:11.5px}
       #mpInfo{background:#18181b;border-radius:8px;padding:8px 10px;color:#a1a1aa;line-height:1.6}
       #mpInfo b{color:#e4e4e7;font-weight:600}
       #mpInfo .warn{color:#f59e0b}
@@ -3959,10 +3968,10 @@ function buildModelPageDOM() {
     page.innerHTML = `
       <div id="mpStage"><p id="mpNote"></p></div>
       <aside id="mpPanel">
-        <h3>Drive</h3>
-        <select id="mpDrive"><option value="coaxial">Centre spindle (rod + hubs)</option><option value="edge">Edge drive (geared rims + rollers)</option></select>
-        <div class="r"><span>Discs</span></div>
-        <select id="mpDiscs"><option value="2">2: front L1, rear L2</option><option value="3">3: front L1, middle L2, rear L3</option></select>
+        <select id="mpDrive" hidden><option value="coaxial">Centre spindle</option><option value="edge">Edge drive</option></select>
+        <select id="mpDiscs" hidden><option value="2">2</option><option value="3">3</option></select>
+        <h3>Discs</h3>
+        <div class="seg" id="mpDiscSeg"><button data-v="2">2 discs</button><button data-v="3">3 discs</button></div>
         <div class="r"><span>Disc / window Ø</span><output id="mpSizeO"></output></div>
         <input id="mpSize" type="range" min="80" max="320" step="5">
         <div class="r"><span>Disc thickness</span><output id="mpTO"></output></div>
@@ -3979,12 +3988,24 @@ function buildModelPageDOM() {
         <h3>View</h3>
         <div class="grid2"><button class="btn" id="mpExplode">Exploded view</button><button class="btn" id="mpPlay">Pause</button></div>
         <input id="mpExplodeR" type="range" min="0" max="1" step="0.01" value="0" aria-label="Explode amount" style="margin-top:6px">
-        <div class="grid2" style="margin-top:6px"><select id="mpCase" aria-label="Case"><option value="pod">Compact pod</option><option value="light">Pod + backlight</option><option value="drum">Full drum + shield</option><option value="open">No case</option></select><button class="btn" id="mpCut" aria-pressed="false">Cut in half</button></div>
+        <div class="grid2" style="margin-top:6px"><button class="btn" id="mpFront">Front view</button><button class="btn" id="mpIso">3/4 view</button></div>
+        <h3>Case</h3>
+        <select id="mpCase" hidden><option value="open">No case</option><option value="pod">Pod</option><option value="light">Pod + light</option><option value="drum">Full drum</option></select>
+        <div class="seg seg4" id="mpCaseSeg"><button data-v="open">No case</button><button data-v="pod">Pod</button><button data-v="light">Pod + light</button><button data-v="drum">Full drum</button></div>
         <label class="chk" id="mpLightRow"><input type="color" id="mpLightCol" style="width:34px;height:22px;padding:0;border:0;background:none"> Backlight colour</label>
-        <label class="chk"><input type="checkbox" id="mpLabels" checked> Part labels (hover a part)</label>
+        <h3>Show</h3>
+        <label class="chk"><input type="checkbox" id="mpShowDiscs" checked> Discs</label>
         <label class="chk"><input type="checkbox" id="mpMech" checked> Mechanism + electronics</label>
         <label class="chk"><input type="checkbox" id="mpBack" checked> Backdrop light</label>
-        <div class="grid2"><button class="btn" id="mpFront">Front view</button><button class="btn" id="mpIso">3/4 view</button></div>
+        <label class="chk"><input type="checkbox" id="mpLabels" checked> Part labels (hover a part)</label>
+        <h3>Section</h3>
+        <div class="seg" id="mpCutSeg"><button data-v="off">Off</button><button data-v="slice">Slice</button><button data-v="layers">Layers</button></div>
+        <div id="mpCutCtl">
+          <div class="r"><span id="mpCutPosL">Offset</span><output id="mpCutPosO"></output></div>
+          <input id="mpCutPos" type="range" step="0.5">
+          <div id="mpCutAngRow"><div class="r"><span>Angle</span><output id="mpCutAngO"></output></div>
+          <input id="mpCutAng" type="range" min="0" max="180" step="1" value="0"></div>
+        </div>
         <h3>Build</h3>
         <div id="mpInfo"></div>
         <h3>Control</h3>
@@ -4011,7 +4032,16 @@ function buildModelPageDOM() {
     document.getElementById('mpBrg').onchange = e => { if (discCount() === 3) params.cxOuterBrg = e.target.value; else params.cxHubBrg = e.target.value; mpRefreshPanel(); };
     document.getElementById('mpCase').onchange = e => { params.cxCase = e.target.value; params.cxEnc = e.target.value === 'drum'; mpRefreshPanel(); V3.onEnclosure && V3.onEnclosure(); };
     document.getElementById('mpLightCol').oninput = e => { params.cxLightCol = e.target.value; V3.recolour && V3.recolour(); };
-    document.getElementById('mpCut').onclick = () => { V3.cut = !V3.cut; mpRefreshPanel(); V3.onCut && V3.onCut(); };
+    document.querySelectorAll('#mpDiscSeg button').forEach(b => b.onclick = () => { params.lbDiscs = b.dataset.v; sync(); });
+    document.querySelectorAll('#mpCaseSeg button').forEach(b => b.onclick = () => { const cs = document.getElementById('mpCase'); cs.value = b.dataset.v; cs.onchange({ target: cs }); });
+    const cutRange = () => V3.cutMode === 'layers' ? [-CX.plateT, Math.ceil((discCount() === 3 ? cx3().frontDisc : CX.frontDisc2()) + discT() + discLip() + 2)] : [-Math.ceil(params.lbDiameter / 2 + 10), Math.ceil(params.lbDiameter / 2 + 10)];
+    document.querySelectorAll('#mpCutSeg button').forEach(b => b.onclick = () => {
+        V3.cutMode = b.dataset.v; const [lo, hi] = cutRange();
+        V3.cutPos = V3.cutMode === 'layers' ? hi - 4 : 0;                     // layers: start just behind the front disc
+        mpRefreshPanel(); V3.onCut && V3.onCut(); });
+    document.getElementById('mpCutPos').oninput = e => { V3.cutPos = +e.target.value; mpRefreshPanel(); V3.onCut && V3.onCut(); };
+    document.getElementById('mpCutAng').oninput = e => { V3.cutAng = +e.target.value; mpRefreshPanel(); V3.onCut && V3.onCut(); };
+    V3.cutRange = cutRange;
     document.getElementById('mpExplode').onclick = () => { V3.explodeTarget = V3.explodeTarget > 0.5 ? 0 : 1; mpRefreshPanel(); };
     document.getElementById('mpExplodeR').oninput = e => { V3.explode = V3.explodeTarget = +e.target.value; mpRefreshPanel(); };
     document.getElementById('mpPlay').onclick = () => { togglePause(); mpRefreshPanel(); };
@@ -4032,17 +4062,31 @@ function mpRefreshPanel() {
     document.getElementById('mpPlay').textContent = paused ? 'Play' : 'Pause';
     const bt = document.getElementById('mpBatt'); bt.checked = !!params.cxBatt; bt.disabled = edge;
     const bs = document.getElementById('mpBrg'), bOpts = discCount() === 3
-        ? [['printed', 'Outer hub: printed 30×42×7 (print-in-place)'], ['steel', 'Outer hub: steel 6806']]
-        : [['608', 'Rear hub: 608 skateboard bearings'], ['688', 'Rear hub: 688s (4 mm slimmer)']];
+        ? [['steel', 'Outer hub: steel 6806 (least friction)'], ['printed', 'Outer hub: printed 30×42×7']]
+        : [['608', 'Rear hub: one 608 skateboard bearing'], ['688', 'Rear hub: one 688 (2 mm slimmer)']];
     if (bs.dataset.key !== bOpts.map(o => o[0]).join()) { bs.dataset.key = bOpts.map(o => o[0]).join(); bs.innerHTML = bOpts.map(([v, l]) => `<option value="${v}">${l}</option>`).join(''); }
-    bs.value = discCount() === 3 ? (params.cxOuterBrg || 'printed') : (params.cxHubBrg || '608'); bs.disabled = edge;
+    bs.value = discCount() === 3 ? (params.cxOuterBrg || 'steel') : (params.cxHubBrg || '608'); bs.disabled = edge;
     const cs = document.getElementById('mpCase'), small = discCount() === 2 && !params.cxBatt;
     cs.disabled = edge; if (document.activeElement !== cs) cs.value = caseMode();
     [...cs.options].forEach(o => { o.disabled = (o.value === 'pod' || o.value === 'light') && !small; });
     cs.title = edge ? 'The edge drive\'s back plate is its enclosure' : small ? 'Compact pod behind the discs, optional LED diffuser, or the full-size drum' : 'The compact pod needs 2 discs and no 18650';
     document.getElementById('mpLightRow').style.display = edge || caseMode() !== 'light' ? 'none' : '';
     document.getElementById('mpLightCol').value = params.cxLightCol || '#ffb36b';
-    document.getElementById('mpCut').setAttribute('aria-pressed', !!V3.cut);
+    document.querySelectorAll('#mpDiscSeg button').forEach(b => { b.setAttribute('aria-pressed', +b.dataset.v === discCount()); });
+    const podOK = discCount() === 2 && !params.cxBatt;
+    document.querySelectorAll('#mpCaseSeg button').forEach(b => { b.setAttribute('aria-pressed', b.dataset.v === caseMode()); b.disabled = (b.dataset.v === 'pod' || b.dataset.v === 'light') && !podOK;
+        b.title = b.disabled ? 'The compact pod needs 2 discs and no 18650' : ''; });
+    const cm = V3.cutMode || 'off';
+    document.querySelectorAll('#mpCutSeg button').forEach(b => b.setAttribute('aria-pressed', b.dataset.v === cm));
+    document.getElementById('mpCutCtl').style.display = cm === 'off' ? 'none' : '';
+    document.getElementById('mpCutAngRow').style.display = cm === 'slice' ? '' : 'none';
+    if (V3.cutRange && cm !== 'off') {
+        const [lo, hi] = V3.cutRange(), cp = document.getElementById('mpCutPos'); cp.min = lo; cp.max = hi;
+        V3.cutPos = Math.min(hi, Math.max(lo, V3.cutPos ?? 0)); if (document.activeElement !== cp) cp.value = V3.cutPos;
+        document.getElementById('mpCutPosL').textContent = cm === 'layers' ? 'Depth (drag to peel layers off the front)' : 'Offset from the spindle';
+        document.getElementById('mpCutPosO').textContent = cm === 'layers' ? `${(+V3.cutPos + CX.plateT).toFixed(1)} mm from the wall` : `${(+V3.cutPos).toFixed(1)} mm`;
+        document.getElementById('mpCutAngO').textContent = `${V3.cutAng || 0}°`;
+    }
     // colour pickers for the discs on show (and the pattern ribs on two-colour discs)
     const cols = v3Discs().map(d => [d.which, d.which[0].toUpperCase() + d.which.slice(1) + ' L' + (d.layer + 1)]);
     if ((params.cxStyle || 'openwork') === 'twocolour' || edge && params.cxStyle === 'twocolour') cols.push(['rib', 'Pattern']);
@@ -4109,7 +4153,8 @@ function showPage(name) {
     document.querySelectorAll('#pageTabs button').forEach(b => b.setAttribute('aria-selected', b.dataset.page === name));
     const page = document.getElementById('modelPage');
     if (name === 'model') {
-        if (params.lbDrive !== 'coaxial' && params.lbDrive !== 'edge') { params.lbDrive = 'coaxial'; }
+        if (params.lbDrive !== 'coaxial') { params.lbDrive = 'coaxial'; }          // the edge drive is a separate project now
+        if (!V3.caseSet) { params.cxCase = 'open'; params.cxEnc = false; V3.caseSet = true; }   // open on 'No case'; pick one from the Case row
         if (!params.lightbox) toggleLightbox();                          // the Design canvas frames the disc too
         syncDriveUI();
         page.classList.add('open'); mpRefreshPanel();
@@ -4174,7 +4219,7 @@ async function openModelScene() {
         'base': 'Holds the two base bearings, the motors and the boards, with wire channels moulded in. Hangs on 2 keyholes; in pod mode its wall is the case.',
         'spacers': 'Shim between the two base bearings.', 'spacer': 'Spacer between two bearings\' inner races.',
         'rod gear': '45 teeth, keyed to an M8 nut on the bolt. Motor A turns it, and with it the bolt and the front disc.',
-        'rear hub': 'Green hub, 45 teeth, two bearings on the bolt (608 skateboard or 688). Motor B turns it; the rear disc presses onto its hex boss.',
+        'rear hub': 'Green hub, 45 teeth, one bearing on the bolt (608 skateboard or 688). Motor B turns it; the rear disc presses onto its hex boss.',
         'Printed bearing': 'Print-in-place ball bearing, 30 × 42 × 7, in place of a 6806. Snip the tabs under the balls after printing.',
         'front hub': 'Turns with the bolt. The front disc presses onto its hex boss; the bolt head sits flush in its face.',
         'middle hub': '45 teeth, two 608s on the bolt; motor B. The riser keys into its top.',
@@ -4214,7 +4259,7 @@ async function openModelScene() {
         const r = renderer.domElement.getBoundingClientRect();
         ptr.set((x - r.left) / r.width * 2 - 1, -(y - r.top) / r.height * 2 + 1);
         ray.setFromCamera(ptr, cam);
-        const hit = ray.intersectObject(scene, true).find(h => shown(h.object) && labelled(h.object) && (!V3.cut || cutPlane.distanceToPoint(h.point) >= 0));
+        const hit = ray.intersectObject(scene, true).find(h => shown(h.object) && labelled(h.object) && (!V3.cutMode || V3.cutMode === 'off' || cutPlane.distanceToPoint(h.point) >= 0));
         if (!hit) { hideTip(); return; }
         const obj = labelled(hit.object), name = obj.userData.label;
         if (obj !== hoverObj) {
@@ -4249,7 +4294,13 @@ async function openModelScene() {
     const box = (w, h, d, color, x, y, z) => { const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat(color)); b.position.set(x, y, z + d / 2); return b; };
     // Cut in half: a plane through the axis hides the half nearest the default camera
     const cutPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
-    V3.onCut = () => { renderer.clippingPlanes = V3.cut ? [cutPlane] : []; };
+    V3.onCut = () => {             // Slice: a plane through (or beside) the spindle at any angle. Layers: everything in front of a depth is removed.
+        const mode = V3.cutMode || 'off';
+        if (mode === 'slice') { const a = (V3.cutAng || 0) * Math.PI / 180; cutPlane.normal.set(-Math.sin(a), Math.cos(a), 0); cutPlane.constant = -(V3.cutPos || 0); }
+        else if (mode === 'layers') { cutPlane.normal.set(0, 0, -1); cutPlane.constant = V3.cutPos ?? 100; }
+        renderer.clippingPlanes = mode === 'off' ? [] : [cutPlane];
+    };
+    V3.cut = false;
     const cyl = (r, h, color) => {
         const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, h, 48), color ? mat(color) : steel);
         m.rotation.x = Math.PI / 2; m.geometry.translate(0, h / 2, 0); return m;
@@ -4406,8 +4457,7 @@ async function openModelScene() {
             spin.push([m(lab(nutModel(), 'M8 nut (back)'), CX.nutBottom + 0.3, 0), 0]);      // in the recess on the back
             if (!three3) {
                 spin.push([m(meshFrom(await build('rear hub', CX_PARTS.rearHub), 0x10b981), CX.hubZ, 2), 1]);
-                if (CX.hubSpacer > 0) m(meshFrom(await build('spacer', CX_PARTS.spacer(CX.hubSpacer)), 0xeab308), CX.hubZ + 7, 2);
-                for (const z of [CX.hubZ, CX.hubZ + CX.hubL - CX.hubBrg.w]) m(lab(bearingModel(CX.hubBrg.od, 8, CX.hubBrg.w), CX.hubBrg.name + ' bearing'), z, 2);
+                m(lab(bearingModel(CX.hubBrg.od, 8, CX.hubBrg.w), CX.hubBrg.name + ' bearing'), CX.hubZ, 2);
                 spin.push([m(meshFrom(await build('front hub', () => CX_PARTS.frontHub()), 0xa855f7), CX.frontZ, 4), 0]);
             } else {
                 spin.push([m(meshFrom(await build('middle hub', CX_PARTS.midHub), 0x10b981), L.hub1Z, 2), 1]);
@@ -4749,6 +4799,7 @@ async function openModelScene() {
         const step = isEdge() ? 9 : 22;
         for (const [obj, z, order] of items) obj.position.z = z + V3.explode * order * step * (isEdge() && z < 0 && order > 0 ? -1 : 1);
         if (back) back.position.z = backZ + V3.explode * backOrder * step;
+        if (discGroup) discGroup.visible = document.getElementById('mpShowDiscs').checked;
         for (const d of discs) d.grp.rotation.z = -ang[d.layer];
         for (const [obj, layer] of spin) obj.rotation.z = -ang[layer];
         for (const [p, phi, layer, Ng, Np] of pinions) p.rotation.z = lbPlanetPhase(phi, -ang[layer], Ng, Np);
