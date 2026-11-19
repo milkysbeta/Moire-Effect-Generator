@@ -48,8 +48,8 @@
         .lightbox-on  { background-color:#b45309; color:#fff; }
         .lightbox-off { background-color:#52525b; color:#d4d4d8; }
     </style>
-    <script id="discLookTransport">/* Moiré Orbit link-up: only on this PC, where the Orbit app runs at localhost:8080 */
-    if (/^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname)) { const s = document.createElement('script'); s.async = true; s.src = 'http://localhost:8080/disc-look.js'; document.head.appendChild(s); }</script>
+    <script id="discLookTransport">/* Moiré Orbit link-up: on this PC the Orbit app runs at localhost:8080; online it is the bundled copy in orbit/ */
+    { const local = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname), s = document.createElement('script'); s.async = true; s.src = local ? 'http://localhost:8080/disc-look.js' : 'orbit/disc-look.js'; document.head.appendChild(s); }</script>
 </head>
 <body class="bg-zinc-950 text-zinc-100 min-h-screen">
 <div class="flex flex-col md:flex-row h-screen">
@@ -4033,7 +4033,7 @@ function buildModelPageDOM() {
     const tabs = document.createElement('div');
     tabs.id = 'pageTabs'; tabs.setAttribute('role', 'tablist');
     tabs.innerHTML = `<button role="tab" data-page="design">Design</button><button role="tab" data-page="model">Centre Spindle 3D</button><a id="smoothOrbitLink" href="http://localhost:8080/model.html">Moiré Orbit</a>`;
-    if (!/^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname)) tabs.querySelector('#smoothOrbitLink')?.remove();   // Orbit lives on this PC only
+    if (!/^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname)) tabs.querySelector('#smoothOrbitLink').href = 'orbit/model.html';   // online: the bundled Orbit copy
     tabs.querySelectorAll('button').forEach(b => b.onclick = () => { location.hash = b.dataset.page === 'model' ? '#model' : '#design'; });
     document.body.appendChild(tabs);
     const page = document.createElement('div');

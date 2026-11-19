@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Moiré Orbit — 3D Sculpture</title>
+    <style>
+        :root {
+            color-scheme: dark;
+            --bg: #060708;
+            --panel: rgba(17, 19, 22, 0.94);
+            --line: #2f3339;
+            --muted: #8c929b;
+            --amber: #f3a72d;
+            --cyan: #55d6ff;
+            --green: #6ce5a6;
+        }
+        * { box-sizing: border-box; }
+        html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+        body { background: var(--bg); color: #f5f6f8; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+        button, select, input { font: inherit; }
+        button, select {
+            color: #f4f4f5;
+            background: #25282d;
+            border: 1px solid #3b4048;
+            border-radius: 9px;
+        }
+        button { cursor: pointer; padding: 9px 11px; }
+        button:hover { border-color: #6f7784; background: #30343a; }
+        button.primary { background: #9a5a0d; border-color: #d78a20; }
+        button.primary:hover { background: #b86c10; }
+        a { color: inherit; text-decoration: none; }
+        #app { height: 100%; display: grid; grid-template-rows: 58px minmax(0, 1fr); }
+        header {
+            z-index: 20;
+            display: flex;
+            align-items: center;
+            gap: 18px;
+            padding: 0 18px;
+            border-bottom: 1px solid #24272c;
+            background: rgba(7, 8, 10, 0.92);
+            backdrop-filter: blur(14px);
+        }
+        .back { color: #b5bac2; font-size: 13px; }
+        .back:hover { color: white; }
+        .title-block { min-width: 0; }
+        h1 { font-size: 15px; margin: 0; letter-spacing: .13em; text-transform: uppercase; }
+        .subtitle { color: var(--muted); font-size: 11px; margin-top: 3px; }
+        .prototype-tag {
+            margin-left: auto;
+            padding: 5px 9px;
+            border: 1px solid #634a27;
+            border-radius: 999px;
+            color: #ffc971;
+            font-size: 10px;
+            letter-spacing: .12em;
+            text-transform: uppercase;
+        }
+        main { min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 320px; }
+        #viewport { position: relative; min-width: 0; overflow: hidden; background: radial-gradient(circle at 50% 46%, #171b20 0%, #08090b 56%, #030405 100%); }
+        #viewport canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+        .hint {
+            position: absolute;
+            left: 16px;
+            bottom: 14px;
+            color: #8f96a0;
+            font-size: 11px;
+            padding: 7px 9px;
+            border: 1px solid rgba(255,255,255,.08);
+            border-radius: 8px;
+            background: rgba(6,7,8,.65);
+            pointer-events: none;
+        }
+        #labels { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+        .part-label {
+            position: absolute;
+            transform: translate(-50%, -50%);
+            padding: 4px 7px;
+            border: 1px solid rgba(255,255,255,.22);
+            border-radius: 6px;
+            background: rgba(7,9,11,.82);
+            color: #e8eaed;
+            font-size: 10px;
+            line-height: 1;
+            white-space: nowrap;
+            box-shadow: 0 4px 18px rgba(0,0,0,.35);
+        }
+        .part-label::before {
+            content: "";
+            display: inline-block;
+            width: 5px;
+            height: 5px;
+            margin-right: 5px;
+            border-radius: 50%;
+            background: var(--amber);
+            vertical-align: 1px;
+        }
+        .part-label[data-disc="B"]::before { background: var(--cyan); }
+        .part-label[data-disc="C"]::before { background: #d3a8ff; }
+        aside {
+            min-height: 0;
+            overflow-y: auto;
+            border-left: 1px solid #282b31;
+            background: var(--panel);
+            padding: 16px;
+        }
+        .section { padding-bottom: 16px; margin-bottom: 16px; border-bottom: 1px solid var(--line); }
+        .section:last-child { border-bottom: 0; }
+        h2 { margin: 0 0 11px; font-size: 11px; color: #b4bac3; letter-spacing: .13em; text-transform: uppercase; }
+        .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+        .grid2 .wide { grid-column: 1 / -1; }
+        .motion-heading, .compact-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+        .motion-heading h2 { margin: 0; }
+        button.motion-icon { display: grid; place-items: center; width: 31px; height: 28px; padding: 0; line-height: 1; }
+        .compact-row { margin-top: 8px; font-size: 11px; }
+        .compact-row select { width: auto; padding: 4px 7px; }
+        .segments { display: flex; gap: 3px; }
+        .segments button { padding: 4px 8px; font-size: 11px; border-radius: 6px; }
+        .inspection-grid { gap: 5px; }
+        .inspection-grid button { padding: 6px; font-size: 11.5px; min-height: 29px; border-radius: 6px; }
+        .labels-row { display:flex; justify-content:flex-end; margin-bottom:6px; }
+        .labels-row button { padding:4px 8px; min-height:25px; font-size:11px; border-radius:6px; }
+        .segments button[aria-pressed=true], .inspection-grid button[aria-current=true], .labels-row button[aria-pressed=true] {
+            border-color: #bc7d26; background: #493010; color: #ffe0a6;
+        }
+        .settings { padding-bottom: 11px; margin-bottom: 11px; }
+        .settings > summary { color: #d0d4db; font-size: 12px; font-weight: 600; padding: 3px 0; }
+        .settings summary { cursor: pointer; }
+        .nested-panel { margin-top: 7px; padding: 7px 8px; border: 1px solid var(--line); border-radius: 7px; font-size: 11px; }
+        .nested-panel[open] > summary { margin-bottom: 8px; }
+        .inline-slider { display: grid; grid-template-columns: auto minmax(0,1fr) auto; align-items: center; gap: 8px; margin-top: 11px; font-size: 11px; }
+        .inline-slider input { min-width: 0; }
+        .speed-controls { display: flex; gap: 7px; }
+        .speed-controls > div { flex: 1; min-width: 0; }
+        .row { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin: 11px 0 5px; font-size: 12px; }
+        .value { color: #f3b24e; font-variant-numeric: tabular-nums; }
+        input[type="range"] { width: 100%; accent-color: #d58a22; cursor: pointer; }
+        select { width: 100%; padding: 8px 9px; }
+        .toggle-row { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; font-size: 12px; }
+        .toggle-row input { accent-color: #d58a22; }
+        .readout {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 7px 12px;
+            font-size: 11px;
+            color: #aeb4bd;
+        }
+        .readout strong { color: #f0f1f3; font-weight: 600; font-variant-numeric: tabular-nums; }
+        .status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 10px;
+            padding: 9px;
+            border: 1px solid #31463a;
+            border-radius: 9px;
+            background: rgba(23, 51, 35, .32);
+            color: #a9efc7;
+            font-size: 11px;
+        }
+        .status i { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 10px var(--green); }
+        .status.away i { background: var(--amber); box-shadow: 0 0 10px var(--amber); }
+        .angles { display: flex; gap: 6px; margin-top: 7px; }
+        .angle { flex: 1; display: flex; justify-content: space-between; gap: 5px; border: 1px solid var(--line); border-radius: 6px; padding: 6px; font-size: 11px; font-variant-numeric: tabular-nums; }
+        .angle[hidden] { display: none; }
+        .angle-a { color: #ffc56e; }
+        .angle-b { color: #80dfff; }
+        .angle-c { color: #debaff; }
+        .drive-path { margin: 8px 0; padding-left: 9px; border-left: 2px solid; font-size: 11px; line-height: 1.4; }
+        .note { margin: 0; color: #8e949d; font-size: 11px; line-height: 1.5; }
+        .warning { color: #d0a663; }
+        @media (max-width: 820px) {
+            main { grid-template-columns: 1fr; grid-template-rows: minmax(54vh, 1fr) minmax(0, 46vh); }
+            aside { border-left: 0; border-top: 1px solid #282b31; }
+            .prototype-tag { display: none; }
+        }
+    </style>
+    <script src="disc-look.js"></script>
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.187.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.187.0/examples/jsm/"
+        }
+    }
+    </script>
+</head>
+<body>
+<div id="app">
+    <header>
+        <nav class="project-nav" aria-label="Project views" style="display:flex;gap:8px;flex-wrap:wrap">
+            <a class="back" id="orbitDesignLink" href="../index.html">← Generator</a>
+            <a class="back" id="orbitSpindleLink" href="../index.html#model">Centre Spindle 3D</a>
+        </nav>
+        <div class="title-block">
+            <h1>Moiré Orbit</h1>
+            <div class="subtitle">Drop-in cartridges · independent rim drives</div>
+        </div>
+        <div class="prototype-tag">Private build model</div>
+    </header>
+    <main>
+        <section id="viewport" aria-label="Interactive 3D sculpture prototype">
+            <div id="labels" aria-hidden="true"></div>
+            <div class="hint">Drag to orbit · wheel to zoom · right-drag to pan</div>
+        </section>
+        <aside>
+            <div class="section controls-top">
+                <div class="motion-heading">
+                    <h2>Motion</h2>
+                    <button id="playBtn" class="motion-icon primary" aria-label="Pause motion" title="Pause motion">⏸</button>
+                </div>
+                <div class="compact-row"><label for="discSize">Disc diameter</label><select id="discSize"></select></div>
+                <div class="compact-row"><span>Pattern discs</span><div id="discCount" class="segments" role="group" aria-label="Pattern discs">
+                    <button type="button" data-count="2" aria-pressed="false">2 discs</button>
+                    <button type="button" data-count="3" aria-pressed="true">3 discs</button>
+                </div></div>
+            </div>
+
+            <div class="section">
+                <div class="labels-row"><button type="button" id="labelsToggle" aria-label="Build labels" aria-pressed="false">Labels off</button></div>
+                <h2>Assembly inspection</h2>
+                <div class="grid2 inspection-grid" data-inspection>
+                    <button id="frontBtn">Front view</button>
+                    <button id="driveBtn">Inspect drive</button>
+                    <button id="loadBtn" aria-pressed="false">Load from top</button>
+                    <button id="rearBtn">Rear motor bay</button>
+                    <button id="cutawayBtn" aria-pressed="false">Pulley cutaway</button>
+                    <button id="wiringBtn">Wiring &amp; parts</button>
+                    <button id="bearingBtn">Inspect bearing seats</button>
+                    <button id="espTrayBtn" aria-pressed="false">Slide out ESP32</button>
+                    <button id="printLayoutBtn" aria-pressed="false">Print layout</button>
+                </div>
+                <div id="cutawayControls" hidden>
+                    <div class="row"><label for="cutawayDrive">Drive to section</label></div>
+                    <select id="cutawayDrive"><option value="A">A · Right</option><option value="B">B · Left</option><option value="C">C · Centre</option></select>
+                    <p class="note">Use straight Ø3 mm round stock. File a short flat at each drive screw and leave the bearing and idler journals round. Size the end-retainer groove to the clip you use.</p>
+                </div>
+                <p id="printLayoutStatus" class="note" style="margin-top:7px" hidden></p>
+                <p id="espTrayStatus" class="note" style="margin-top:7px" hidden>Remove the side shell, unplug the headers and undo the two screws in the end stop. The board slides out along its edge rails.</p>
+                <div id="loadControls" hidden>
+                    <div class="row"><label for="slotSelect">Cartridge to lift</label></div>
+                    <select id="slotSelect"><option value="A">A · Front slot</option><option value="B">B · Middle / rear slot</option><option value="C">C · Rear slot</option></select>
+                    <p id="loadStatus" class="note" style="margin-top:7px" aria-live="polite"></p>
+                </div>
+                <div class="row"><label for="explode">Extra gap per disc</label><span id="explodeValue" class="value">0 mm</span></div>
+                <input id="explode" type="range" min="0" max="12" step="0.5" value="0">
+                <p class="note">Extra gap hides the rigid skeleton to expose the disc stack.</p>
+                <div class="toggle-row"><label for="lightsToggle">Lighting channel</label><input id="lightsToggle" type="checkbox" checked></div>
+                <div class="toggle-row"><label for="platesToggle">Show outer shell</label><input id="platesToggle" type="checkbox" checked></div>
+                <div class="row"><label for="assemblyStep">Build sequence</label></div>
+                <select id="assemblyStep">
+                    <option value="">Complete model</option>
+                    <option value="1">1 · Common foot and drive frame</option>
+                    <option value="2">2 · Spindles, motors and belts</option>
+                    <option value="3">3 · Boards and wiring</option>
+                    <option value="4">4 · Fascia and cartridges</option>
+                    <option value="5">5 · Seat the lid</option>
+                </select>
+                <button id="nextAssemblyStep" style="width:100%;margin-top:7px">Next assembly step</button>
+                <p id="assemblyStatus" class="note" style="margin-top:7px" aria-live="polite">Choose a step to see the parts that go in at that stage.</p>
+            </div>
+
+            <details class="section settings">
+                <summary>Motion and construction</summary>
+                <div class="row"><label for="cartridgeBuild">Cartridge construction</label></div>
+                <select id="cartridgeBuild">
+                    <option value="printed">Printed patterns · 2.4 mm</option>
+                    <option value="hybrid">3 mm Perspex in printed rims · 3.6 mm</option>
+                </select>
+                <div class="speed-controls">
+                    <div>
+                        <div class="row"><label for="speedB" class="angle-b">Blue B speed</label></div>
+                        <select id="speedB">
+                            <option value="-4">−4×</option><option value="-3">−3×</option><option value="-2" selected>−2×</option>
+                            <option value="2">+2×</option><option value="3">+3×</option><option value="4">+4×</option>
+                        </select>
+                    </div>
+                    <div id="speedControlC">
+                        <div class="row"><label for="speedC" class="angle-c">Purple C speed</label></div>
+                        <select id="speedC">
+                            <option value="-4">−4×</option><option value="-3">−3×</option><option value="-2">−2×</option>
+                            <option value="2">+2×</option><option value="3" selected>+3×</option><option value="4">+4×</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="row"><label for="motionMode">Motion style</label></div>
+                <select id="motionMode"><option value="steady">Steady</option><option value="drift">Gentle drift · up to ±25%</option></select>
+                <div class="inline-slider"><label for="cycle">Turn time · A</label><input id="cycle" type="range" min="155" max="540" step="5" value="180"><span id="cycleValue" class="value">180 s</span></div>
+                <div class="row"><label for="crank">Set phase · disc A at +1×</label><span id="crankValue" class="value">0°</span></div>
+                <input id="crank" type="range" min="0" max="360" step="1" value="0">
+                <div class="angles" aria-label="Signed disc rotation">
+                    <div class="angle angle-a">A <strong id="angleA">0°</strong></div>
+                    <div class="angle angle-b">B <strong id="angleB">0°</strong></div>
+                    <div class="angle angle-c" id="angleCardC">C <strong id="angleC">0°</strong></div>
+                </div>
+                <div id="alignmentStatus" class="status"><i></i><span>Home alignment</span></div>
+
+            </details>
+
+            <details class="section settings">
+                <summary>Mount and backlight</summary>
+                <div class="row"><label for="mountMode">Installation</label></div>
+                <select id="mountMode"><option value="shelf">Shelf</option><option value="wall">Wall cleat</option></select>
+                <div class="row"><label for="backlightMode">Backlight cassette</label></div>
+                <select id="backlightMode"><option value="off">Open back</option><option value="unlit">Opal diffuser · unlit</option><option value="lit">Opal diffuser · lit</option></select>
+                <details class="nested-panel"><summary>Mount inspection</summary>
+                <div class="grid2 inspection-grid" data-inspection>
+                    <button id="wallFitBtn">Inspect wall mount</button>
+                    <button id="backlightFitBtn">Inspect diffuser mount</button>
+                </div>
+                </details>
+                <p class="note" id="installNote" aria-live="polite"></p>
+            </details>
+
+            <details class="section settings">
+                <summary>Information</summary>
+                <details class="nested-panel">
+                    <summary>Active drive paths</summary>
+                <p class="drive-path angle-a">A · Lower-right drive spindle</p>
+                <p class="drive-path angle-b">B · Lower-left drive spindle</p>
+                <p class="drive-path angle-c" id="thirdDrive">C · Lower-middle drive spindle</p>
+                <div class="readout">
+                    <span>Signed speed ratio</span><strong id="ratioReadout">A +1× · B −2× · C +3×</strong>
+                    <span>Motor-to-rim reduction</span><strong id="motorRatio">10.333:1</strong>
+                    <span>A disc / motor rpm</span><strong id="rpmA">+0.33 / −3.44</strong>
+                    <span>B disc / motor rpm</span><strong id="rpmB">−0.67 / +6.89</strong>
+                    <span id="rpmCLabel">C disc / motor rpm</span><strong id="rpmC">+1.00 / −10.33</strong>
+                </div>
+                <p class="note" id="supportSummary" style="margin-top:9px">A and B each ride on two outer cogs. C rides on both outer idlers and its own centre drive cog.</p>
+                <details style="margin-top:10px">
+                    <summary>Printable pulleys and belt specification</summary>
+                    <div class="readout">
+                        <span>Timing belt</span><strong>72-2GT-3 · 36 teeth</strong>
+                        <span>Belt pitch / width</span><strong>2.00 / 3.00 mm</strong>
+                        <span>Pulley pair / centres</span><strong>16T + 16T / 20.00 mm</strong>
+                        <span>Pulley flange OD / depth</span><strong>Ø12.10 / 6.50 mm</strong>
+                        <span>Clear belt face</span><strong>3.30 mm</strong>
+                        <span>Motor double-D bore</span><strong>Ø5.15 / 3.10 mm flats</strong>
+                        <span>Spindle D-bore</span><strong>Ø3.16 mm · flat at 1.13 mm</strong>
+                        <span>Side screw pilot</span><strong>Ø1.60 mm · tap M2</strong>
+                    </div>
+                    <p class="note">Print the pulleys in PLA+ with the bore vertical. Swing A and B inward on their pivots to fit the belts. C slides in two short, size-specific slots. Set the lightest tension that tracks cleanly at reversal. See the <a href="docs/base-drive.md">build notes</a>.</p>
+                    <p class="note"><a href="cad/drive-parts/motor-pulley.stl" download>Motor pulley STL</a> · <a href="cad/drive-parts/spindle-pulley.stl" download>Spindle pulley STL</a></p>
+                </details>
+                <p class="note" style="margin-top:7px">A is front (L1), B is L2, C is rear (L3). Positive rpm means clockwise from the front.</p>
+                </details>
+
+                <details class="nested-panel">
+                    <summary>Gear fit and printed trials</summary>
+                    <div class="readout">
+                        <span>Rim and pinion</span><strong>Module 0.8 · 25° pressure angle</strong>
+                        <span>Nominal tooth backlash</span><strong>0.20 mm at the pitch circle</strong>
+                        <span>Tip-to-root clearance</span><strong>0.20 mm radial</strong>
+                        <span>Cartridge groove clearance</span><strong>0.15 mm per face</strong>
+                    </div>
+                    <p class="note">All three lower stations cleared a full tooth pitch at nominal centres for S100, S150, S250 and S300. Aim for ±0.10 mm on the finished centre spacing and check a full turn by hand with the belt off.</p>
+                    <p class="note"><a href="docs/base-drive.md#gear-fit-verification">Mesh check and printable drive trials</a></p>
+                </details>
+
+                <details class="nested-panel">
+                    <summary>Electronics</summary>
+                <div class="readout">
+                    <span>Estimated 5 V budget</span><strong id="powerEstimate">≈ 1.25 A · 6.2 W</strong>
+                    <span>Prototype supply</span><strong>Regulated 5 V · 2 A</strong>
+                </div>
+                <p class="note" style="margin-top:9px">Left USB-C supplies power. Right USB-C accesses the ESP32-S3. Disconnect the ESP32’s main 5 V feed before plugging in a programming cable.</p>
+                <p class="note" style="margin-top:7px">The ULN2003 boards share a low deck with the sockets facing up. The ESP32 sits upright on the right, with its USB-C face 0.6 mm inside the shoulder.</p>
+                <p class="note" style="margin-top:7px">The upright USB-C openings are 9.2 × 16.8 mm. Route the motor plugs beneath the deck before seating the cards.</p>
+                <details id="wiringDiagram" style="margin-top:10px">
+                    <summary>ESP32-S3 wiring diagram</summary>
+                    <div class="row"><label for="wireSelect">Trace a connection</label></div>
+                    <select id="wireSelect">
+                        <option value="">All connections</option>
+                        <optgroup id="signalTraceOptions" label="ESP32-S3 signals"></optgroup>
+                        <optgroup label="Motor connectors">
+                            <option value="motor-A">ULN2003 A → motor A · 5-pin</option>
+                            <option value="motor-B">ULN2003 B → motor B · 5-pin</option>
+                            <option value="motor-C" data-channel="C">ULN2003 C → motor C · 5-pin</option>
+                        </optgroup>
+                        <optgroup label="Power">
+                            <option value="power">Left USB-C → 5 V supply branches</option>
+                            <option value="ground">Left USB-C → common ground</option>
+                        </optgroup>
+                    </select>
+                    <div class="toggle-row"><label for="wireLabelsToggle">Show wire labels</label><input id="wireLabelsToggle" type="checkbox" checked></div>
+                    <pre class="note" style="white-space:pre-wrap">Left USB-C 5 V ─┬─ ULN2003 A/B/C V+
+                └─ Disconnect ─ S3 5V
+USB-C GND ────┬── ULN2003 A/B/C GND
+              └── S3 GND
+S3 GPIO ── IN1–IN4 on each ULN2003
+ULN2003 5-pin socket ── corresponding motor</pre>
+                    <div class="readout">
+                        <span>Motor A · IN1–IN4</span><strong id="pinsA"></strong>
+                        <span>Motor B · IN1–IN4</span><strong id="pinsB"></strong>
+                        <span id="pinsCLabel">Motor C · IN1–IN4</span><strong id="pinsC"></strong>
+                    </div>
+                    <p class="note" style="margin-top:7px">Signal order in the model is orange, yellow, green, blue. Power is red, ground is grey. Use the printed pin labels on the actual boards.</p>
+                </details>
+                </details>
+
+                <details class="nested-panel">
+                    <summary>Model dimensions</summary>
+                <div class="readout">
+                    <span>Visible pattern field</span><strong id="windowDiameter">Ø 92.0 mm</strong>
+                    <span>Outer ring diameter</span><strong id="caseDiameter">Ø 124.9 mm</strong>
+                    <span>Shell depth at the rim</span><strong id="ringDepth">16.0 mm</strong>
+                    <span>Shelf contact</span><strong id="baseDepth">113 × 38.4 mm</strong>
+                    <span>Base enclosure height</span><strong id="baseHeight">44.5 mm</strong>
+                    <span id="wallDepthLabel" hidden>Wall to front</span><strong id="wallDepth" hidden></strong>
+                    <span>Cartridge standard</span><strong id="cartridgeSize">S100 · Ø 100.8 mm</strong>
+                    <span>Rim / pinion</span><strong id="teethReadout">124T / 12T</strong>
+                    <span>Pinion outside</span><strong id="pinionDiameter">Ø 11.2 mm</strong>
+                    <span>Geared cartridge thickness</span><strong id="discWidth">2.4 mm</strong>
+                    <span>Gap between discs</span><strong id="discGap">1.5 mm</strong>
+                    <span>Disc stack depth</span><strong id="stackDepth">10.2 mm</strong>
+                </div>
+                <p class="note" style="margin-top:9px">Swap patterns within one size family. Change the upper cradle and case for a different diameter. The motor deck and foot fit all four presets.</p>
+                </details>
+
+                <details class="nested-panel">
+                    <summary>Assembly</summary>
+                <p class="note">The motor deck and disc guides print as one frame. Seat its two keys in the common electronics foot and secure it from underneath with two M2 × 5 countersunk screws.</p>
+                <div class="readout"><span>Centre slot offset from S100</span><strong id="middleLift">0.00 mm</strong></div>
+                <p class="note" style="margin-top:7px">The frame sets the centre motor height. Slide it to take up belt slack. The lid has two smooth stops above each disc with 0.5 mm radial clearance.</p>
+                <p class="note"><a href="cad/skeleton/common-base.stl" download>Electronics foot STL</a> · <a id="cradleDownload" href="cad/skeleton/S100-3-printed.stl" download>Drive frame STL</a></p>
+                <p class="note"><a href="cad/case-panels/front.stl" download>Front plate STL</a> · <a href="cad/case-panels/rear.stl" download>Rear plate STL</a> · <a href="cad/case-panels/side.stl" download>Side plate STL</a> · <a id="apronDownload" href="cad/case-panels/S100-apron.stl" download>Ring transition STL</a></p>
+                <p class="note"><a href="docs/base-drive.md">Shell, spindle and diffuser build notes</a></p>
+                </details>
+
+                <details class="nested-panel">
+                    <summary>Bench checks</summary>
+                <p class="note"><span class="warning">Web prototype.</span> Check actual motor and shaft fits, wiring space, and running noise on one printed drive before building the whole unit.</p>
+                </details>
+            </details>
+        </aside>
+    </main>
+</div>
+<script type="module" src="model-geared.js"></script>
+</body>
+</html>
